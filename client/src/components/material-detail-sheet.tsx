@@ -114,18 +114,18 @@ function ReviewHistoryTimeline({
                     {/* Review card */}
                     <div className="flex-1 rounded-md border p-3 space-y-2 bg-card">
                       <div className="flex items-start justify-between">
-                        <div className="space-y-1 flex-1">
+                        <div className="space-y-4 flex-1">
                           <div className="grid grid-cols-2 gap-4">
                             <p className="text-sm font-medium">
-                              Initiated by{" "}
-                              <strong>
+                              Initiated by:{" "}
+                              <strong className="capitalize">
                                 {review.initiated_by_user?.full_name ??
                                   "Unknown"}
                               </strong>
                             </p>
                             <p className="text-sm font-medium">
-                              Decided by{" "}
-                              <strong>
+                              Decided by:{" "}
+                              <strong className="capitalize">
                                 {review.decided_by_user?.full_name ??
                                   "No Decision"}
                               </strong>
@@ -167,14 +167,26 @@ function ReviewHistoryTimeline({
                               </div>
                             </div>
                           </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Final Decision
+                              </p>
+                              <p className="text-xs capitalize">
+                                {review.final_decision ?? "None provided"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Final Notes
+                              </p>
+                              <p className="text-xs">
+                                {review.final_notes ?? "None provided"}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      {/* {review.notes && (
-                    <div className="pt-2 border-t">
-                      <p className="text-xs text-muted-foreground">Notes:</p>
-                      <p className="text-sm">{review.notes}</p>
-                    </div>
-                  )} */}
                       <div className="flex justify-between w-full">
                         <div className="flex gap-2 items-center">
                           <Badge
