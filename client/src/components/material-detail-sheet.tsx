@@ -168,13 +168,24 @@ function ReviewHistoryTimeline({
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Final Decision
-                              </p>
-                              <p className="text-xs capitalize">
-                                {review.final_decision ?? "None provided"}
-                              </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Final Decision
+                                </p>
+                                <p className="text-xs capitalize">
+                                  {review.final_decision ?? "None provided"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Final Qty. Adj.
+                                </p>
+                                <p className="text-xs capitalize">
+                                  {review.final_qty_adjustment?.toLocaleString() ??
+                                    "None provided"}
+                                </p>
+                              </div>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">
