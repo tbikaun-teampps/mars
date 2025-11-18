@@ -95,7 +95,7 @@ async def list_materials(
     query = (
         select(
             SAPMaterialData,
-            func.count(MaterialReviewDB.review_id).label("reviews_count"),
+            func.count(MaterialReviewDB.review_id.distinct()).label("reviews_count"),
             latest_review.c.review_date.label("last_reviewed"),
             latest_review.c.next_review_date.label("next_review"),
             # latest_review.c.notes.label("review_notes"),
