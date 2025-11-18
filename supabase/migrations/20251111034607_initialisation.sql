@@ -150,13 +150,13 @@ CREATE TABLE material_reviews (
     decided_by UUID DEFAULT auth.uid(), -- Might be different from initiator
     decided_at TIMESTAMPTZ,
 
-    -- Follow-up scheduling (NEW)
+    -- Follow-up scheduling
     requires_follow_up BOOLEAN DEFAULT false,
     next_review_date DATE, -- When should this be reviewed again
     follow_up_reason TEXT, -- Why we need to review again
     review_frequency_weeks INTEGER, -- Number of weeks between reviews
   
-    -- Link to previous review (NEW)
+    -- Link to previous review
     previous_review_id INTEGER REFERENCES material_reviews(review_id),
 
     -- Additional tracking
