@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import { FerrisWheel, Loader } from "lucide-react";
 
 export function LoginForm({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<"form">) {
+}: React.ComponentProps<"div">) {
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +28,7 @@ export function LoginForm({
       if (error) {
         setError(error.message || "Failed to sign in");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);
@@ -33,50 +36,79 @@ export function LoginForm({
   };
 
   return (
-    <form
-      className={cn("flex flex-col gap-6", className)}
-      onSubmit={handleSubmit}
-      {...props}
-    >
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold">Login to your account</h1>
-        <p className="text-balance text-sm text-muted-foreground">
-          Enter your email below to login to your account
-        </p>
-      </div>
-      <div className="grid gap-6">
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-            {error}
+    <Card className={cn("w-full backdrop-blur-sm", className)} {...props}>
+      <CardContent className="p-6">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-2 font-medium">
+              <FerrisWheel className="h-12 w-12 text-primary" />
+              <span className="sr-only">MARS</span>
+            </div>
+            <h1 className="text-xl font-bold">Welcome to MARS</h1>
           </div>
-        )}
-        <div className="grid gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="m@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={loading}
-          />
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            <div className="grid gap-3">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="m@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid gap-3">
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+                disabled={loading}
+              />
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              className={`w-full transition-all duration-300 ${
+                loading
+                  ? "bg-gradient-to-r from-[#eb59ff] to-[#032a83] border-0 text-white animate-brand-wave"
+                  : ""
+              }`}
+              disabled={loading}
+            >
+              <span className="relative z-20 flex items-center justify-center">
+                {loading && <Loader className="mr-2 h-4 w-4 animate-spin" />}
+                {loading ? "Signing in..." : "Login"}
+              </span>
+            </Button>
+          </form>
+          <div className="text-center max-w-md">
+            <p className="text-gray-500 dark:text-gray-400 text-xs">
+              Built by{" "}
+              <a
+                href="https://www.teampps.com.au"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gradient-to-r from-[#eb59ff] to-[#032a83] bg-clip-text text-transparent hover:from-[#f472b6] hover:to-[#1e40af] transition-all duration-300"
+              >
+                TEAM
+              </a>{" "}
+              • © 2025
+            </p>
+          </div>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={loading}
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Signing in..." : "Login"}
-        </Button>
-      </div>
-    </form>
+      </CardContent>
+    </Card>
   );
 }

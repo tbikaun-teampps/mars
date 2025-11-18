@@ -5,9 +5,9 @@ import { MaterialsTable } from "@/components/materials-table";
 import { AuditLog } from "@/components/audit-log";
 import { UploadSAPDialog } from "@/components/upload-sap-dialog";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { FerrisWheel, Upload, LayoutDashboard, ScrollText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { HexagonalBackground } from "@/components/hexagonal-bg";
 
 type View = "dashboard" | "audit-log";
 
@@ -36,10 +36,11 @@ export function MainPage() {
   // Show login form if not authenticated
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md p-6">
+      <div className="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
+        <div className="w-full max-w-sm">
+          <HexagonalBackground />
           <LoginForm />
-        </Card>
+        </div>
       </div>
     );
   }
