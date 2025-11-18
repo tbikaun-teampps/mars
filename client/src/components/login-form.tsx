@@ -7,16 +7,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { FerrisWheel, Loader } from "lucide-react";
+import { getVersionInfo } from "@/lib/version";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const {displayVersion} = getVersionInfo();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +112,7 @@ export function LoginForm({
               >
                 TEAM
               </a>{" "}
-              • © 2025
+              • {displayVersion}
             </p>
           </div>
         </div>
