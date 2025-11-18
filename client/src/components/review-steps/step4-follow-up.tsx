@@ -2,10 +2,6 @@ import { useFormContext } from "react-hook-form";
 import { FormInputField, FormToggleGroupField } from "@/components/ui/form";
 import { Stepheader } from "./step-header";
 
-const getTodayDate = () => {
-  return new Date().toISOString().split("T")[0];
-};
-
 export function Step4FollowUp() {
   const { watch } = useFormContext();
   const scheduleFollowUp = watch("scheduleFollowUp");
@@ -32,15 +28,14 @@ export function Step4FollowUp() {
         name="scheduleFollowUpDate"
         label="When is the follow-up review scheduled? *"
         type="date"
-        min={getTodayDate()}
         disabled={!scheduleFollowUp}
       />
 
       <FormInputField
-        name="scheduleReviewFrequency"
-        label="What is the review frequency (in months)? *"
+        name="scheduleReviewFrequencyWeeks"
+        label="What is the review frequency (in weeks)? *"
         type="number"
-        placeholder="Enter review frequency in months. If left blank, no automatic reviews will be scheduled."
+        placeholder="Enter review frequency in weeks. If left blank, no automatic reviews will be scheduled."
         disabled={!scheduleFollowUp}
       />
     </div>

@@ -729,7 +729,7 @@ async def upload_sap_material_data(
 
                     review_reason="Initial OBS data import",
                     current_stock_qty=record.get("unrestricted_quantity"),
-                    current_stock_value=record.get("total_value")/record.get('total_quantity') * record.get('unrestricted_quantity') if record.get('total_quantity') and record.get('total_value') else 0,
+                    current_stock_value=round(record.get("total_value")/record.get('total_quantity') * record.get('unrestricted_quantity'), 2) if record.get('total_quantity') and record.get('total_value') else 0,
                     months_no_movement=0,
                     proposed_action="No action proposed (historical data)",
                     proposed_qty_adjustment=0,
@@ -757,7 +757,7 @@ async def upload_sap_material_data(
                     follow_up_reason="Scheduled review from initial OBS data import" if record.get("next_review") else None,
                     review_frequency_weeks=0,
                     status="completed",
-                    checklist_completed=True,
+                    completed_checklist=True,
                 )
                 print(
                     f"Inserting initial review for material {record['material_number']}"

@@ -1,6 +1,8 @@
 import { createContext, useEffect, useState, ReactNode } from 'react'
 import { User, Session, AuthError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { queryClient } from '@/api/query-client'
+import { queryKeys } from '@/api/query-keys'
 
 interface AuthContextType {
   user: User | null
@@ -46,11 +48,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       email,
       password,
     })
+
+    if (!error) {
+      // Invalidate the current user query to refetch user data
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.user.current(),
+      })
+    }
+
     return { error }
   }
 
   const signOut = async () => {
     await supabase.auth.signOut()
+
+    // Invalidate the current user query to clear cached user data
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.user.current(),
+    })
   }
 
   const value = {

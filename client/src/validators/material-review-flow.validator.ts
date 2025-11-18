@@ -132,23 +132,6 @@ export const step4Schema = z
         "All follow-up fields are required when scheduling a follow-up review",
       path: ["scheduleFollowUp"],
     }
-  )
-  .refine(
-    (data) => {
-      // If follow-up is scheduled, ensure the date is in the future
-      if (data.scheduleFollowUp && data.scheduleFollowUpDate) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Reset time to start of day for fair comparison
-        const reviewDate = new Date(data.scheduleFollowUpDate);
-        reviewDate.setHours(0, 0, 0, 0); // Reset time for fair comparison
-        return reviewDate >= today;
-      }
-      return true;
-    },
-    {
-      message: "Follow-up date must be today or in the future",
-      path: ["scheduleFollowUpDate"],
-    }
   );
 
 // Final decision step
