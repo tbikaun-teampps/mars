@@ -714,27 +714,80 @@ async def upload_sap_material_data(
 
         # Extract OBS review data and create initial material review(s)
         inserted_reviews = 0
-        # for record in records_to_insert:
-        #     if record.get("last_reviewed"):
-        #         review_db = MaterialReviewDB(
-        #             material_number=record["material_number"],
-        #             review_date=record.get("last_reviewed"),
-        #             next_review_date=record.get("next_review"),
-        #             notes=record.get("review_notes"),
-        #             reviewed_by="00000000-0000-0000-0000-000000000000",  # System user
-        #             status="other",  # Mark as 'other' since it's historical data
-        #         )
-        #         print(
-        #             f"Inserting initial review for material {record['material_number']}"
-        #         )
-        #         try:
-        #             db.add(review_db)
-        #             await db.commit()
-        #             inserted_reviews += 1
-        #         except Exception as e:
-        #             await db.rollback()
-        #             print(f"Failed to insert review: {str(e)}")
-        # print(f"Inserted {inserted_reviews} initial material reviews from OBS data")
+        for record in records_to_insert:
+            if record.get("last_reviewed"):
+                review_db = MaterialReviewDB(
+                    material_number=record.get("material_number"),
+
+                    created_by="00000000-0000-0000-0000-000000000000",  # System user
+                    last_updated_by="00000000-0000-0000-0000-000000000000",  # System user
+                    created_at=record.get("last_reviewed"),
+                    updated_at=record.get("last_reviewed"),
+
+                    initiated_by="00000000-0000-0000-0000-000000000000",  # System user
+                    review_date=record.get("last_reviewed"),
+
+                    review_reason="Initial OBS data import",
+                    current_stock_qty=record.get("unrestricted_quantity"),
+                    current_stock_value=record.get("total_value")/record.get('total_quantity') * record.get('unrestricted_quantity') if record.get('total_quantity') and record.get('total_value') else 0,
+                    months_no_movement=0,
+                    proposed_action="No action proposed (historical data)",
+                    proposed_qty_adjustment=0,
+                    business_justification="N/A",
+                    sme_name="System",
+                    sme_email="system@mars.teampps.com",
+                    sme_department="System",
+                    sme_feedback_method="other",
+                    sme_contacted_date=record.get("last_reviewed"),
+                    sme_responded_date=record.get("last_reviewed"),
+                    sme_recommendation="N/A",
+                    sme_recommended_qty=0,
+                    sme_analysis="N/A",
+                    alternative_applications="N/A",
+                    risk_assessment="N/A",
+
+                    final_decision="no change",
+                    final_qty_adjustment=0,
+                    final_notes=record.get("review_notes"),
+                    decided_by="00000000-0000-0000-0000-000000000000",  # System user
+                    decided_at=record.get("last_reviewed"),
+
+                    requires_follow_up=True if record.get("next_review") else False,
+                    next_review_date=record.get("next_review"),
+                    follow_up_reason="Scheduled review from initial OBS data import" if record.get("next_review") else None,
+                    review_frequency_weeks=0,
+                    status="completed",
+                    checklist_completed=True,
+                )
+                print(
+                    f"Inserting initial review for material {record['material_number']}"
+                )
+                try:
+                    db.add(review_db)
+                    await db.commit()
+                    inserted_reviews += 1
+                    # Automatically complete the checklist for the imported review
+                    checklist_db = ReviewChecklistDB(
+                        review_id=review_db.review_id,
+                        created_by="00000000-0000-0000-0000-000000000000",  # System user
+                        last_updated_by="00000000-0000-0000-0000-000000000000",  # System user
+                        created_at=record.get("last_reviewed"),
+                        updated_at=record.get("last_reviewed"),
+                        
+                        has_open_orders=False,
+                        has_forecast_demand=False,
+                        checked_alternate_plants=False,
+                        contacted_procurement=False,
+                        reviewed_bom_usage=False,
+                        checked_supersession=False,
+                        checked_historical_usage=False,
+                    )
+                    db.add(checklist_db)
+                    await db.commit()
+                except Exception as e:
+                    await db.rollback()
+                    print(f"Failed to insert review: {str(e)}")
+        print(f"Inserted {inserted_reviews} initial material reviews from OBS data")
 
         # Prepare response message
         if inserted_count == 0 and skipped_count > 0:
