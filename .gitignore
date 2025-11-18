@@ -61,3 +61,7 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+
+# Claude
+CLAUDE.local.md

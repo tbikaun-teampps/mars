@@ -78,4 +78,10 @@ export const queryKeys = {
     list: (materialNumber: number, reviewId: number, params?: ReviewCommentsQueryParams) =>
       [...queryKeys.reviewComments.all, "list", materialNumber, reviewId, params] as const,
   },
+
+  // User queries
+  user: {
+    all: ["user"] as const,
+    current: () => [...queryKeys.user.all, "current"] as const,
+  },
 } as const;

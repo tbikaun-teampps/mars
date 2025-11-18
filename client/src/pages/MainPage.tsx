@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FerrisWheel, Upload, LayoutDashboard, ScrollText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { HexagonalBackground } from "@/components/hexagonal-bg";
+import { UserMenu } from "@/components/user-menu";
 
 type View = "dashboard" | "audit-log";
 
@@ -80,9 +81,7 @@ export function MainPage() {
               <Upload className="mr-2 h-4 w-4" />
               Upload
             </Button>
-            <Button onClick={handleLogout} variant="ghost">
-              Logout
-            </Button>
+            <UserMenu onLogout={handleLogout} />
           </div>
         </div>
       </header>
