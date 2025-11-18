@@ -16,6 +16,7 @@ import {
   PaginatedReviewCommentsResponse,
   ReviewComment,
   ReviewCommentCreate,
+  UserResponse,
 } from "./client";
 import {
   queryKeys,
@@ -326,5 +327,16 @@ export function useDeleteReviewComment(): UseMutationResult<
     onError: (error) => {
       console.error("Failed to delete comment:", error);
     },
+  });
+}
+
+/**
+ * Hook to fetch current user profile
+ */
+export function useCurrentUser(): UseQueryResult<UserResponse, Error> {
+  return useQuery({
+    queryKey: queryKeys.user.current(),
+    queryFn: () => apiClient.getCurrentUser(),
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }

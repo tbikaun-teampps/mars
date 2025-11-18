@@ -10,7 +10,6 @@ import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
-// Type aliases for cleaner code
 type PaginatedMaterialsResponse =
   components["schemas"]["PaginatedMaterialsResponse"];
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
@@ -20,6 +19,8 @@ type PaginatedAuditLogsResponse =
   components["schemas"]["PaginatedAuditLogsResponse"];
 type PaginatedMaterialAuditLogsResponse =
   components["schemas"]["PaginatedMaterialAuditLogsResponse"];
+export type UserResponse = components["schemas"]["UserResponse"];
+
 
 // Comment types
 export interface ReviewComment {
@@ -384,6 +385,11 @@ export class ApiClient {
 
   async deleteReviewComment(commentId: number): Promise<{ message: string }> {
     return this.delete<{ message: string }>(`/comments/${commentId}`);
+  }
+
+  // User API methods
+  async getCurrentUser(): Promise<UserResponse> {
+    return this.get<UserResponse>("/users/me");
   }
 }
 
