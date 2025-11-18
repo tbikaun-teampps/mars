@@ -9,6 +9,7 @@ import { FerrisWheel, Upload, LayoutDashboard, ScrollText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { HexagonalBackground } from "@/components/hexagonal-bg";
 import { UserMenu } from "@/components/user-menu";
+import { getVersionInfo } from "@/lib/version";
 
 type View = "dashboard" | "audit-log";
 
@@ -18,6 +19,7 @@ export function MainPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
   const activeView = (searchParams.get("view") as View) || "dashboard";
+  const { displayVersion } = getVersionInfo();
 
   const handleLogout = async () => {
     await signOut();
@@ -89,6 +91,21 @@ export function MainPage() {
         {/* Add 'container back to main className for max-w constraints, etc. */}
         {activeView === "dashboard" ? <MaterialsTable /> : <AuditLog />}
       </main>
+      <footer className="border-t mt-8 absolute bottom-0 w-full py-2 flex justify-center items-center">
+        <p className="text-gray-400 text-xs">
+          {/* #eb59ff to  #032a83*/}
+          Built by{" "}
+          <a
+            href="https://www.teampps.com.au"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-gradient-to-r from-[#eb59ff] to-[#032a83] bg-clip-text text-transparent hover:from-[#f472b6] hover:to-[#1e40af] transition-all duration-300"
+          >
+            TEAM
+          </a>{" "}
+          • {displayVersion}
+        </p>
+      </footer>
       <UploadSAPDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
