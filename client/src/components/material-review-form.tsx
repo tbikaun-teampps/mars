@@ -550,18 +550,6 @@ function MaterialReviewFormInner({
       if (step5Schema.safeParse(formData).success) {
         markStepComplete(4);
       }
-    } else if (materialData) {
-      // Create mode: Set default next review date to 1 year from now
-      // Reset the ref since this is a new review creation
-      lastResetReviewIdRef.current = null;
-
-      const nextYear = new Date();
-      nextYear.setFullYear(nextYear.getFullYear() + 1);
-      const defaultDate = nextYear;
-      form.reset({
-        ...form.getValues(),
-        scheduleFollowUpDate: defaultDate,
-      });
     }
   }, [materialData, existingReview, isEditMode, form, markStepComplete]);
 
