@@ -19,7 +19,7 @@ type PaginatedAuditLogsResponse =
   components["schemas"]["PaginatedAuditLogsResponse"];
 type PaginatedMaterialAuditLogsResponse =
   components["schemas"]["PaginatedMaterialAuditLogsResponse"];
-type UserResponse = components["schemas"]["UserResponse"];
+export type UserResponse = components["schemas"]["UserResponse"];
 
 
 // Comment types
