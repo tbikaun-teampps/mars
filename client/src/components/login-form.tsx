@@ -40,11 +40,16 @@ export function LoginForm({
       <CardContent className="p-6">
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2">
-            <div className="flex flex-col items-center gap-2 font-medium">
-              <FerrisWheel className="h-12 w-12 text-primary" />
-              <span className="sr-only">MARS</span>
+            <div className="flex flex-col items-center gap-3 font-medium">
+              <div className="relative text-muted-foreground">
+                <FerrisWheel className="h-12 w-12" />
+              </div>
+              <h1 className="text-2xl font-bold">MARS</h1>
+              <p className="text-sm text-muted-foreground text-center">
+                Material Analysis & Review System
+              </p>
             </div>
-            <h1 className="text-xl font-bold">Welcome to MARS</h1>
+            <h2 className="text-lg font-semibold mt-2">Welcome</h2>
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -61,6 +66,7 @@ export function LoginForm({
             </div>
 
             <div className="grid gap-3">
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
