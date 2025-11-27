@@ -326,7 +326,7 @@ export function MaterialsFilterPanel({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger>
+      <PopoverTrigger asChild>
         <Button variant="ghost">
           <Filter className="h-4 w-4" />
           Filters

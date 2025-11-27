@@ -60,7 +60,7 @@ export function SortingPanel({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger>
+      <PopoverTrigger asChild>
         <Button variant="ghost">
           <ArrowUpDown className="h-4 w-4" />
           Sort

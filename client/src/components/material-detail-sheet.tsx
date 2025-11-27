@@ -854,6 +854,7 @@ export function MaterialDetailSheet({
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent
+        aria-describedby={undefined}
         className={`${
           isReviewMode
             ? "min-w-[1200px] max-w-[1200px] p-0"
