@@ -176,7 +176,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="w-full">
-      <div className="flex items-center gap-2 py-4">
+      <div className="flex items-center gap-2 py-4 justify-end">
         {filterColumn && (
           <Input
             placeholder={filterPlaceholder}
@@ -209,11 +209,7 @@ export function DataTable<TData, TValue>({
             </Select>
 
             {currentSorting.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleSortDirection}
-              >
+              <Button variant="outline" size="sm" onClick={toggleSortDirection}>
                 {currentSorting[0].desc ? (
                   <>
                     <ArrowDown className="h-4 w-4 mr-1" />
@@ -259,7 +255,7 @@ export function DataTable<TData, TValue>({
         </DropdownMenu> */}
       </div>
       {activeFilterBadges && <div className="pb-3">{activeFilterBadges}</div>}
-      <div className="rounded-md border">
+      <div className="border">
         <Table>
           <colgroup>
             {table.getAllColumns().map((column) => (

@@ -5,11 +5,7 @@ import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "./ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   Select,
   SelectContent,
@@ -43,10 +39,7 @@ const NEXT_REVIEW_LABELS: Record<string, string> = {
 
 interface ActiveFilterBadgesProps {
   filters: MaterialFilters;
-  onRemoveFilter: (
-    key: keyof MaterialFilters,
-    value?: string
-  ) => void;
+  onRemoveFilter: (key: keyof MaterialFilters, value?: string) => void;
   onClearAll?: () => void;
 }
 
@@ -63,12 +56,12 @@ export function ActiveFilterBadges({
       <Badge
         key={`type-${type}`}
         variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs"
+        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
       >
         Type: {type}
         <button
           onClick={() => onRemoveFilter("materialType", type)}
-          className="ml-1 hover:bg-muted rounded-full p-0.5"
+          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -77,10 +70,15 @@ export function ActiveFilterBadges({
   });
 
   // Value range badges
-  if (filters.minTotalValue !== undefined || filters.maxTotalValue !== undefined) {
+  if (
+    filters.minTotalValue !== undefined ||
+    filters.maxTotalValue !== undefined
+  ) {
     const label =
       filters.minTotalValue !== undefined && filters.maxTotalValue !== undefined
-        ? `Value: ${formatCurrency(filters.minTotalValue)} - ${formatCurrency(filters.maxTotalValue)}`
+        ? `Value: ${formatCurrency(filters.minTotalValue)} - ${formatCurrency(
+            filters.maxTotalValue
+          )}`
         : filters.minTotalValue !== undefined
         ? `Value: ≥${formatCurrency(filters.minTotalValue)}`
         : `Value: ≤${formatCurrency(filters.maxTotalValue!)}`;
@@ -88,7 +86,7 @@ export function ActiveFilterBadges({
       <Badge
         key="value-range"
         variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs"
+        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
       >
         {label}
         <button
@@ -96,7 +94,7 @@ export function ActiveFilterBadges({
             onRemoveFilter("minTotalValue");
             onRemoveFilter("maxTotalValue");
           }}
-          className="ml-1 hover:bg-muted rounded-full p-0.5"
+          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -105,9 +103,13 @@ export function ActiveFilterBadges({
   }
 
   // Quantity range badges
-  if (filters.minTotalQuantity !== undefined || filters.maxTotalQuantity !== undefined) {
+  if (
+    filters.minTotalQuantity !== undefined ||
+    filters.maxTotalQuantity !== undefined
+  ) {
     const label =
-      filters.minTotalQuantity !== undefined && filters.maxTotalQuantity !== undefined
+      filters.minTotalQuantity !== undefined &&
+      filters.maxTotalQuantity !== undefined
         ? `Qty: ${filters.minTotalQuantity.toLocaleString()} - ${filters.maxTotalQuantity.toLocaleString()}`
         : filters.minTotalQuantity !== undefined
         ? `Qty: ≥${filters.minTotalQuantity.toLocaleString()}`
@@ -116,7 +118,7 @@ export function ActiveFilterBadges({
       <Badge
         key="qty-range"
         variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs"
+        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
       >
         {label}
         <button
@@ -124,7 +126,7 @@ export function ActiveFilterBadges({
             onRemoveFilter("minTotalQuantity");
             onRemoveFilter("maxTotalQuantity");
           }}
-          className="ml-1 hover:bg-muted rounded-full p-0.5"
+          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -138,12 +140,13 @@ export function ActiveFilterBadges({
       <Badge
         key="last-reviewed"
         variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs"
+        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
       >
-        {LAST_REVIEWED_LABELS[filters.lastReviewedFilter] || filters.lastReviewedFilter}
+        {LAST_REVIEWED_LABELS[filters.lastReviewedFilter] ||
+          filters.lastReviewedFilter}
         <button
           onClick={() => onRemoveFilter("lastReviewedFilter")}
-          className="ml-1 hover:bg-muted rounded-full p-0.5"
+          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -157,12 +160,13 @@ export function ActiveFilterBadges({
       <Badge
         key="next-review"
         variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs"
+        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
       >
-        {NEXT_REVIEW_LABELS[filters.nextReviewFilter] || filters.nextReviewFilter}
+        {NEXT_REVIEW_LABELS[filters.nextReviewFilter] ||
+          filters.nextReviewFilter}
         <button
           onClick={() => onRemoveFilter("nextReviewFilter")}
-          className="ml-1 hover:bg-muted rounded-full p-0.5"
+          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -176,12 +180,12 @@ export function ActiveFilterBadges({
       <Badge
         key="has-reviews"
         variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs"
+        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
       >
         Has reviews
         <button
           onClick={() => onRemoveFilter("hasReviews")}
-          className="ml-1 hover:bg-muted rounded-full p-0.5"
+          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -200,7 +204,7 @@ export function ActiveFilterBadges({
         Has errors
         <button
           onClick={() => onRemoveFilter("hasErrors")}
-          className="ml-1 hover:bg-red-200 dark:hover:bg-red-800 rounded-full p-0.5"
+          className="ml-1 hover:bg-red-200 dark:hover:bg-red-800 rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -219,7 +223,7 @@ export function ActiveFilterBadges({
         Has warnings
         <button
           onClick={() => onRemoveFilter("hasWarnings")}
-          className="ml-1 hover:bg-yellow-200 dark:hover:bg-yellow-800 rounded-full p-0.5"
+          className="ml-1 hover:bg-yellow-200 dark:hover:bg-yellow-800 rounded-full p-0.5 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -235,7 +239,7 @@ export function ActiveFilterBadges({
       {onClearAll && (
         <Badge
           variant="outline"
-          className="gap-1 pl-2 pr-1 py-1 text-xs border-dashed cursor-pointer hover:bg-muted"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-muted border-dashed cursor-pointer hover:bg-muted"
           onClick={onClearAll}
         >
           Clear all
@@ -282,7 +286,8 @@ export function MaterialsFilterPanel({
   const [isOpen, setIsOpen] = React.useState(false);
 
   // Local state for form inputs (allows typing without immediate URL updates)
-  const [localFilters, setLocalFilters] = React.useState<MaterialFilters>(filters);
+  const [localFilters, setLocalFilters] =
+    React.useState<MaterialFilters>(filters);
 
   // Sync local state when filters prop changes (e.g., from URL)
   React.useEffect(() => {
@@ -321,17 +326,19 @@ export function MaterialsFilterPanel({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium h-8 px-3 border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 cursor-pointer">
-        <Filter className="h-4 w-4" />
-        Filters
-        {activeFilterCount > 0 && (
-          <Badge
-            variant="secondary"
-            className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-          >
-            {activeFilterCount}
-          </Badge>
-        )}
+      <PopoverTrigger>
+        <Button variant="ghost">
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <Badge
+              variant="outline"
+              className="ml-1 h-5 w-5 rounded-sm p-0 flex items-center justify-center text-xs"
+            >
+              {activeFilterCount}
+            </Badge>
+          )}
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80" align="start">
         <div className="space-y-4">
