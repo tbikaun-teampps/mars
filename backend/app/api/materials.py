@@ -710,7 +710,7 @@ async def upload_sap_material_data(
         )
 
         # Take first n rows for testing
-        df = df.head(10)
+        # df = df.head(10)
 
         # Validate that required columns exist
         missing_columns = set(column_mapping.keys()) - set(df.columns)
