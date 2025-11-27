@@ -239,7 +239,7 @@ export function ActiveFilterBadges({
       {onClearAll && (
         <Badge
           variant="outline"
-          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-muted border-dashed cursor-pointer hover:bg-muted"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm border-dashed cursor-pointer hover:bg-muted"
           onClick={onClearAll}
         >
           Clear all
