@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -206,9 +207,14 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="w-full">
-      <div className="flex items-center gap-2 py-4 justify-between">
-        {activeFilterBadges}
-        <div className="flex items-center gap-2">
+      <div
+        className={cn(
+          "flex items-center gap-2 py-1",
+          activeFilterBadges ? "justify-between" : "justify-end"
+        )}
+      >
+        <div>{activeFilterBadges}</div>
+        <div className="flex gap-2">
           {searchPanel}
           {sortPanel}
           {filterPanel}

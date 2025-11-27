@@ -204,11 +204,22 @@ export function MaterialsTable() {
           );
         const tooltipText = tooltipParts.join(", ");
 
+        // Determine badge color based on insight severity
+        const getBadgeColor = () => {
+          if (counts["error"]) {
+            return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+          }
+          if (counts["warning"]) {
+            return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+          }
+          return "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400";
+        };
+
         return (
           <Tooltip>
             <TooltipTrigger>
               <Badge
-                className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 cursor-pointer hover:opacity-80 flex items-center gap-1"
+                className={`${getBadgeColor()} cursor-pointer hover:opacity-80 flex items-center gap-1`}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedMaterialNumber(row.original.material_number);
