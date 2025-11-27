@@ -3,12 +3,10 @@ import { ColumnDef } from "@tanstack/react-table";
 import { components } from "@/types/api";
 import { DataTable } from "@/components/data-table";
 import { MaterialDetailSheet } from "@/components/material-detail-sheet";
-import {
-  MaterialsFilterPanel,
-  ActiveFilterBadges,
-} from "@/components/materials-filter-panel";
-import { SortingPanel, ActiveSortBadge } from "@/components/sorting-panel";
-import { SearchInput, ActiveSearchBadge } from "@/components/search-input";
+import { MaterialsFilterPanel } from "@/components/materials-filter-panel";
+import { SortingPanel } from "@/components/sorting-panel";
+import { SearchInput } from "@/components/search-input";
+import { ActiveBadges } from "@/components/active-badges";
 import { format, formatDistanceToNow } from "date-fns";
 import { Lightbulb } from "lucide-react";
 import { Badge } from "./ui/badge";
@@ -80,6 +78,7 @@ export function MaterialsTable() {
     setSorting,
     setFilters,
     clearFilters,
+    clearAll,
     removeFilter,
     setSearch,
   } = useTableUrlState();
@@ -513,30 +512,24 @@ export function MaterialsTable() {
           />
         }
         activeFilterBadges={
-          <>
-            <ActiveSearchBadge
-              value={filters.search || ""}
-              onClear={() => setSearch("")}
-            />
-            <ActiveSortBadge
-              sorting={sorting}
-              sortableColumns={[
-                { value: "material_number", label: "Material Number" },
-                { value: "material_desc", label: "Material Description" },
-                { value: "created_on", label: "Created Date" },
-                { value: "total_quantity", label: "Total Quantity" },
-                { value: "total_value", label: "Total Value" },
-                { value: "unit_value", label: "Unit Value" },
-                { value: "safety_stock", label: "Safety Stock" },
-              ]}
-              onClear={() => setSorting([])}
-            />
-            <ActiveFilterBadges
-              filters={filters}
-              onRemoveFilter={removeFilter}
-              onClearAll={clearFilters}
-            />
-          </>
+          <ActiveBadges
+            search={filters.search || ""}
+            onClearSearch={() => setSearch("")}
+            sorting={sorting}
+            sortableColumns={[
+              { value: "material_number", label: "Material Number" },
+              { value: "material_desc", label: "Material Description" },
+              { value: "created_on", label: "Created Date" },
+              { value: "total_quantity", label: "Total Quantity" },
+              { value: "total_value", label: "Total Value" },
+              { value: "unit_value", label: "Unit Value" },
+              { value: "safety_stock", label: "Safety Stock" },
+            ]}
+            onClearSorting={() => setSorting([])}
+            filters={filters}
+            onRemoveFilter={removeFilter}
+            onClearAll={clearAll}
+          />
         }
       />
 

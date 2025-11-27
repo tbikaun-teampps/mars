@@ -236,6 +236,29 @@ export function useTableUrlState() {
     });
   }, [setFilters]);
 
+  // Clear all: filters, sorting, and search in one atomic operation
+  const clearAll = useCallback(() => {
+    updateParams({
+      // Clear sorting
+      sortBy: null,
+      sortDesc: null,
+      // Clear filters
+      materialType: null,
+      minValue: null,
+      maxValue: null,
+      minQty: null,
+      maxQty: null,
+      lastReviewed: null,
+      nextReview: null,
+      hasReviews: null,
+      hasErrors: null,
+      hasWarnings: null,
+      search: null,
+      // Reset pagination
+      page: null,
+    });
+  }, [updateParams]);
+
   // Set search independently
   const setSearch = useCallback(
     (search: string) => {
@@ -299,6 +322,7 @@ export function useTableUrlState() {
     setSorting,
     setFilters,
     clearFilters,
+    clearAll,
     removeFilter,
     setSearch,
   };

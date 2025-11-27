@@ -116,11 +116,17 @@ export function DataTable<TData, TValue>({
   }, [checkScroll]);
 
   const scrollLeft = () => {
-    tableRef.current?.parentElement?.scrollBy({ left: -200, behavior: "smooth" });
+    tableRef.current?.parentElement?.scrollBy({
+      left: -200,
+      behavior: "smooth",
+    });
   };
 
   const scrollRight = () => {
-    tableRef.current?.parentElement?.scrollBy({ left: 200, behavior: "smooth" });
+    tableRef.current?.parentElement?.scrollBy({
+      left: 200,
+      behavior: "smooth",
+    });
   };
 
   const table = useReactTable({
@@ -200,38 +206,14 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="w-full">
-      <div className="flex items-center gap-2 py-4 justify-end">
-        {searchPanel}
-        {sortPanel}
-        {filterPanel}
-        {/* <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => {
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                )
-              })}
-          </DropdownMenuContent>
-        </DropdownMenu> */}
+      <div className="flex items-center gap-2 py-4 justify-between">
+        {activeFilterBadges}
+        <div className="flex items-center gap-2">
+          {searchPanel}
+          {sortPanel}
+          {filterPanel}
+        </div>
       </div>
-      {activeFilterBadges && <div className="pb-3">{activeFilterBadges}</div>}
       <div className="border relative">
         {canScrollLeft && (
           <button
