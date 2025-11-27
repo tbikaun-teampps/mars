@@ -45,11 +45,11 @@ export function AuditLog() {
   const columns: ColumnDef<MaterialAuditLogEntry>[] = [
     {
       accessorKey: "timestamp",
-      header: () => <div className="text-center">Timestamp</div>,
+      header: "Timestamp",
       cell: ({ row }) => {
         const date = row.getValue("timestamp") as string;
         return (
-          <div className="text-center text-xs">
+          <div className="text-xs">
             <div>
               {formatDistanceToNow(new Date(date), { addSuffix: true })}
             </div>
@@ -59,13 +59,26 @@ export function AuditLog() {
           </div>
         );
       },
-      size: 180,
+      size: 100,
+    },
+    {
+      accessorKey: "changed_by_user",
+      header: "Changed By",
+      cell: ({ row }) => {
+        const changedByUser = row.original.changed_by_user;
+        return (
+          <div className="text-xs">
+            <span>{changedByUser?.full_name ?? "Unknown User"}</span>
+          </div>
+        );
+      },
+      size: 100,
     },
     {
       accessorKey: "material_number",
-      header: () => <div className="text-center">Material #</div>,
+      header: "Material Number",
       cell: ({ row }) => (
-        <div className="text-center font-medium text-xs">
+        <div className="font-medium text-xs">
           {row.getValue("material_number")}
         </div>
       ),
@@ -82,7 +95,7 @@ export function AuditLog() {
           </div>
         );
       },
-      size: 250,
+      size: 200,
     },
     {
       accessorKey: "change_summary",
@@ -91,19 +104,6 @@ export function AuditLog() {
         <div className="text-xs">{row.getValue("change_summary")}</div>
       ),
       size: 300,
-    },
-    {
-      accessorKey: "changed_by_user",
-      header: () => <div className="text-center">Changed By</div>,
-      cell: ({ row }) => {
-        const changedByUser = row.original.changed_by_user;
-        return (
-          <div className="text-center text-xs">
-            <span>{changedByUser?.full_name ?? "Unknown User"}</span>
-          </div>
-        );
-      },
-      size: 150,
     },
   ];
 

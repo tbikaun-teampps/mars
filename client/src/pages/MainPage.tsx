@@ -87,7 +87,7 @@ export function MainPage() {
           </div>
         </div>
       </header>
-      <main className="mx-auto px-4 container flex-1 overflow-auto py-4">
+      <main className="mx-auto px-4 container flex-1 overflow-auto">
         {/* Add 'container back to main className for max-w constraints, etc. */}
         {activeView === "dashboard" ? <MaterialsTable /> : <AuditLog />}
       </main>
