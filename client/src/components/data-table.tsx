@@ -15,6 +15,7 @@ import {
   PaginationState,
   OnChangeFn,
 } from "@tanstack/react-table";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -84,6 +85,44 @@ export function DataTable<TData, TValue>({
       pageSize: 20,
     });
 
+  // Scroll indicator state
+  const tableRef = React.useRef<HTMLTableElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(false);
+
+  const checkScroll = React.useCallback(() => {
+    const scrollContainer = tableRef.current?.parentElement;
+    if (!scrollContainer) return;
+    setCanScrollLeft(scrollContainer.scrollLeft > 0);
+    setCanScrollRight(
+      scrollContainer.scrollLeft <
+        scrollContainer.scrollWidth - scrollContainer.clientWidth - 1
+    );
+  }, []);
+
+  React.useEffect(() => {
+    const scrollContainer = tableRef.current?.parentElement;
+    if (!scrollContainer) return;
+    checkScroll();
+    scrollContainer.addEventListener("scroll", checkScroll, { passive: true });
+    window.addEventListener("resize", checkScroll);
+    const observer = new ResizeObserver(checkScroll);
+    observer.observe(scrollContainer);
+    return () => {
+      scrollContainer.removeEventListener("scroll", checkScroll);
+      window.removeEventListener("resize", checkScroll);
+      observer.disconnect();
+    };
+  }, [checkScroll]);
+
+  const scrollLeft = () => {
+    tableRef.current?.parentElement?.scrollBy({ left: -200, behavior: "smooth" });
+  };
+
+  const scrollRight = () => {
+    tableRef.current?.parentElement?.scrollBy({ left: 200, behavior: "smooth" });
+  };
+
   const table = useReactTable({
     data,
     columns,
@@ -113,6 +152,23 @@ export function DataTable<TData, TValue>({
       columnPinning: columnPinning || { left: [], right: [] },
     },
   });
+
+  // Calculate pinned column widths for arrow positioning
+  const leftPinnedWidth = React.useMemo(() => {
+    const leftPinned = columnPinning?.left || [];
+    return leftPinned.reduce((acc, colId) => {
+      const col = table.getColumn(colId);
+      return acc + (col?.getSize() || 0);
+    }, 0);
+  }, [columnPinning?.left, table]);
+
+  const rightPinnedWidth = React.useMemo(() => {
+    const rightPinned = columnPinning?.right || [];
+    return rightPinned.reduce((acc, colId) => {
+      const col = table.getColumn(colId);
+      return acc + (col?.getSize() || 0);
+    }, 0);
+  }, [columnPinning?.right, table]);
 
   // These are the important styles to make sticky column pinning work!
   // Based on official TanStack Table example
@@ -176,8 +232,30 @@ export function DataTable<TData, TValue>({
         </DropdownMenu> */}
       </div>
       {activeFilterBadges && <div className="pb-3">{activeFilterBadges}</div>}
-      <div className="border">
-        <Table>
+      <div className="border relative">
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={scrollLeft}
+            className="absolute top-0 bottom-0 z-20 flex items-center px-1 bg-gradient-to-r from-white via-white/80 to-transparent cursor-pointer hover:from-muted"
+            style={{ left: leftPinnedWidth }}
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={scrollRight}
+            className="absolute top-0 bottom-0 z-20 flex items-center px-1 bg-gradient-to-l from-white via-white/80 to-transparent cursor-pointer hover:from-muted"
+            style={{ right: rightPinnedWidth }}
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </button>
+        )}
+        <Table ref={tableRef}>
           <colgroup>
             {table.getAllColumns().map((column) => (
               <col key={column.id} style={{ width: `${column.getSize()}px` }} />
