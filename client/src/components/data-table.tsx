@@ -209,7 +209,7 @@ export function DataTable<TData, TValue>({
     <div className="w-full">
       <div
         className={cn(
-          "flex items-center gap-2 py-1",
+          "flex items-center gap-2 py-2 sticky top-0 z-30 bg-background",
           activeFilterBadges ? "justify-between" : "justify-end"
         )}
       >
@@ -307,32 +307,30 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        {/* <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div> */}
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex items-center justify-end space-x-2 py-4 sticky bottom-0 z-30 bg-background">
+        <div className="flex-1 text-xs text-muted-foreground">
           Showing {table.getRowModel().rows.length} of {totalRows || 0} row
           {totalRows || 0 > 1 ? "s" : ""}.
         </div>
         {manualPagination && pageCount !== undefined && (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             Page {table.getState().pagination.pageIndex + 1} of {pageCount}
           </div>
         )}
         <div className="space-x-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="text-xs"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
             Previous
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="text-xs"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
