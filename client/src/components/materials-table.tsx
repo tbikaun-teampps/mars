@@ -7,6 +7,7 @@ import {
   MaterialsFilterPanel,
   ActiveFilterBadges,
 } from "@/components/materials-filter-panel";
+import { SortingPanel, ActiveSortBadge } from "@/components/sorting-panel";
 import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -507,20 +508,25 @@ export function MaterialsTable() {
         manualSorting={true}
         sorting={sorting}
         onSortingChange={setSorting}
-        enableSortingControls={true}
-        sortableColumns={[
-          { value: "material_number", label: "Material Number" },
-          { value: "material_desc", label: "Material Description" },
-          { value: "created_on", label: "Created Date" },
-          { value: "total_quantity", label: "Total Quantity" },
-          { value: "total_value", label: "Total Value" },
-          { value: "unit_value", label: "Unit Value" },
-          { value: "safety_stock", label: "Safety Stock" },
-        ]}
         columnPinning={{
           left: ["insights", "material_number", "material_desc"],
           right: ["reviews_count", "last_reviewed", "next_review"],
         }}
+        sortPanel={
+          <SortingPanel
+            sortableColumns={[
+              { value: "material_number", label: "Material Number" },
+              { value: "material_desc", label: "Material Description" },
+              { value: "created_on", label: "Created Date" },
+              { value: "total_quantity", label: "Total Quantity" },
+              { value: "total_value", label: "Total Value" },
+              { value: "unit_value", label: "Unit Value" },
+              { value: "safety_stock", label: "Safety Stock" },
+            ]}
+            sorting={sorting}
+            onSortingChange={setSorting}
+          />
+        }
         filterPanel={
           <MaterialsFilterPanel
             filters={filters}
@@ -530,11 +536,26 @@ export function MaterialsTable() {
           />
         }
         activeFilterBadges={
-          <ActiveFilterBadges
-            filters={filters}
-            onRemoveFilter={removeFilter}
-            onClearAll={clearFilters}
-          />
+          <>
+            <ActiveSortBadge
+              sorting={sorting}
+              sortableColumns={[
+                { value: "material_number", label: "Material Number" },
+                { value: "material_desc", label: "Material Description" },
+                { value: "created_on", label: "Created Date" },
+                { value: "total_quantity", label: "Total Quantity" },
+                { value: "total_value", label: "Total Value" },
+                { value: "unit_value", label: "Unit Value" },
+                { value: "safety_stock", label: "Safety Stock" },
+              ]}
+              onClear={() => setSorting([])}
+            />
+            <ActiveFilterBadges
+              filters={filters}
+              onRemoveFilter={removeFilter}
+              onClearAll={clearFilters}
+            />
+          </>
         }
       />
 

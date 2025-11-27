@@ -15,17 +15,8 @@ import {
   PaginationState,
   OnChangeFn,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -51,14 +42,13 @@ interface DataTableProps<TData, TValue> {
   manualSorting?: boolean;
   sorting?: SortingState;
   onSortingChange?: OnChangeFn<SortingState>;
-  // Sorting controls props
-  enableSortingControls?: boolean;
-  sortableColumns?: Array<{ value: string; label: string }>;
   // Column pinning props
   columnPinning?: ColumnPinningState;
   // Custom filter panel component
   filterPanel?: React.ReactNode;
-  // Active filter badges component
+  // Custom sort panel component
+  sortPanel?: React.ReactNode;
+  // Active filter/sort badges component
   activeFilterBadges?: React.ReactNode;
 }
 
@@ -76,10 +66,9 @@ export function DataTable<TData, TValue>({
   manualSorting = false,
   sorting: externalSorting,
   onSortingChange,
-  enableSortingControls = false,
-  sortableColumns = [],
   columnPinning,
   filterPanel,
+  sortPanel,
   activeFilterBadges,
 }: DataTableProps<TData, TValue>) {
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
@@ -153,27 +142,6 @@ export function DataTable<TData, TValue>({
     };
   };
 
-  // Sorting handlers
-  const handleSortChange = (value: string) => {
-    if (onSortingChange) {
-      const currentSorting = externalSorting || internalSorting;
-      onSortingChange([{ id: value, desc: currentSorting[0]?.desc ?? false }]);
-    }
-  };
-
-  const toggleSortDirection = () => {
-    if (onSortingChange) {
-      const currentSorting = externalSorting || internalSorting;
-      if (currentSorting.length > 0) {
-        onSortingChange([
-          { id: currentSorting[0].id, desc: !currentSorting[0].desc },
-        ]);
-      }
-    }
-  };
-
-  const currentSorting = externalSorting || internalSorting;
-
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 py-4 justify-end">
@@ -190,42 +158,7 @@ export function DataTable<TData, TValue>({
           />
         )}
 
-        {enableSortingControls && sortableColumns.length > 0 && (
-          <>
-            <Select
-              value={currentSorting[0]?.id}
-              onValueChange={handleSortChange}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Sort by..." />
-              </SelectTrigger>
-              <SelectContent>
-                {sortableColumns.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {currentSorting.length > 0 && (
-              <Button variant="outline" size="sm" onClick={toggleSortDirection}>
-                {currentSorting[0].desc ? (
-                  <>
-                    <ArrowDown className="h-4 w-4 mr-1" />
-                    Descending
-                  </>
-                ) : (
-                  <>
-                    <ArrowUp className="h-4 w-4 mr-1" />
-                    Ascending
-                  </>
-                )}
-              </Button>
-            )}
-          </>
-        )}
-
+        {sortPanel}
         {filterPanel}
         {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
