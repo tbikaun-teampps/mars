@@ -16,6 +16,7 @@ export interface MaterialFilters {
   hasReviews?: boolean;
   hasErrors?: boolean;
   hasWarnings?: boolean;
+  search?: string;
 }
 
 /**
@@ -68,6 +69,7 @@ export function useTableUrlState() {
     const hasReviewsParam = searchParams.get("hasReviews");
     const hasErrorsParam = searchParams.get("hasErrors");
     const hasWarningsParam = searchParams.get("hasWarnings");
+    const searchParam = searchParams.get("search");
 
     const filters: MaterialFilters = {
       materialType,
@@ -84,6 +86,7 @@ export function useTableUrlState() {
       hasReviews: hasReviewsParam ? hasReviewsParam === "true" : undefined,
       hasErrors: hasErrorsParam ? hasErrorsParam === "true" : undefined,
       hasWarnings: hasWarningsParam ? hasWarningsParam === "true" : undefined,
+      search: searchParam || undefined,
     };
 
     return { pageIndex, pageSize, sorting, filters };
@@ -209,6 +212,7 @@ export function useTableUrlState() {
           filters.hasWarnings !== undefined
             ? String(filters.hasWarnings)
             : null,
+        search: filters.search || null,
         page: null, // Reset to first page when filters change
       });
     },
@@ -228,8 +232,17 @@ export function useTableUrlState() {
       hasReviews: undefined,
       hasErrors: undefined,
       hasWarnings: undefined,
+      search: undefined,
     });
   }, [setFilters]);
+
+  // Set search independently
+  const setSearch = useCallback(
+    (search: string) => {
+      setFilters({ ...state.filters, search: search || undefined });
+    },
+    [state.filters, setFilters]
+  );
 
   // Remove a single filter (for badge dismiss)
   const removeFilter = useCallback(
@@ -266,6 +279,7 @@ export function useTableUrlState() {
     if (filters.hasReviews !== undefined) count++;
     if (filters.hasErrors !== undefined) count++;
     if (filters.hasWarnings !== undefined) count++;
+    if (filters.search) count++;
 
     return count;
   }, [state]);
@@ -286,5 +300,6 @@ export function useTableUrlState() {
     setFilters,
     clearFilters,
     removeFilter,
+    setSearch,
   };
 }

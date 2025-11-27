@@ -8,6 +8,7 @@ import {
   ActiveFilterBadges,
 } from "@/components/materials-filter-panel";
 import { SortingPanel, ActiveSortBadge } from "@/components/sorting-panel";
+import { SearchInput, ActiveSearchBadge } from "@/components/search-input";
 import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -85,6 +86,7 @@ export function MaterialsTable() {
     setFilters,
     clearFilters,
     removeFilter,
+    setSearch,
   } = useTableUrlState();
 
   // Build query params from UI state
@@ -111,6 +113,7 @@ export function MaterialsTable() {
     has_reviews: filters.hasReviews,
     has_errors: filters.hasErrors,
     has_warnings: filters.hasWarnings,
+    search: filters.search,
   });
 
   const materials = data?.items ?? [];
@@ -498,8 +501,6 @@ export function MaterialsTable() {
         columns={columns}
         data={materials}
         onRowClick={handleRowClick}
-        filterColumn="material_desc"
-        filterPlaceholder="Filter by description..."
         manualPagination={true}
         pageCount={pageCount}
         pagination={{ pageIndex, pageSize }}
@@ -512,6 +513,13 @@ export function MaterialsTable() {
           left: ["insights", "material_number", "material_desc"],
           right: ["reviews_count", "last_reviewed", "next_review"],
         }}
+        searchPanel={
+          <SearchInput
+            value={filters.search || ""}
+            onChange={setSearch}
+            placeholder="Search materials..."
+          />
+        }
         sortPanel={
           <SortingPanel
             sortableColumns={[
@@ -537,6 +545,10 @@ export function MaterialsTable() {
         }
         activeFilterBadges={
           <>
+            <ActiveSearchBadge
+              value={filters.search || ""}
+              onClear={() => setSearch("")}
+            />
             <ActiveSortBadge
               sorting={sorting}
               sortableColumns={[

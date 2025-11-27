@@ -16,7 +16,6 @@ import {
   OnChangeFn,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,8 +29,6 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   onRowClick?: (row: TData) => void;
-  filterColumn?: string;
-  filterPlaceholder?: string;
   // Manual pagination props
   manualPagination?: boolean;
   pageCount?: number;
@@ -44,6 +41,8 @@ interface DataTableProps<TData, TValue> {
   onSortingChange?: OnChangeFn<SortingState>;
   // Column pinning props
   columnPinning?: ColumnPinningState;
+  // Custom search panel component
+  searchPanel?: React.ReactNode;
   // Custom filter panel component
   filterPanel?: React.ReactNode;
   // Custom sort panel component
@@ -56,8 +55,6 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   onRowClick,
-  filterColumn,
-  filterPlaceholder = "Filter...",
   manualPagination = false,
   pageCount,
   pagination: externalPagination,
@@ -67,6 +64,7 @@ export function DataTable<TData, TValue>({
   sorting: externalSorting,
   onSortingChange,
   columnPinning,
+  searchPanel,
   filterPanel,
   sortPanel,
   activeFilterBadges,
@@ -145,19 +143,7 @@ export function DataTable<TData, TValue>({
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 py-4 justify-end">
-        {filterColumn && (
-          <Input
-            placeholder={filterPlaceholder}
-            value={
-              (table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
-            }
-            onChange={(event) =>
-              table.getColumn(filterColumn)?.setFilterValue(event.target.value)
-            }
-            className="max-w-sm"
-          />
-        )}
-
+        {searchPanel}
         {sortPanel}
         {filterPanel}
         {/* <DropdownMenu>

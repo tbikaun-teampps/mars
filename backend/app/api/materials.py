@@ -14,7 +14,7 @@ from fastapi import (
     status,
     UploadFile,
 )
-from sqlalchemy import func as sa_func, text
+from sqlalchemy import func as sa_func, text, cast, String
 from sqlalchemy.orm import aliased
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -159,7 +159,7 @@ async def list_materials(
     if search:
         search_pattern = f"%{search}%"
         query = query.where(
-            (SAPMaterialData.material_number.cast(str).ilike(search_pattern))
+            (cast(SAPMaterialData.material_number, String).ilike(search_pattern))
             | (SAPMaterialData.material_desc.ilike(search_pattern))
             | (SAPMaterialData.material_type.ilike(search_pattern))
         )
