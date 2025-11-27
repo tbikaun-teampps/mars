@@ -129,7 +129,7 @@ export function SortingPanel({
                       className="text-sm font-normal cursor-pointer flex items-center gap-1"
                     >
                       <ArrowUp className="h-3 w-3" />
-                      Ascending
+                      Ascending (Low to High)
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -139,7 +139,7 @@ export function SortingPanel({
                       className="text-sm font-normal cursor-pointer flex items-center gap-1"
                     >
                       <ArrowDown className="h-3 w-3" />
-                      Descending
+                      Descending (High to Low)
                     </Label>
                   </div>
                 </RadioGroup>
