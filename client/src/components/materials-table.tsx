@@ -370,6 +370,15 @@ export function MaterialsTable() {
       header: "Last Reviewed",
       cell: ({ row }) => {
         const date = row.getValue("last_reviewed") as string;
+        const hasActiveReview = row.original.has_active_review;
+
+        if (hasActiveReview) {
+          return (
+            <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              In Review
+            </Badge>
+          );
+        }
         if (!date) {
           return <Badge variant="destructive">Not Reviewed</Badge>;
         }
@@ -387,6 +396,15 @@ export function MaterialsTable() {
       cell: ({ row }) => {
         const nextReviewDate = row.original.next_review;
         const lastReviewedDate = row.original.last_reviewed;
+        const hasActiveReview = row.original.has_active_review;
+
+        if (hasActiveReview) {
+          return (
+            <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              In Review
+            </Badge>
+          );
+        }
         if (!nextReviewDate && !lastReviewedDate) {
           return <Badge variant="destructive">Not Reviewed</Badge>;
         }

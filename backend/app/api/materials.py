@@ -108,6 +108,17 @@ async def list_materials(
         .subquery()
     )
 
+    # Subquery to detect if there's an active (in-progress) review for each material
+    active_review = (
+        select(
+            MaterialReviewDB.material_number,
+            sa_func.count(MaterialReviewDB.review_id).label("active_count"),
+        )
+        .where(MaterialReviewDB.status.notin_([ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value]))
+        .group_by(MaterialReviewDB.material_number)
+        .subquery()
+    )
+
     # Use LEFT JOIN to count reviews and get latest review data
     # Create a JSON object for each insight and aggregate them
     insight_json = sa_func.json_build_object(
@@ -135,6 +146,7 @@ async def list_materials(
             latest_review.c.next_review_date.label("next_review"),
             # latest_review.c.notes.label("review_notes"),
             insights_agg,
+            (active_review.c.active_count > 0).label("has_active_review"),
         )
         .outerjoin(
             MaterialReviewDB,
@@ -148,11 +160,16 @@ async def list_materials(
             MaterialInsightDB,
             SAPMaterialData.material_number == MaterialInsightDB.material_number,
         )
+        .outerjoin(
+            active_review,
+            SAPMaterialData.material_number == active_review.c.material_number,
+        )
         .group_by(
             SAPMaterialData.material_number,
             latest_review.c.review_date,
             latest_review.c.next_review_date,
             # latest_review.c.notes,
+            active_review.c.active_count,
         )
     )
 
@@ -295,6 +312,7 @@ async def list_materials(
         next_review,
         # review_notes,
         insights_json,
+        has_active_review,
     ) in rows:
         material_dict = transform_db_record_to_material(
             material_data.model_dump()
@@ -304,6 +322,7 @@ async def list_materials(
         material_dict["last_reviewed"] = last_reviewed
         material_dict["next_review"] = next_review
         # material_dict["review_notes"] = review_notes
+        material_dict["has_active_review"] = bool(has_active_review)
         # Transform insights from JSON to Insight objects
         if insights_json and isinstance(insights_json, list):
             material_dict["insights"] = [

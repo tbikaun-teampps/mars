@@ -258,9 +258,13 @@ interface MaterialsFilterPanelProps {
 }
 
 const MATERIAL_TYPES = [
-  { value: "SPRS", label: "SPRS (Spare Parts)" },
-  { value: "ROTG", label: "ROTG (Rotables)" },
+  { value: "CHEM", label: "CHEM (Chemicals)" },
+  { value: "CORE", label: "CORE (Core)" },
   { value: "FING", label: "FING (Finished)" },
+  { value: "OPER", label: "OPER (Operating Supplies)" },
+  { value: "RAWM", label: "RAWM (Raw Materials)" },
+  { value: "ROTG", label: "ROTG (Rotables)" },
+  { value: "SPRS", label: "SPRS (Spare Parts)" },
 ];
 
 const LAST_REVIEWED_OPTIONS = [

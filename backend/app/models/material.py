@@ -73,6 +73,7 @@ class Material(BaseModel):
     # review_notes: str | None = None
     reviews_count: int | None = 0  # Number of reviews
     insights: list[Insight] = []  # List of insights
+    has_active_review: bool = False  # True if there's an active (non-completed/cancelled) review
 
 
 class MaterialWithReviews(Material):
