@@ -340,3 +340,61 @@ export function useCurrentUser(): UseQueryResult<UserResponse, Error> {
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
+
+/**
+ * Hook to acknowledge an insight
+ */
+export function useAcknowledgeInsight(): UseMutationResult<
+  { message: string },
+  Error,
+  { materialNumber: number; insightId: number }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ materialNumber, insightId }) =>
+      apiClient.acknowledgeInsight(materialNumber, insightId),
+    onSuccess: (_data, { materialNumber }) => {
+      // Invalidate material details to refetch with updated insight state
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.materials.detail(materialNumber),
+      });
+      // Also invalidate materials list as it may show insight counts
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.materials.all,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to acknowledge insight:", error);
+    },
+  });
+}
+
+/**
+ * Hook to unacknowledge an insight
+ */
+export function useUnacknowledgeInsight(): UseMutationResult<
+  { message: string },
+  Error,
+  { materialNumber: number; insightId: number }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ materialNumber, insightId }) =>
+      apiClient.unacknowledgeInsight(materialNumber, insightId),
+    onSuccess: (_data, { materialNumber }) => {
+      // Invalidate material details to refetch with updated insight state
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.materials.detail(materialNumber),
+      });
+      // Also invalidate materials list as it may show insight counts
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.materials.all,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to unacknowledge insight:", error);
+    },
+  });
+}

@@ -118,10 +118,11 @@ async def list_materials(
     )
 
     # Aggregate insights into a JSON array, filtering out NULL values
-    # Use json_agg with filter to exclude rows where insight_type is NULL
+    # Only include unacknowledged insights (acknowledged_at IS NULL)
     insights_agg = sa_func.coalesce(
         sa_func.json_agg(insight_json).filter(
             MaterialInsightDB.insight_type.isnot(None)
+            & MaterialInsightDB.acknowledged_at.is_(None)
         ),
         text("'[]'::json"),
     ).label("insights")
@@ -485,18 +486,38 @@ async def get_material(
         material_dict["next_review"] = None
         material_dict["review_notes"] = None
 
-    # Fetch insights for this material
-    insights_query = select(MaterialInsightDB).where(
-        MaterialInsightDB.material_number == material_number
+    # Fetch insights for this material with acknowledger profile
+    AcknowledgerProfile = aliased(ProfileDB)
+    insights_query = (
+        select(MaterialInsightDB, AcknowledgerProfile)
+        .where(MaterialInsightDB.material_number == material_number)
+        .outerjoin(
+            AcknowledgerProfile,
+            MaterialInsightDB.acknowledged_by == AcknowledgerProfile.id,
+        )
     )
     insights_result = await db.exec(insights_query)
     insights_data = insights_result.all()
 
-    # Transform to Insight objects
-    insights = [
-        Insight(insight_type=i.insight_type, message=i.message)
-        for i in insights_data
-    ]
+    # Transform to Insight objects with acknowledgement info
+    insights = []
+    for insight_db, acknowledger_profile in insights_data:
+        acknowledged_by_user = None
+        if acknowledger_profile:
+            acknowledged_by_user = UserProfile(
+                id=acknowledger_profile.id, full_name=acknowledger_profile.full_name
+            )
+
+        insights.append(
+            Insight(
+                insight_id=insight_db.insight_id,
+                insight_type=insight_db.insight_type,
+                message=insight_db.message,
+                acknowledged_at=insight_db.acknowledged_at,
+                acknowledged_by=insight_db.acknowledged_by,
+                acknowledged_by_user=acknowledged_by_user,
+            )
+        )
     material_dict["insights"] = insights
 
     return MaterialWithReviews(**material_dict, reviews=reviews)

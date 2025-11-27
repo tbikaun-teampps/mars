@@ -17,6 +17,7 @@ from app.models.db_models import (
     SAPMaterialData,
     MaterialReviewDB,
     ReviewChecklistDB,
+    MaterialInsightDB,
     ProfileDB,
 )
 from app.models.user import UserProfile
@@ -141,7 +142,17 @@ def generate_change_summary(
             return "Added new review"
         elif table_name == "review_checklist":
             return "Completed checklist verification"
+        elif table_name == "material_insights":
+            return "Generated insight"
         return f"Created {table_name} record"
+
+    # Handle insight acknowledgement updates
+    if table_name == "material_insights" and fields_changed:
+        if "acknowledged_at" in fields_changed:
+            if new_values and new_values.get("acknowledged_at"):
+                return "Acknowledged insight"
+            else:
+                return "Removed insight acknowledgement"
 
     # UPDATE operation
     if not fields_changed or len(fields_changed) == 0:
@@ -240,7 +251,7 @@ async def list_material_audit_logs(
     # Build base query for material-related tables
     query = (
         select(AuditLogDB, ProfileDB)
-        .where(AuditLogDB.table_name.in_(["sap_material_data", "material_reviews", "review_checklist"]))
+        .where(AuditLogDB.table_name.in_(["sap_material_data", "material_reviews", "review_checklist", "material_insights"]))
         .outerjoin(ProfileDB, AuditLogDB.changed_by == ProfileDB.id)
     )
 
@@ -250,11 +261,12 @@ async def list_material_audit_logs(
     if date_to:
         query = query.where(AuditLogDB.changed_at <= date_to)
 
-    # For material_number filter, we need to handle three tables differently
+    # For material_number filter, we need to handle four tables differently
     if material_number is not None:
         # For sap_material_data, record_id is material_number
         # For material_reviews, we need to get review_ids for the material
         # For review_checklist, we need to get checklist_ids for those review_ids
+        # For material_insights, we need to get insight_ids for the material
         from sqlalchemy import or_
 
         material_review_ids_query = select(MaterialReviewDB.review_id).where(
@@ -272,7 +284,14 @@ async def list_material_audit_logs(
             checklist_ids_result = await db.exec(checklist_ids_query)
             checklist_ids = [row for row in checklist_ids_result.all()]
 
-        if material_review_ids or checklist_ids:
+        # Get insight_ids for the material
+        insight_ids_query = select(MaterialInsightDB.insight_id).where(
+            MaterialInsightDB.material_number == material_number
+        )
+        insight_ids_result = await db.exec(insight_ids_query)
+        insight_ids = [row for row in insight_ids_result.all()]
+
+        if material_review_ids or checklist_ids or insight_ids:
             conditions = [
                 # Material table changes
                 (AuditLogDB.table_name == "sap_material_data")
@@ -293,6 +312,13 @@ async def list_material_audit_logs(
                     & (AuditLogDB.record_id.in_(checklist_ids))
                 )
 
+            if insight_ids:
+                # Insight table changes
+                conditions.append(
+                    (AuditLogDB.table_name == "material_insights")
+                    & (AuditLogDB.record_id.in_(insight_ids))
+                )
+
             query = query.where(or_(*conditions))
         else:
             # Only material table changes
@@ -305,7 +331,7 @@ async def list_material_audit_logs(
     count_query = (
         select(func.count())
         .select_from(AuditLogDB)
-        .where(AuditLogDB.table_name.in_(["sap_material_data", "material_reviews", "review_checklist"]))
+        .where(AuditLogDB.table_name.in_(["sap_material_data", "material_reviews", "review_checklist", "material_insights"]))
     )
     if date_from:
         count_query = count_query.where(AuditLogDB.changed_at >= date_from)
@@ -313,7 +339,7 @@ async def list_material_audit_logs(
         count_query = count_query.where(AuditLogDB.changed_at <= date_to)
     # Apply same material_number filter logic to count
     if material_number is not None:
-        if material_review_ids or checklist_ids:
+        if material_review_ids or checklist_ids or insight_ids:
             count_conditions = [
                 # Material table changes
                 (AuditLogDB.table_name == "sap_material_data")
@@ -332,6 +358,13 @@ async def list_material_audit_logs(
                 count_conditions.append(
                     (AuditLogDB.table_name == "review_checklist")
                     & (AuditLogDB.record_id.in_(checklist_ids))
+                )
+
+            if insight_ids:
+                # Insight table changes
+                count_conditions.append(
+                    (AuditLogDB.table_name == "material_insights")
+                    & (AuditLogDB.record_id.in_(insight_ids))
                 )
 
             count_query = count_query.where(or_(*count_conditions))
@@ -385,6 +418,14 @@ async def list_material_audit_logs(
                 mat_number = review_result.first()
             else:
                 mat_number = None
+        elif log.table_name == "material_insights":
+            # Look up the material_number from the insight
+            insight_query = select(MaterialInsightDB.material_number).where(
+                MaterialInsightDB.insight_id == log.record_id
+            )
+            insight_result = await db.exec(insight_query)
+            mat_number_result = insight_result.first()
+            mat_number = mat_number_result if mat_number_result else None
         else:
             mat_number = None
 

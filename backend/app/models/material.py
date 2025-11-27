@@ -1,16 +1,22 @@
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel
 
 from app.models.review import MaterialReview
+from app.models.user import UserProfile
 
 
 class Insight(BaseModel):
     """Insight model."""
 
-    insight_type: str  # 'info', 'warning', 'error'
+    insight_id: Optional[int] = None
+    insight_type: str  # 'info', 'warning', 'error', 'success'
     message: str
+    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[UUID] = None
+    acknowledged_by_user: Optional[UserProfile] = None
 
 
 class ConsumptionHistory(BaseModel):

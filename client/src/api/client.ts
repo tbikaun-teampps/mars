@@ -433,6 +433,25 @@ export class ApiClient {
   async getCurrentUser(): Promise<UserResponse> {
     return this.get<UserResponse>("/users/me");
   }
+
+  // Insight acknowledgement methods
+  async acknowledgeInsight(
+    materialNumber: number,
+    insightId: number
+  ): Promise<{ message: string }> {
+    return this.put<{ message: string }>(
+      `/materials/${materialNumber}/insights/${insightId}/acknowledge`
+    );
+  }
+
+  async unacknowledgeInsight(
+    materialNumber: number,
+    insightId: number
+  ): Promise<{ message: string }> {
+    return this.put<{ message: string }>(
+      `/materials/${materialNumber}/insights/${insightId}/unacknowledge`
+    );
+  }
 }
 
 // Export a default instance

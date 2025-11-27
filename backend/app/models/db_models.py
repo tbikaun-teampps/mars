@@ -76,6 +76,13 @@ class MaterialInsightDB(SQLModel, table=True):
         sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
     )
 
+    # Acknowledgement fields
+    acknowledged_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
+    )
+    acknowledged_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    last_modified_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+
     # Relationship to material
     material: Optional[SAPMaterialData] = Relationship(back_populates="insights")
 

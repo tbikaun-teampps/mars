@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Info, Loader2, Plus, MessageSquare, AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Info, Loader2, Plus, MessageSquare, AlertCircle, AlertTriangle, CheckCircle2, Check, X, Eye, EyeOff } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { components } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import {
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { ReviewCommentsDialog } from "@/components/review-comments-dialog";
 import { formatDate, formatDistanceToNow } from "date-fns";
-import { useMaterialDetails, useCancelReview } from "@/api/queries";
+import { useMaterialDetails, useCancelReview, useAcknowledgeInsight, useUnacknowledgeInsight } from "@/api/queries";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn, getMaterialReviewStatusBadgeColor } from "@/lib/utils";
@@ -42,15 +42,27 @@ type MaterialReview = MaterialReviewBase & {
 // Insights Panel Component
 interface InsightsPanelProps {
   insights: Insight[] | undefined;
+  materialNumber: number;
 }
 
-function InsightsPanel({ insights }: InsightsPanelProps) {
+function InsightsPanel({ insights, materialNumber }: InsightsPanelProps) {
+  const [showAcknowledged, setShowAcknowledged] = React.useState(false);
+  const acknowledgeInsight = useAcknowledgeInsight();
+  const unacknowledgeInsight = useUnacknowledgeInsight();
+
   if (!insights || insights.length === 0) {
     return null;
   }
 
+  // Separate acknowledged and unacknowledged insights
+  const unacknowledgedInsights = insights.filter((i) => !i.acknowledged_at);
+  const acknowledgedInsights = insights.filter((i) => i.acknowledged_at);
+
+  // Show either all insights or only unacknowledged based on toggle
+  const visibleInsights = showAcknowledged ? insights : unacknowledgedInsights;
+
   // Group insights by type
-  const groupedInsights = insights.reduce(
+  const groupedInsights = visibleInsights.reduce(
     (acc, insight) => {
       const type = insight.insight_type;
       if (!acc[type]) {
@@ -61,6 +73,14 @@ function InsightsPanel({ insights }: InsightsPanelProps) {
     },
     {} as Record<string, Insight[]>
   );
+
+  const handleAcknowledge = (insightId: number) => {
+    acknowledgeInsight.mutate({ materialNumber, insightId });
+  };
+
+  const handleUnacknowledge = (insightId: number) => {
+    unacknowledgeInsight.mutate({ materialNumber, insightId });
+  };
 
   const insightConfig: Record<
     string,
@@ -100,6 +120,38 @@ function InsightsPanel({ insights }: InsightsPanelProps) {
 
   return (
     <div className="space-y-2 mb-4">
+      {/* Toggle for showing acknowledged insights */}
+      {acknowledgedInsights.length > 0 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            {acknowledgedInsights.length} acknowledged insight
+            {acknowledgedInsights.length !== 1 ? "s" : ""} hidden
+          </span>
+          <button
+            onClick={() => setShowAcknowledged(!showAcknowledged)}
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            {showAcknowledged ? (
+              <>
+                <EyeOff className="h-3 w-3" />
+                Hide acknowledged
+              </>
+            ) : (
+              <>
+                <Eye className="h-3 w-3" />
+                Show acknowledged
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {unacknowledgedInsights.length === 0 && !showAcknowledged && (
+        <div className="text-sm text-muted-foreground text-center py-2">
+          All insights have been acknowledged
+        </div>
+      )}
+
       {typePriority.map((type) => {
         const typeInsights = groupedInsights[type] || [];
         if (typeInsights.length === 0) return null;
@@ -122,9 +174,60 @@ function InsightsPanel({ insights }: InsightsPanelProps) {
                   {typeInsights.length} {config.label}
                   {typeInsights.length > 1 ? "s" : ""}
                 </div>
-                <ul className="text-xs space-y-1">
-                  {typeInsights.map((insight, idx) => (
-                    <li key={idx}>{insight.message}</li>
+                <ul className="text-xs space-y-2">
+                  {typeInsights.map((insight) => (
+                    <li
+                      key={insight.insight_id}
+                      className={cn(
+                        "flex items-start justify-between gap-2",
+                        insight.acknowledged_at && "opacity-60"
+                      )}
+                    >
+                      <span
+                        className={
+                          insight.acknowledged_at ? "line-through" : ""
+                        }
+                      >
+                        {insight.message}
+                      </span>
+                      {insight.insight_id && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() =>
+                                insight.acknowledged_at
+                                  ? handleUnacknowledge(insight.insight_id!)
+                                  : handleAcknowledge(insight.insight_id!)
+                              }
+                              className="flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                              disabled={
+                                acknowledgeInsight.isPending ||
+                                unacknowledgeInsight.isPending
+                              }
+                            >
+                              {insight.acknowledged_at ? (
+                                <X className="h-3 w-3" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {insight.acknowledged_at ? (
+                              <p className="text-xs">
+                                Acknowledged by{" "}
+                                {insight.acknowledged_by_user?.full_name ||
+                                  "Unknown"}
+                                <br />
+                                Click to restore
+                              </p>
+                            ) : (
+                              <p className="text-xs">Acknowledge this insight</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -571,7 +674,7 @@ function MaterialDetailsContent({
       ) : materialDetails ? (
         <div className="mt-6 flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
           {/* Insights Panel - displayed prominently at the top */}
-          <InsightsPanel insights={materialDetails.insights} />
+          <InsightsPanel insights={materialDetails.insights} materialNumber={materialNumber!} />
 
           <div>
             <div className="flex items-center gap-4 mb-4">
