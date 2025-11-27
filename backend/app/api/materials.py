@@ -284,10 +284,11 @@ async def list_materials(
 
         sort_column = field_mapping.get(sort_by)
         if sort_column is not None:
+            # Use NULLS LAST for both directions to keep NULL values at the bottom
             if sort_order == "desc":
-                query = query.order_by(sort_column.desc())
+                query = query.order_by(sort_column.desc().nulls_last())
             else:
-                query = query.order_by(sort_column.asc())
+                query = query.order_by(sort_column.asc().nulls_last())
         else:
             print(f"Warning: Unknown sort field '{sort_by}', ignoring sort")
 
