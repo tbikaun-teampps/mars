@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useUploadSAPData } from "@/api/queries";
+import { apiClient, UploadJobStatus } from "@/api/client";
 import {
   Dialog,
   DialogContent,
@@ -12,66 +13,128 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface UploadSAPDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+// Map phase names to user-friendly labels
+const phaseLabels: Record<string, string> = {
+  validating: "Validating CSV...",
+  materials: "Uploading materials...",
+  insights: "Generating insights...",
+  reviews: "Creating reviews...",
+};
+
 export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
-  const [uploadMessage, setUploadMessage] = useState<string>("");
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<UploadJobStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const uploadMutation = useUploadSAPData();
+  const queryClient = useQueryClient();
+
+  // Determine upload state
+  const isUploading = uploadMutation.isPending;
+  const isProcessing = jobId !== null && jobStatus?.status === "processing";
+  const isPending = jobId !== null && jobStatus?.status === "pending";
+  const isCompleted = jobStatus?.status === "completed";
+  const isFailed = jobStatus?.status === "failed";
+  const isBusy = isUploading || isProcessing || isPending;
+
+  // Poll for job status
+  const pollStatus = useCallback(async () => {
+    if (!jobId) return;
+
+    try {
+      const status = await apiClient.getUploadJobStatus(jobId);
+      setJobStatus(status);
+
+      if (status.status === "completed") {
+        // Invalidate materials query to refresh the data
+        queryClient.invalidateQueries({ queryKey: ["materials"] });
+      } else if (status.status === "failed") {
+        setError(status.error || "Upload processing failed");
+      }
+    } catch (err) {
+      console.error("Failed to poll job status:", err);
+    }
+  }, [jobId, queryClient]);
+
+  // Set up polling interval
+  useEffect(() => {
+    if (!jobId || isCompleted || isFailed) return;
+
+    // Poll immediately
+    pollStatus();
+
+    // Then poll every 2 seconds
+    const interval = setInterval(pollStatus, 2000);
+
+    return () => clearInterval(interval);
+  }, [jobId, isCompleted, isFailed, pollStatus]);
+
+  // Auto-close dialog after successful completion
+  useEffect(() => {
+    if (isCompleted) {
+      const timer = setTimeout(() => {
+        handleClose();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isCompleted]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setUploadStatus("idle");
-      setUploadMessage("");
+      setJobId(null);
+      setJobStatus(null);
+      setError(null);
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) return;
 
+    setError(null);
+    setJobId(null);
+    setJobStatus(null);
+
     uploadMutation.mutate(selectedFile, {
       onSuccess: (data) => {
-        setUploadStatus("success");
-        setUploadMessage(
-          `Successfully uploaded! ${data.records_inserted} records inserted, ${data.records_skipped} skipped, ${data.reviews_inserted} reviews created.`
-        );
-        setSelectedFile(null);
-        // Reset file input
-        const fileInput = document.getElementById("csv-file-input") as HTMLInputElement;
-        if (fileInput) fileInput.value = "";
-
-        // Close dialog after 2 seconds
-        setTimeout(() => {
-          onOpenChange(false);
-          setUploadStatus("idle");
-          setUploadMessage("");
-        }, 2000);
+        // Set the job ID to start polling
+        setJobId(data.job_id);
       },
-      onError: (error) => {
-        setUploadStatus("error");
-        setUploadMessage(error.message || "Failed to upload file. Please try again.");
+      onError: (err) => {
+        setError(err.message || "Failed to start upload. Please try again.");
       },
     });
   };
 
   const handleClose = () => {
-    if (!uploadMutation.isPending) {
+    if (!isBusy) {
       onOpenChange(false);
-      setSelectedFile(null);
-      setUploadStatus("idle");
-      setUploadMessage("");
-      const fileInput = document.getElementById("csv-file-input") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
+      // Reset state after dialog closes
+      setTimeout(() => {
+        setSelectedFile(null);
+        setJobId(null);
+        setJobStatus(null);
+        setError(null);
+        const fileInput = document.getElementById("csv-file-input") as HTMLInputElement;
+        if (fileInput) fileInput.value = "";
+      }, 150);
     }
   };
+
+  // Get current phase label
+  const currentPhaseLabel = jobStatus?.current_phase
+    ? phaseLabels[jobStatus.current_phase] || jobStatus.current_phase
+    : "Starting...";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -91,11 +154,11 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              disabled={uploadMutation.isPending}
+              disabled={isBusy}
             />
           </div>
 
-          {selectedFile && (
+          {selectedFile && !isProcessing && !isPending && !isCompleted && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileText className="h-4 w-4" />
               <span>{selectedFile.name}</span>
@@ -103,17 +166,46 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
             </div>
           )}
 
-          {uploadStatus === "success" && (
-            <div className="flex items-start gap-2 rounded-md bg-green-50 p-3 text-sm text-green-900">
-              <CheckCircle className="h-5 w-5 shrink-0" />
-              <p>{uploadMessage}</p>
+          {/* Progress display during processing */}
+          {(isProcessing || isPending) && jobStatus && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm font-medium">{currentPhaseLabel}</span>
+              </div>
+
+              <Progress value={jobStatus.progress.percentage} />
+
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>
+                  {jobStatus.progress.processed.toLocaleString()} of{" "}
+                  {jobStatus.progress.total.toLocaleString()} records
+                </span>
+                <span>{jobStatus.progress.percentage.toFixed(1)}%</span>
+              </div>
             </div>
           )}
 
-          {uploadStatus === "error" && (
+          {/* Success message */}
+          {isCompleted && jobStatus?.result && (
+            <div className="flex items-start gap-2 rounded-md bg-green-50 p-3 text-sm text-green-900">
+              <CheckCircle className="h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-medium">Upload completed successfully!</p>
+                <p className="text-xs mt-1">
+                  {jobStatus.result.inserted.toLocaleString()} materials processed,{" "}
+                  {jobStatus.result.insights.toLocaleString()} insights generated,{" "}
+                  {jobStatus.result.reviews.toLocaleString()} reviews created.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Error message */}
+          {(error || isFailed) && (
             <div className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-900">
               <AlertCircle className="h-5 w-5 shrink-0" />
-              <p>{uploadMessage}</p>
+              <p>{error || jobStatus?.error || "Upload failed. Please try again."}</p>
             </div>
           )}
         </div>
@@ -122,23 +214,33 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
           <Button
             variant="outline"
             onClick={handleClose}
-            disabled={uploadMutation.isPending}
+            disabled={isBusy}
           >
-            Cancel
+            {isCompleted ? "Close" : "Cancel"}
           </Button>
-          <Button
-            onClick={handleUpload}
-            disabled={!selectedFile || uploadMutation.isPending}
-          >
-            {uploadMutation.isPending ? (
-              <>Uploading...</>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload
-              </>
-            )}
-          </Button>
+          {!isCompleted && (
+            <Button
+              onClick={handleUpload}
+              disabled={!selectedFile || isBusy}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : isProcessing || isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload
+                </>
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

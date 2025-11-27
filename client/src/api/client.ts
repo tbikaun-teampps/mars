@@ -47,13 +47,33 @@ export interface PaginatedReviewCommentsResponse {
   limit: number;
 }
 
-// Type for SAP data upload response
+// Type for SAP data upload response (async job)
 export interface UploadSAPDataResponse {
+  job_id: string;
+  status: "pending";
   message: string;
-  records_inserted: number;
-  records_skipped: number;
-  skipped_materials: number[];
-  reviews_inserted: number;
+}
+
+// Type for upload job status polling
+export interface UploadJobStatus {
+  job_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  current_phase: "validating" | "materials" | "insights" | "reviews" | null;
+  progress: {
+    total: number;
+    processed: number;
+    percentage: number;
+  };
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  result?: {
+    inserted: number;
+    updated: number;
+    insights: number;
+    reviews: number;
+  };
+  error?: string;
 }
 
 // Type for updating a review (all fields optional for partial updates)
@@ -361,7 +381,7 @@ export class ApiClient {
     return this.get<PaginatedMaterialAuditLogsResponse>(endpoint);
   }
 
-  // Upload SAP CSV data
+  // Upload SAP CSV data (returns job_id for progress polling)
   async uploadSAPData(file: File): Promise<UploadSAPDataResponse> {
     // Get the current session token from Supabase
     const { data: { session } } = await supabase.auth.getSession();
@@ -392,6 +412,11 @@ export class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Get upload job status (for progress polling)
+  async getUploadJobStatus(jobId: string): Promise<UploadJobStatus> {
+    return this.get<UploadJobStatus>(`/materials/upload-jobs/${jobId}`);
   }
 
   // Review comments API methods

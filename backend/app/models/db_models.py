@@ -2,9 +2,10 @@
 
 from datetime import date, datetime
 from typing import Optional, Any
+from uuid import UUID, uuid4
+
 from sqlmodel import Field, Relationship, SQLModel, Column, JSON
 from sqlalchemy import ARRAY, String, text, TIMESTAMP
-from uuid import UUID
 
 
 class ProfileDB(SQLModel, table=True):
@@ -276,4 +277,31 @@ class AuditLogDB(SQLModel, table=True):
     )
     changed_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+    )
+
+
+class UploadJobDB(SQLModel, table=True):
+    """Upload Job table model for tracking async CSV upload progress."""
+
+    __tablename__ = "upload_jobs"
+
+    job_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    status: str = Field(default="pending", max_length=20)
+    total_records: int = Field(default=0)
+    processed_records: int = Field(default=0)
+    current_phase: Optional[str] = Field(default=None, max_length=50)
+    inserted_count: int = Field(default=0)
+    updated_count: int = Field(default=0)
+    insights_count: int = Field(default=0)
+    reviews_count: int = Field(default=0)
+    error_message: Optional[str] = None
+    created_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    created_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+    )
+    started_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
     )

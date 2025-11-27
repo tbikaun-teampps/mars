@@ -3,10 +3,12 @@
 import io
 import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
+from uuid import UUID
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -14,7 +16,8 @@ from fastapi import (
     status,
     UploadFile,
 )
-from sqlalchemy import func as sa_func, text, cast, String
+from sqlalchemy import func as sa_func, text, cast, String, delete
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import aliased
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -29,9 +32,10 @@ from app.models.db_models import (
     ReviewChecklistDB,
     ReviewCommentDB,
     ProfileDB,
+    UploadJobDB,
 )
 from app.models.user import UserProfile
-from app.core.database import get_db
+from app.core.database import get_db, async_session_maker
 from app.models.material import (
     Material,
     PaginatedMaterialsResponse,
@@ -546,11 +550,12 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
     """Generate insights for a material based on its data."""
     insights: list[Insight] = []
     saving_potential = 0.0
-    unrestricted_qty = material.unrestricted_quantity
-    safety_stock = material.safety_stock
+    # Default None values to 0 for safe comparisons
+    unrestricted_qty = material.unrestricted_quantity or 0
+    safety_stock = material.safety_stock or 0
     coverage_ratio = material.coverage_ratio
-    total_qty = material.total_quantity
-    total_value = material.total_value
+    total_qty = material.total_quantity or 0
+    total_value = material.total_value or 0
 
     print(f"Processing insights for material\n{material}")
 
@@ -651,14 +656,44 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
     return insights
 
 
-# Add endpoint for uploading csv of SAP material data
-@router.post("/materials/upload-sap-data", status_code=status.HTTP_200_OK)
+# CSV column mapping to database fields (used by upload endpoints)
+CSV_COLUMN_MAPPING = {
+    "Material Number": "material_number",
+    "Material Description": "material_desc",
+    "Material Type": "material_type",
+    "Mat Group": "mat_group",
+    "MGrp Text": "mat_group_desc",
+    "MRP Controller": "mrp_controller",
+    "Created On": "created_on",
+    "Total Qty": "total_quantity",
+    "Total Value": "total_value",
+    "Unrestricted Qty": "unrestricted_quantity",
+    "Safety Stock": "safety_stock",
+    "Unrestricted Value": "unrestricted_value",
+    "Stock / Av Consump 3 Years": "coverage_ratio",
+    "Max of Cons Av. & 12m Demand": "max_cons_demand",
+    "Demand & FC 12m": "demand_fc_12m",
+    "Demand & FC Total": "demand_fc_total",
+    "Year 1 Cons": "cons_1y",
+    "Year 2 Cons": "cons_2y",
+    "Year 3 Cons": "cons_3y",
+    "Year 4 Cons": "cons_4y",
+    "Year 5 Cons": "cons_5y",
+    "Purchased Qty Last 2Y": "purchased_qty_2y",
+    "OBS LAST REVIEWED": "last_reviewed",
+    "OBS NEXT REVIEW": "next_review",
+    "OBS Notes": "review_notes",
+}
+
+
+@router.post("/materials/upload-sap-data", status_code=status.HTTP_202_ACCEPTED)
 async def upload_sap_material_data(
-    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks,
     csv_file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Upload SAP material data CSV to update materials data."""
+    """Upload SAP material data CSV. Returns job_id for progress polling."""
 
     # Validate file extension
     if not csv_file.filename or not csv_file.filename.endswith(".csv"):
@@ -667,309 +702,19 @@ async def upload_sap_material_data(
             detail="File must be a CSV file (.csv extension required)",
         )
 
-    # CSV column mapping to database fields
-    # Note: Fixed column names to match database schema
-    column_mapping = {
-        "Material Number": "material_number",
-        "Material Description": "material_desc",
-        "Material Type": "material_type",
-        "Mat Group": "mat_group",
-        "MGrp Text": "mat_group_desc",
-        "MRP Controller": "mrp_controller",
-        "Created On": "created_on",
-        "Total Qty": "total_quantity",
-        "Total Value": "total_value",
-        "Unrestricted Qty": "unrestricted_quantity",
-        "Safety Stock": "safety_stock",
-        "Unrestricted Value": "unrestricted_value",
-        "Stock / Av Consump 3 Years": "coverage_ratio",
-        "Max of Cons Av. & 12m Demand": "max_cons_demand",
-        "Demand & FC 12m": "demand_fc_12m",
-        "Demand & FC Total": "demand_fc_total",
-        "Year 1 Cons": "cons_1y",
-        "Year 2 Cons": "cons_2y",
-        "Year 3 Cons": "cons_3y",
-        "Year 4 Cons": "cons_4y",
-        "Year 5 Cons": "cons_5y",
-        "Purchased Qty Last 2Y": "purchased_qty_2y",
-        "OBS LAST REVIEWED": "last_reviewed",
-        "OBS NEXT REVIEW": "next_review",
-        "OBS Notes": "review_notes",
-    }
+    # Read file content before response closes
+    content = await csv_file.read()
 
+    # Quick validation (encoding, required columns) - fail fast before creating job
     try:
-        # Read file content from uploaded file
-        content = await csv_file.read()
-
-        # Read CSV using pandas
-        df = pd.read_csv(
-            io.BytesIO(content),
-            encoding="utf-8",
-            thousands=",",  # Handle comma thousands separators (e.g., "1,234" -> 1234)
-            na_values=["", "NA", "N/A", "null", "NULL"],
-        )
-
-        # Take first n rows for testing
-        # df = df.head(10)
-
-        # Validate that required columns exist
-        missing_columns = set(column_mapping.keys()) - set(df.columns)
+        # Just read header row to validate columns
+        df_header = pd.read_csv(io.BytesIO(content), encoding="utf-8", nrows=0)
+        missing_columns = set(CSV_COLUMN_MAPPING.keys()) - set(df_header.columns)
         if missing_columns:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Missing required columns: {', '.join(sorted(missing_columns))}",
             )
-
-        # Check if dataframe is empty
-        if df.empty:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="CSV file contains no data rows",
-            )
-
-        # Select only the columns we need and rename them
-        df = df[list(column_mapping.keys())].rename(columns=column_mapping)
-
-        # Convert string columns to string type to handle numeric values in CSV
-        # This ensures columns like mat_group (which might be "1305") are strings, not integers
-        string_columns = [
-            "material_desc",
-            "material_type",
-            "mat_group",
-            "mat_group_desc",
-            "mrp_controller",
-            "review_notes",
-        ]
-
-        for col in string_columns:
-            # Convert to string, handling None/NaN values
-            df[col] = df[col].astype(str)
-            # Replace 'nan' string (from converting None to string) back to None
-            df[col] = df[col].replace(["nan", "None"], None)
-
-        # Validate material_number is not null
-        if df["material_number"].isna().any():
-            first_null_idx = df["material_number"].isna().idxmax()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Row {first_null_idx + 2}: Material Number is required",  # +2 for header and 0-index
-            )
-
-        # Clean numeric columns - strip currency symbols, spaces, and convert to numeric
-        numeric_columns = [
-            "total_quantity",
-            "total_value",
-            "unrestricted_quantity",
-            "unrestricted_value",
-            "safety_stock",
-            "coverage_ratio",
-            "max_cons_demand",
-            "demand_fc_12m",
-            "demand_fc_total",
-            "cons_1y",
-            "cons_2y",
-            "cons_3y",
-            "cons_4y",
-            "cons_5y",
-            "purchased_qty_2y",
-        ]
-
-        for col in numeric_columns:
-            # Clean currency symbols and spaces, then convert to numeric
-            # Handles values like "$12,081,199 ", "$ 1,234.56", etc.
-            df[col] = df[col].astype(str).str.replace("$", "", regex=False).str.strip()
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-            # Replace infinity values with NaN (which will become None in JSON)
-            df[col] = df[col].replace([float("inf"), float("-inf")], pd.NA)
-
-        # Convert date columns to Python date objects
-        # Note: CSV dates are in DD/MM/YYYY or DD/MM/YY format
-        for date_col in ["created_on", "last_reviewed", "next_review"]:
-            df[date_col] = pd.to_datetime(
-                df[date_col], format="mixed", dayfirst=True, errors="coerce"
-            ).dt.date
-
-        # Replace all non-JSON-compliant values with None
-        # This ensures no NaN, inf, -inf, pd.NA, or pd.NaT values remain
-        df = df.replace([np.nan, np.inf, -np.inf, pd.NA, pd.NaT], None)
-
-        # Validate created_on is not null (required field)
-        if df["created_on"].isna().any() or (df["created_on"] == None).any():
-            # Find rows with null created_on
-            null_mask = df["created_on"].isna() | (df["created_on"] == None)
-            null_indices = df[null_mask].index.tolist()
-            first_null_idx = null_indices[0]
-            null_count = len(null_indices)
-
-            # Get the original value from the CSV before date conversion
-            # We need to re-read the original value to show what was invalid
-            original_df = pd.read_csv(
-                io.BytesIO(content),
-                encoding="utf-8",
-                thousands=",",
-                na_values=["", "NA", "N/A", "null", "NULL"],
-            )
-            original_df = original_df.head(10)
-            original_created_on = original_df.iloc[first_null_idx]["Created On"]
-
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Row {first_null_idx + 2}: Created On date is required but is missing or invalid. "
-                f"Received: '{original_created_on}' ({null_count} row(s) affected). "
-                f"Expected format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DD",
-            )
-
-        # Convert dataframe to list of dictionaries for database insertion
-        records_to_insert = df.to_dict("records")
-
-        # Insert records into database one at a time to handle duplicates gracefully
-        inserted_count = 0
-        skipped_count = 0
-        skipped_materials = []
-
-        for record in records_to_insert:
-            try:
-                # Create SQLModel instance from record dict
-                material = SAPMaterialData(**record)
-                db.add(material)
-                await db.commit()
-                inserted_count += 1
-            except Exception as db_error:
-                await db.rollback()
-                # Check if it's a duplicate key error
-                error_msg = str(db_error).lower()
-                if (
-                    "duplicate" in error_msg
-                    or "unique" in error_msg
-                    or "constraint" in error_msg
-                ):
-                    # Skip this duplicate record and continue
-                    skipped_count += 1
-                    # Only add to list if we haven't reached 50 (to keep response size reasonable)
-                    if len(skipped_materials) < 50:
-                        skipped_materials.append(
-                            record.get("material_number", "unknown")
-                        )
-                else:
-                    # Re-raise other database errors (not duplicates)
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Database error on material {record.get('material_number', 'unknown')}: {str(db_error)}",
-                    )
-
-                continue  # Continue to next record after handling duplicate
-
-            # Generate insights for the record
-            try:
-                insights = generate_material_insight(material)
-                for insight in insights:
-                    insight_model = MaterialInsightDB(
-                        **insight.model_dump(),
-                        material_number=material.material_number,
-                    )
-                    db.add(insight_model)
-                    await db.commit()
-            except Exception as insight_error:
-                print(
-                    f"Failed to generate insights for material {material.material_number}: {str(insight_error)}"
-                )
-
-        # Extract OBS review data and create initial material review(s)
-        inserted_reviews = 0
-        for record in records_to_insert:
-            if record.get("last_reviewed"):
-                review_db = MaterialReviewDB(
-                    material_number=record.get("material_number"),
-
-                    created_by="00000000-0000-0000-0000-000000000000",  # System user
-                    last_updated_by="00000000-0000-0000-0000-000000000000",  # System user
-                    created_at=record.get("last_reviewed"),
-                    updated_at=record.get("last_reviewed"),
-
-                    initiated_by="00000000-0000-0000-0000-000000000000",  # System user
-                    review_date=record.get("last_reviewed"),
-
-                    review_reason="Initial OBS data import",
-                    current_stock_qty=record.get("unrestricted_quantity"),
-                    current_stock_value=round(record.get("total_value")/record.get('total_quantity') * record.get('unrestricted_quantity'), 2) if record.get('total_quantity') and record.get('total_value') else 0,
-                    months_no_movement=0,
-                    proposed_action="No action proposed (historical data)",
-                    proposed_qty_adjustment=0,
-                    business_justification="N/A",
-                    sme_name="System",
-                    sme_email="system@mars.teampps.com",
-                    sme_department="System",
-                    sme_feedback_method="other",
-                    sme_contacted_date=record.get("last_reviewed"),
-                    sme_responded_date=record.get("last_reviewed"),
-                    sme_recommendation="N/A",
-                    sme_recommended_qty=0,
-                    sme_analysis="N/A",
-                    alternative_applications="N/A",
-                    risk_assessment="N/A",
-
-                    final_decision="no change",
-                    final_qty_adjustment=0,
-                    final_notes=record.get("review_notes"),
-                    decided_by="00000000-0000-0000-0000-000000000000",  # System user
-                    decided_at=record.get("last_reviewed"),
-
-                    requires_follow_up=True if record.get("next_review") else False,
-                    next_review_date=record.get("next_review"),
-                    follow_up_reason="Scheduled review from initial OBS data import" if record.get("next_review") else None,
-                    review_frequency_weeks=0,
-                    status="completed",
-                    completed_checklist=True,
-                )
-                print(
-                    f"Inserting initial review for material {record['material_number']}"
-                )
-                try:
-                    db.add(review_db)
-                    await db.commit()
-                    inserted_reviews += 1
-                    # Automatically complete the checklist for the imported review
-                    checklist_db = ReviewChecklistDB(
-                        review_id=review_db.review_id,
-                        created_by="00000000-0000-0000-0000-000000000000",  # System user
-                        last_updated_by="00000000-0000-0000-0000-000000000000",  # System user
-                        created_at=record.get("last_reviewed"),
-                        updated_at=record.get("last_reviewed"),
-                        
-                        has_open_orders=False,
-                        has_forecast_demand=False,
-                        checked_alternate_plants=False,
-                        contacted_procurement=False,
-                        reviewed_bom_usage=False,
-                        checked_supersession=False,
-                        checked_historical_usage=False,
-                    )
-                    db.add(checklist_db)
-                    await db.commit()
-                except Exception as e:
-                    await db.rollback()
-                    print(f"Failed to insert review: {str(e)}")
-        print(f"Inserted {inserted_reviews} initial material reviews from OBS data")
-
-        # Prepare response message
-        if inserted_count == 0 and skipped_count > 0:
-            message = "All materials already exist in database (all duplicates skipped)"
-        elif skipped_count > 0:
-            message = f"SAP material data uploaded. {inserted_count} new materials added, {skipped_count} duplicates skipped"
-        else:
-            message = "SAP material data uploaded successfully"
-
-        return {
-            "message": message,
-            "records_inserted": inserted_count,
-            "records_skipped": skipped_count,
-            "skipped_materials": skipped_materials if skipped_count > 0 else [],
-            "reviews_inserted": inserted_reviews,
-        }
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
     except UnicodeDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -980,13 +725,381 @@ async def upload_sap_material_data(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="CSV file is empty",
         )
-    except pd.errors.ParserError as e:
+
+    # Create job record
+    job = UploadJobDB(
+        status="pending",
+        created_by=UUID(current_user.id),
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    # Start background processing
+    background_tasks.add_task(
+        process_sap_upload_background,
+        job_id=job.job_id,
+        file_content=content,
+    )
+
+    return {
+        "job_id": str(job.job_id),
+        "status": "pending",
+        "message": "Upload started. Poll /materials/upload-jobs/{job_id} for progress.",
+    }
+
+
+@router.get("/materials/upload-jobs/{job_id}")
+async def get_upload_job_status(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get the status and progress of an upload job."""
+
+    result = await db.execute(
+        select(UploadJobDB).where(UploadJobDB.job_id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV file parsing error: {str(e)}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Upload job not found",
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process SAP material data: {str(e)}",
-        )
+
+    progress_pct = 0.0
+    if job.total_records > 0:
+        progress_pct = round(job.processed_records / job.total_records * 100, 1)
+
+    response = {
+        "job_id": str(job.job_id),
+        "status": job.status,
+        "current_phase": job.current_phase,
+        "progress": {
+            "total": job.total_records,
+            "processed": job.processed_records,
+            "percentage": progress_pct,
+        },
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+    }
+
+    if job.status == "completed":
+        response["result"] = {
+            "inserted": job.inserted_count,
+            "updated": job.updated_count,
+            "insights": job.insights_count,
+            "reviews": job.reviews_count,
+        }
+    elif job.status == "failed":
+        response["error"] = job.error_message
+
+    return response
+
+
+async def process_sap_upload_background(job_id: UUID, file_content: bytes):
+    """Process CSV upload in background with batch operations and progress tracking."""
+
+    # Chunk sizes based on PostgreSQL parameter limit (32,767)
+    MATERIAL_CHUNK_SIZE = 1000  # 25 columns
+    INSIGHT_CHUNK_SIZE = 5000   # 3 columns
+    REVIEW_CHUNK_SIZE = 500     # ~30 columns
+    CHECKLIST_CHUNK_SIZE = 2000 # ~13 columns
+
+    # Get fresh DB session (background task runs outside request context)
+    async with async_session_maker() as db:
+        # Get the job record
+        job = await db.get(UploadJobDB, job_id)
+        if not job:
+            print(f"Upload job {job_id} not found")
+            return
+
+        job.status = "processing"
+        job.started_at = datetime.utcnow()
+        job.current_phase = "validating"
+        await db.commit()
+
+        try:
+            # Parse and validate CSV
+            df = pd.read_csv(
+                io.BytesIO(file_content),
+                encoding="utf-8",
+                thousands=",",
+                na_values=["", "NA", "N/A", "null", "NULL"],
+            )
+
+            if df.empty:
+                raise ValueError("CSV file contains no data rows")
+
+            # Select and rename columns
+            df = df[list(CSV_COLUMN_MAPPING.keys())].rename(columns=CSV_COLUMN_MAPPING)
+
+            # Convert string columns
+            string_columns = ["material_desc", "material_type", "mat_group", "mat_group_desc", "mrp_controller", "review_notes"]
+            for col in string_columns:
+                df[col] = df[col].astype(str).replace(["nan", "None"], None)
+
+            # Validate material_number
+            if df["material_number"].isna().any():
+                first_null_idx = df["material_number"].isna().idxmax()
+                raise ValueError(f"Row {first_null_idx + 2}: Material Number is required")
+
+            # Clean numeric columns
+            numeric_columns = ["total_quantity", "total_value", "unrestricted_quantity", "unrestricted_value",
+                            "safety_stock", "coverage_ratio", "max_cons_demand", "demand_fc_12m", "demand_fc_total",
+                            "cons_1y", "cons_2y", "cons_3y", "cons_4y", "cons_5y", "purchased_qty_2y"]
+            for col in numeric_columns:
+                df[col] = df[col].astype(str).str.replace("$", "", regex=False).str.strip()
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+                df[col] = df[col].replace([float("inf"), float("-inf")], pd.NA)
+
+            # Convert date columns
+            for date_col in ["created_on", "last_reviewed", "next_review"]:
+                df[date_col] = pd.to_datetime(df[date_col], format="mixed", dayfirst=True, errors="coerce").dt.date
+
+            # Replace non-JSON values with None
+            df = df.replace([np.nan, np.inf, -np.inf, pd.NA, pd.NaT], None)
+
+            # Validate created_on
+            if df["created_on"].isna().any() or (df["created_on"] == None).any():
+                null_mask = df["created_on"].isna() | (df["created_on"] == None)
+                first_null_idx = df[null_mask].index.tolist()[0]
+                raise ValueError(f"Row {first_null_idx + 2}: Created On date is required")
+
+            records = df.to_dict("records")
+            job.total_records = len(records)
+            await db.commit()
+
+            # Phase 1: Batch upsert materials
+            job.current_phase = "materials"
+            await db.commit()
+
+            for chunk_start in range(0, len(records), MATERIAL_CHUNK_SIZE):
+                chunk_end = min(chunk_start + MATERIAL_CHUNK_SIZE, len(records))
+                chunk = records[chunk_start:chunk_end]
+
+                # Prepare values for upsert
+                material_values = [{
+                    "material_number": r["material_number"],
+                    "material_desc": r.get("material_desc"),
+                    "material_type": r.get("material_type"),
+                    "mat_group": r.get("mat_group"),
+                    "mat_group_desc": r.get("mat_group_desc"),
+                    "mrp_controller": r.get("mrp_controller"),
+                    "created_on": r.get("created_on"),
+                    "total_quantity": r.get("total_quantity"),
+                    "total_value": r.get("total_value"),
+                    "unrestricted_quantity": r.get("unrestricted_quantity"),
+                    "unrestricted_value": r.get("unrestricted_value"),
+                    "safety_stock": r.get("safety_stock"),
+                    "coverage_ratio": r.get("coverage_ratio"),
+                    "max_cons_demand": r.get("max_cons_demand"),
+                    "demand_fc_12m": r.get("demand_fc_12m"),
+                    "demand_fc_total": r.get("demand_fc_total"),
+                    "cons_1y": r.get("cons_1y"),
+                    "cons_2y": r.get("cons_2y"),
+                    "cons_3y": r.get("cons_3y"),
+                    "cons_4y": r.get("cons_4y"),
+                    "cons_5y": r.get("cons_5y"),
+                    "purchased_qty_2y": r.get("purchased_qty_2y"),
+                    "last_reviewed": r.get("last_reviewed"),
+                    "next_review": r.get("next_review"),
+                    "review_notes": r.get("review_notes"),
+                } for r in chunk]
+
+                # Upsert with ON CONFLICT
+                stmt = pg_insert(SAPMaterialData).values(material_values)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["material_number"],
+                    set_={
+                        "material_desc": stmt.excluded.material_desc,
+                        "material_type": stmt.excluded.material_type,
+                        "mat_group": stmt.excluded.mat_group,
+                        "mat_group_desc": stmt.excluded.mat_group_desc,
+                        "mrp_controller": stmt.excluded.mrp_controller,
+                        "created_on": stmt.excluded.created_on,
+                        "total_quantity": stmt.excluded.total_quantity,
+                        "total_value": stmt.excluded.total_value,
+                        "unrestricted_quantity": stmt.excluded.unrestricted_quantity,
+                        "unrestricted_value": stmt.excluded.unrestricted_value,
+                        "safety_stock": stmt.excluded.safety_stock,
+                        "coverage_ratio": stmt.excluded.coverage_ratio,
+                        "max_cons_demand": stmt.excluded.max_cons_demand,
+                        "demand_fc_12m": stmt.excluded.demand_fc_12m,
+                        "demand_fc_total": stmt.excluded.demand_fc_total,
+                        "cons_1y": stmt.excluded.cons_1y,
+                        "cons_2y": stmt.excluded.cons_2y,
+                        "cons_3y": stmt.excluded.cons_3y,
+                        "cons_4y": stmt.excluded.cons_4y,
+                        "cons_5y": stmt.excluded.cons_5y,
+                        "purchased_qty_2y": stmt.excluded.purchased_qty_2y,
+                        "last_reviewed": stmt.excluded.last_reviewed,
+                        "next_review": stmt.excluded.next_review,
+                        "review_notes": stmt.excluded.review_notes,
+                        "uploaded_at": text("NOW()"),
+                    }
+                )
+                await db.execute(stmt)
+                await db.commit()
+
+                job.processed_records = chunk_end
+                job.inserted_count = chunk_end
+                await db.commit()
+
+            # Phase 2: Generate and insert insights
+            job.current_phase = "insights"
+            job.processed_records = 0
+            await db.commit()
+
+            # Delete existing insights for uploaded materials
+            material_numbers = [r["material_number"] for r in records]
+            delete_stmt = delete(MaterialInsightDB).where(
+                MaterialInsightDB.material_number.in_(material_numbers)
+            )
+            await db.execute(delete_stmt)
+            await db.commit()
+
+            # Generate insights for all materials
+            all_insights = []
+            for i, record in enumerate(records):
+                valid_fields = set(SAPMaterialData.model_fields.keys())
+                material = SAPMaterialData(**{k: v for k, v in record.items() if k in valid_fields})
+                insights = generate_material_insight(material)
+                for insight in insights:
+                    all_insights.append({
+                        "material_number": material.material_number,
+                        "message": insight.message,
+                        "insight_type": insight.insight_type,
+                    })
+
+                # Update progress periodically
+                if (i + 1) % 1000 == 0:
+                    job.processed_records = i + 1
+                    await db.commit()
+
+            # Batch insert insights
+            for i in range(0, len(all_insights), INSIGHT_CHUNK_SIZE):
+                chunk = all_insights[i:i + INSIGHT_CHUNK_SIZE]
+                if chunk:
+                    stmt = pg_insert(MaterialInsightDB).values(chunk)
+                    await db.execute(stmt)
+            await db.commit()
+
+            job.insights_count = len(all_insights)
+            job.processed_records = len(records)
+            await db.commit()
+
+            # Phase 3: Create reviews for materials with last_reviewed
+            job.current_phase = "reviews"
+            job.processed_records = 0
+            await db.commit()
+
+            system_user_id = "00000000-0000-0000-0000-000000000000"
+            all_reviews = []
+
+            for record in records:
+                if record.get("last_reviewed"):
+                    current_stock_value = 0
+                    if record.get('total_quantity') and record.get('total_value') and record.get('unrestricted_quantity'):
+                        current_stock_value = round(
+                            record.get("total_value") / record.get('total_quantity') * record.get('unrestricted_quantity'),
+                            2
+                        )
+
+                    all_reviews.append({
+                        "material_number": record.get("material_number"),
+                        "created_by": system_user_id,
+                        "last_updated_by": system_user_id,
+                        "created_at": record.get("last_reviewed"),
+                        "updated_at": record.get("last_reviewed"),
+                        "initiated_by": system_user_id,
+                        "review_date": record.get("last_reviewed"),
+                        "review_reason": "Initial OBS data import",
+                        "current_stock_qty": record.get("unrestricted_quantity"),
+                        "current_stock_value": current_stock_value,
+                        "months_no_movement": 0,
+                        "proposed_action": "No action proposed (historical data)",
+                        "proposed_qty_adjustment": 0,
+                        "business_justification": "N/A",
+                        "sme_name": "System",
+                        "sme_email": "system@mars.teampps.com",
+                        "sme_department": "System",
+                        "sme_feedback_method": "other",
+                        "sme_contacted_date": record.get("last_reviewed"),
+                        "sme_responded_date": record.get("last_reviewed"),
+                        "sme_recommendation": "N/A",
+                        "sme_recommended_qty": 0,
+                        "sme_analysis": "N/A",
+                        "alternative_applications": "N/A",
+                        "risk_assessment": "N/A",
+                        "final_decision": "no change",
+                        "final_qty_adjustment": 0,
+                        "final_notes": record.get("review_notes"),
+                        "decided_by": system_user_id,
+                        "decided_at": record.get("last_reviewed"),
+                        "requires_follow_up": True if record.get("next_review") else False,
+                        "next_review_date": record.get("next_review"),
+                        "follow_up_reason": "Scheduled review from initial OBS data import" if record.get("next_review") else None,
+                        "review_frequency_weeks": 0,
+                        "status": "completed",
+                        "completed_checklist": True,
+                    })
+
+            # Batch insert reviews and checklists
+            all_checklists = []
+            reviews_inserted = 0
+
+            for i in range(0, len(all_reviews), REVIEW_CHUNK_SIZE):
+                chunk = all_reviews[i:i + REVIEW_CHUNK_SIZE]
+                if chunk:
+                    stmt = pg_insert(MaterialReviewDB).values(chunk).returning(
+                        MaterialReviewDB.review_id, MaterialReviewDB.created_at
+                    )
+                    result = await db.execute(stmt)
+                    review_results = result.fetchall()
+
+                    for review_id, created_at in review_results:
+                        all_checklists.append({
+                            "review_id": review_id,
+                            "created_by": system_user_id,
+                            "last_updated_by": system_user_id,
+                            "created_at": created_at,
+                            "updated_at": created_at,
+                            "has_open_orders": False,
+                            "has_forecast_demand": False,
+                            "checked_alternate_plants": False,
+                            "contacted_procurement": False,
+                            "reviewed_bom_usage": False,
+                            "checked_supersession": False,
+                            "checked_historical_usage": False,
+                        })
+                        reviews_inserted += 1
+
+                job.processed_records = i + len(chunk)
+                await db.commit()
+
+            # Batch insert checklists
+            for i in range(0, len(all_checklists), CHECKLIST_CHUNK_SIZE):
+                chunk = all_checklists[i:i + CHECKLIST_CHUNK_SIZE]
+                if chunk:
+                    stmt = pg_insert(ReviewChecklistDB).values(chunk)
+                    await db.execute(stmt)
+            await db.commit()
+
+            job.reviews_count = reviews_inserted
+
+            # Mark as completed
+            job.status = "completed"
+            job.current_phase = None
+            job.completed_at = datetime.utcnow()
+            await db.commit()
+
+            print(f"Upload job {job_id} completed: {job.inserted_count} materials, {job.insights_count} insights, {job.reviews_count} reviews")
+
+        except Exception as e:
+            job.status = "failed"
+            job.error_message = str(e)
+            job.current_phase = None
+            await db.commit()
+            print(f"Upload job {job_id} failed: {str(e)}")
