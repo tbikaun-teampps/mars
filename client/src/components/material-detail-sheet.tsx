@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Info, Loader2, Plus, MessageSquare } from "lucide-react";
+import { Info, Loader2, Plus, MessageSquare, AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { components } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,109 @@ import { cn, getMaterialReviewStatusBadgeColor } from "@/lib/utils";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReviewBase = components["schemas"]["MaterialReview"];
+type Insight = components["schemas"]["Insight"];
 
 // Extended type to include fields returned by the API but missing from generated types
 type MaterialReview = MaterialReviewBase & {
   review_id?: number | null;
 };
+
+// Insights Panel Component
+interface InsightsPanelProps {
+  insights: Insight[] | undefined;
+}
+
+function InsightsPanel({ insights }: InsightsPanelProps) {
+  if (!insights || insights.length === 0) {
+    return null;
+  }
+
+  // Group insights by type
+  const groupedInsights = insights.reduce(
+    (acc, insight) => {
+      const type = insight.insight_type;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(insight);
+      return acc;
+    },
+    {} as Record<string, Insight[]>
+  );
+
+  const insightConfig: Record<
+    string,
+    { icon: React.ReactNode; bgColor: string; borderColor: string; textColor: string; label: string }
+  > = {
+    error: {
+      icon: <AlertCircle className="h-4 w-4" />,
+      bgColor: "bg-red-50 dark:bg-red-900/20",
+      borderColor: "border-red-200 dark:border-red-800",
+      textColor: "text-red-700 dark:text-red-400",
+      label: "Error",
+    },
+    warning: {
+      icon: <AlertTriangle className="h-4 w-4" />,
+      bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
+      borderColor: "border-yellow-200 dark:border-yellow-800",
+      textColor: "text-yellow-700 dark:text-yellow-400",
+      label: "Warning",
+    },
+    info: {
+      icon: <Info className="h-4 w-4" />,
+      bgColor: "bg-blue-50 dark:bg-blue-900/20",
+      borderColor: "border-blue-200 dark:border-blue-800",
+      textColor: "text-blue-700 dark:text-blue-400",
+      label: "Info",
+    },
+    success: {
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      bgColor: "bg-green-50 dark:bg-green-900/20",
+      borderColor: "border-green-200 dark:border-green-800",
+      textColor: "text-green-700 dark:text-green-400",
+      label: "Success",
+    },
+  };
+
+  const typePriority = ["error", "warning", "info", "success"];
+
+  return (
+    <div className="space-y-2 mb-4">
+      {typePriority.map((type) => {
+        const typeInsights = groupedInsights[type] || [];
+        if (typeInsights.length === 0) return null;
+
+        const config = insightConfig[type] || insightConfig.info;
+
+        return (
+          <div
+            key={type}
+            className={cn(
+              "rounded-md border p-3",
+              config.bgColor,
+              config.borderColor
+            )}
+          >
+            <div className={cn("flex items-start gap-2", config.textColor)}>
+              <div className="flex-shrink-0 mt-0.5">{config.icon}</div>
+              <div className="flex-1 space-y-1">
+                <div className="font-medium text-sm">
+                  {typeInsights.length} {config.label}
+                  {typeInsights.length > 1 ? "s" : ""}
+                </div>
+                <ul className="text-xs space-y-1">
+                  {typeInsights.map((insight, idx) => (
+                    <li key={idx}>{insight.message}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface MaterialDetailSheetProps {
   materialNumber: number | null;
@@ -472,6 +570,9 @@ function MaterialDetailsContent({
         </div>
       ) : materialDetails ? (
         <div className="mt-6 flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
+          {/* Insights Panel - displayed prominently at the top */}
+          <InsightsPanel insights={materialDetails.insights} />
+
           <div>
             <div className="flex items-center gap-4 mb-4">
               <div className="flex-1 border-t border-gray-300" />

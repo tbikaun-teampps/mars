@@ -485,6 +485,20 @@ async def get_material(
         material_dict["next_review"] = None
         material_dict["review_notes"] = None
 
+    # Fetch insights for this material
+    insights_query = select(MaterialInsightDB).where(
+        MaterialInsightDB.material_number == material_number
+    )
+    insights_result = await db.exec(insights_query)
+    insights_data = insights_result.all()
+
+    # Transform to Insight objects
+    insights = [
+        Insight(insight_type=i.insight_type, message=i.message)
+        for i in insights_data
+    ]
+    material_dict["insights"] = insights
+
     return MaterialWithReviews(**material_dict, reviews=reviews)
 
 
