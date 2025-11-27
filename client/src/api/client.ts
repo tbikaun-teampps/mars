@@ -111,6 +111,17 @@ export interface MaterialsQueryParams {
   sort_by?: string;
   sort_order?: "asc" | "desc";
   search?: string;
+  // Filter parameters
+  material_type?: string[];
+  min_total_value?: number;
+  max_total_value?: number;
+  min_total_quantity?: number;
+  max_total_quantity?: number;
+  last_reviewed_filter?: string;
+  next_review_filter?: string;
+  has_reviews?: boolean;
+  has_errors?: boolean;
+  has_warnings?: boolean;
 }
 
 export interface AuditLogsQueryParams {
@@ -221,6 +232,37 @@ export class ApiClient {
     if (params?.sort_by) queryParams.append("sort_by", params.sort_by);
     if (params?.sort_order) queryParams.append("sort_order", params.sort_order);
     if (params?.search) queryParams.append("search", params.search);
+
+    // Filter parameters
+    if (params?.material_type && params.material_type.length > 0) {
+      params.material_type.forEach((type) =>
+        queryParams.append("material_type", type)
+      );
+    }
+    if (params?.min_total_value !== undefined)
+      queryParams.append("min_total_value", params.min_total_value.toString());
+    if (params?.max_total_value !== undefined)
+      queryParams.append("max_total_value", params.max_total_value.toString());
+    if (params?.min_total_quantity !== undefined)
+      queryParams.append(
+        "min_total_quantity",
+        params.min_total_quantity.toString()
+      );
+    if (params?.max_total_quantity !== undefined)
+      queryParams.append(
+        "max_total_quantity",
+        params.max_total_quantity.toString()
+      );
+    if (params?.last_reviewed_filter)
+      queryParams.append("last_reviewed_filter", params.last_reviewed_filter);
+    if (params?.next_review_filter)
+      queryParams.append("next_review_filter", params.next_review_filter);
+    if (params?.has_reviews !== undefined)
+      queryParams.append("has_reviews", params.has_reviews.toString());
+    if (params?.has_errors !== undefined)
+      queryParams.append("has_errors", params.has_errors.toString());
+    if (params?.has_warnings !== undefined)
+      queryParams.append("has_warnings", params.has_warnings.toString());
 
     const queryString = queryParams.toString();
     const endpoint = `/materials${queryString ? `?${queryString}` : ""}`;

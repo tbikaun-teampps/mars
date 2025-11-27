@@ -56,6 +56,10 @@ interface DataTableProps<TData, TValue> {
   sortableColumns?: Array<{ value: string; label: string }>;
   // Column pinning props
   columnPinning?: ColumnPinningState;
+  // Custom filter panel component
+  filterPanel?: React.ReactNode;
+  // Active filter badges component
+  activeFilterBadges?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -75,6 +79,8 @@ export function DataTable<TData, TValue>({
   enableSortingControls = false,
   sortableColumns = [],
   columnPinning,
+  filterPanel,
+  activeFilterBadges,
 }: DataTableProps<TData, TValue>) {
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
     []
@@ -223,6 +229,8 @@ export function DataTable<TData, TValue>({
             )}
           </>
         )}
+
+        {filterPanel}
         {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto">
@@ -250,6 +258,7 @@ export function DataTable<TData, TValue>({
           </DropdownMenuContent>
         </DropdownMenu> */}
       </div>
+      {activeFilterBadges && <div className="pb-3">{activeFilterBadges}</div>}
       <div className="rounded-md border">
         <Table>
           <colgroup>

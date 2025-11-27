@@ -9,6 +9,17 @@ export interface MaterialsQueryParams {
   sort_by?: string;
   sort_order?: "asc" | "desc";
   search?: string;
+  // Filter parameters
+  material_type?: string[];
+  min_total_value?: number;
+  max_total_value?: number;
+  min_total_quantity?: number;
+  max_total_quantity?: number;
+  last_reviewed_filter?: string;
+  next_review_filter?: string;
+  has_reviews?: boolean;
+  has_errors?: boolean;
+  has_warnings?: boolean;
 }
 
 export interface AuditLogsQueryParams {

@@ -1,8 +1,12 @@
 import * as React from "react";
-import { ColumnDef, SortingState } from "@tanstack/react-table";
+import { ColumnDef } from "@tanstack/react-table";
 import { components } from "@/types/api";
 import { DataTable } from "@/components/data-table";
 import { MaterialDetailSheet } from "@/components/material-detail-sheet";
+import {
+  MaterialsFilterPanel,
+  ActiveFilterBadges,
+} from "@/components/materials-filter-panel";
 import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -10,6 +14,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useMaterials } from "@/api/queries";
+import { useTableUrlState } from "@/hooks/useTableUrlState";
 
 type Material = components["schemas"]["Material"];
 
@@ -67,12 +72,19 @@ export function MaterialsTable() {
   const [isInsightsDialogOpen, setIsInsightsDialogOpen] = React.useState(false);
   const [selectedInsights, setSelectedInsights] = React.useState<Insight[]>([]);
 
-  // Pagination state
-  const [pageIndex, setPageIndex] = React.useState(0);
-  const [pageSize, setPageSize] = React.useState(20);
-
-  // Sorting state
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  // Use URL-based state for pagination, sorting, and filters
+  const {
+    pageIndex,
+    pageSize,
+    sorting,
+    filters,
+    activeFilterCount,
+    setPagination,
+    setSorting,
+    setFilters,
+    clearFilters,
+    removeFilter,
+  } = useTableUrlState();
 
   // Build query params from UI state
   const skip = pageIndex * pageSize;
@@ -80,12 +92,24 @@ export function MaterialsTable() {
   const sortOrder =
     sorting.length > 0 ? (sorting[0].desc ? "desc" : "asc") : undefined;
 
-  // Fetch materials using React Query
+  // Fetch materials using React Query with filters
   const { data, isLoading, isError, error } = useMaterials({
     skip,
     limit: pageSize,
     sort_by: sortBy,
     sort_order: sortOrder,
+    // Filter params
+    material_type:
+      filters.materialType.length > 0 ? filters.materialType : undefined,
+    min_total_value: filters.minTotalValue,
+    max_total_value: filters.maxTotalValue,
+    min_total_quantity: filters.minTotalQuantity,
+    max_total_quantity: filters.maxTotalQuantity,
+    last_reviewed_filter: filters.lastReviewedFilter,
+    next_review_filter: filters.nextReviewFilter,
+    has_reviews: filters.hasReviews,
+    has_errors: filters.hasErrors,
+    has_warnings: filters.hasWarnings,
   });
 
   const materials = data?.items ?? [];
@@ -95,22 +119,6 @@ export function MaterialsTable() {
     setSelectedMaterialNumber(material.material_number);
     setSelectedMaterialDescription(material.material_desc);
     setIsSheetOpen(true);
-  };
-
-  const handlePaginationChange = (
-    updater:
-      | { pageIndex: number; pageSize: number }
-      | ((old: { pageIndex: number; pageSize: number }) => {
-          pageIndex: number;
-          pageSize: number;
-        })
-  ) => {
-    const newPagination =
-      typeof updater === "function"
-        ? updater({ pageIndex, pageSize })
-        : updater;
-    setPageIndex(newPagination.pageIndex);
-    setPageSize(newPagination.pageSize);
   };
 
   const pageCount = Math.ceil(total / pageSize);
@@ -495,7 +503,7 @@ export function MaterialsTable() {
         pageCount={pageCount}
         pagination={{ pageIndex, pageSize }}
         totalRows={total}
-        onPaginationChange={handlePaginationChange}
+        onPaginationChange={setPagination}
         manualSorting={true}
         sorting={sorting}
         onSortingChange={setSorting}
@@ -513,6 +521,21 @@ export function MaterialsTable() {
           left: ["insights", "material_number", "material_desc"],
           right: ["reviews_count", "last_reviewed", "next_review"],
         }}
+        filterPanel={
+          <MaterialsFilterPanel
+            filters={filters}
+            onFiltersChange={setFilters}
+            onClearFilters={clearFilters}
+            activeFilterCount={activeFilterCount}
+          />
+        }
+        activeFilterBadges={
+          <ActiveFilterBadges
+            filters={filters}
+            onRemoveFilter={removeFilter}
+            onClearAll={clearFilters}
+          />
+        }
       />
 
       <MaterialDetailSheet

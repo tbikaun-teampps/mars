@@ -3,6 +3,7 @@
 import io
 import numpy as np
 import pandas as pd
+from datetime import date, timedelta
 from typing import Optional
 from fastapi import (
     APIRouter,
@@ -55,6 +56,39 @@ async def list_materials(
     search: Optional[str] = Query(
         None,
         description="Search across material_number, material_desc, and material_type",
+    ),
+    # Filter parameters
+    material_type: Optional[list[str]] = Query(
+        None, description="Filter by material types (e.g., SPRS, HALB, FERT)"
+    ),
+    min_total_value: Optional[float] = Query(
+        None, description="Minimum total value filter"
+    ),
+    max_total_value: Optional[float] = Query(
+        None, description="Maximum total value filter"
+    ),
+    min_total_quantity: Optional[float] = Query(
+        None, description="Minimum total quantity filter"
+    ),
+    max_total_quantity: Optional[float] = Query(
+        None, description="Maximum total quantity filter"
+    ),
+    last_reviewed_filter: Optional[str] = Query(
+        None,
+        description="Filter by last reviewed: 'overdue_90' (>90 days), 'overdue_30' (>30 days), 'never' (never reviewed)",
+    ),
+    next_review_filter: Optional[str] = Query(
+        None,
+        description="Filter by next review: 'overdue' (past due), 'due_soon' (<30 days), 'not_scheduled' (no date set)",
+    ),
+    has_reviews: Optional[bool] = Query(
+        None, description="Filter by whether material has any reviews"
+    ),
+    has_errors: Optional[bool] = Query(
+        None, description="Filter by whether material has error insights"
+    ),
+    has_warnings: Optional[bool] = Query(
+        None, description="Filter by whether material has warning insights"
     ),
 ) -> PaginatedMaterialsResponse:
     """List all materials with pagination, sorting, and search."""
@@ -130,6 +164,84 @@ async def list_materials(
             | (SAPMaterialData.material_type.ilike(search_pattern))
         )
 
+    # Apply material type filter
+    if material_type:
+        query = query.where(SAPMaterialData.material_type.in_(material_type))
+
+    # Apply total value range filters
+    if min_total_value is not None:
+        query = query.where(SAPMaterialData.total_value >= min_total_value)
+    if max_total_value is not None:
+        query = query.where(SAPMaterialData.total_value <= max_total_value)
+
+    # Apply total quantity range filters
+    if min_total_quantity is not None:
+        query = query.where(SAPMaterialData.total_quantity >= min_total_quantity)
+    if max_total_quantity is not None:
+        query = query.where(SAPMaterialData.total_quantity <= max_total_quantity)
+
+    # Apply has_reviews filter (uses HAVING since it's aggregated)
+    if has_reviews is not None:
+        if has_reviews:
+            query = query.having(
+                func.count(MaterialReviewDB.review_id.distinct()) > 0
+            )
+        else:
+            query = query.having(
+                func.count(MaterialReviewDB.review_id.distinct()) == 0
+            )
+
+    # Apply last_reviewed_filter (uses HAVING since it depends on latest_review)
+    today = date.today()
+    if last_reviewed_filter:
+        if last_reviewed_filter == "never":
+            query = query.having(latest_review.c.review_date.is_(None))
+        elif last_reviewed_filter == "overdue_30":
+            threshold_30 = today - timedelta(days=30)
+            query = query.having(latest_review.c.review_date < threshold_30)
+        elif last_reviewed_filter == "overdue_90":
+            threshold_90 = today - timedelta(days=90)
+            query = query.having(latest_review.c.review_date < threshold_90)
+
+    # Apply next_review_filter (uses HAVING since it depends on latest_review)
+    if next_review_filter:
+        if next_review_filter == "not_scheduled":
+            # Has been reviewed but no next review date set
+            query = query.having(
+                (latest_review.c.review_date.isnot(None))
+                & (latest_review.c.next_review_date.is_(None))
+            )
+        elif next_review_filter == "overdue":
+            # Next review date is in the past
+            query = query.having(latest_review.c.next_review_date < today)
+        elif next_review_filter == "due_soon":
+            # Next review date is within 30 days
+            threshold_30 = today + timedelta(days=30)
+            query = query.having(
+                (latest_review.c.next_review_date >= today)
+                & (latest_review.c.next_review_date <= threshold_30)
+            )
+
+    # Apply insights filters (has_errors, has_warnings)
+    # These need to filter based on aggregated insight data
+    if has_errors is not None and has_errors:
+        # Filter for materials that have at least one error insight
+        query = query.having(
+            sa_func.count(
+                sa_func.nullif(MaterialInsightDB.insight_type != "error", True)
+            )
+            > 0
+        )
+
+    if has_warnings is not None and has_warnings:
+        # Filter for materials that have at least one warning insight
+        query = query.having(
+            sa_func.count(
+                sa_func.nullif(MaterialInsightDB.insight_type != "warning", True)
+            )
+            > 0
+        )
+
     # Apply sorting if provided
     if sort_by:
         # Map frontend field names to model attributes
@@ -158,14 +270,10 @@ async def list_materials(
             print(f"Warning: Unknown sort field '{sort_by}', ignoring sort")
 
     # Get total count before pagination
-    count_query = select(func.count()).select_from(SAPMaterialData)
-    if search:
-        search_pattern = f"%{search}%"
-        count_query = count_query.where(
-            (SAPMaterialData.material_number.cast(str).ilike(search_pattern))
-            | (SAPMaterialData.material_desc.ilike(search_pattern))
-            | (SAPMaterialData.material_type.ilike(search_pattern))
-        )
+    # For complex queries with HAVING clauses, count distinct material_numbers from the filtered query
+    # Create a subquery without pagination to count total matching rows
+    count_subquery = query.with_only_columns(SAPMaterialData.material_number).subquery()
+    count_query = select(func.count()).select_from(count_subquery)
 
     total_result = await db.exec(count_query)
     total = total_result.one()
