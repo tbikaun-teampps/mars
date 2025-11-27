@@ -440,7 +440,7 @@ function MaterialDetailsContent({
 
   return (
     <div className="flex flex-col h-full">
-      <SheetHeader>
+      <SheetHeader className="sticky top-0">
         <SheetTitle>
           <div className="flex items-center gap-4">
             {/* <div className="flex gap-2">
@@ -471,7 +471,7 @@ function MaterialDetailsContent({
           </div>
         </div>
       ) : materialDetails ? (
-        <div className="mt-6 flex flex-col gap-6 flex-1 min-h-0">
+        <div className="mt-6 flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
           <div>
             <div className="flex items-center gap-4 mb-4">
               <div className="flex-1 border-t border-gray-300" />
