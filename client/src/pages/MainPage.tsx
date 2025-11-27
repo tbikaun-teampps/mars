@@ -49,8 +49,8 @@ export function MainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <header className="border-b shrink-0">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FerrisWheel className="h-8 w-8" />
@@ -87,11 +87,11 @@ export function MainPage() {
           </div>
         </div>
       </header>
-      <main className="mx-auto px-4 container">
+      <main className="mx-auto px-4 container flex-1 overflow-auto py-4">
         {/* Add 'container back to main className for max-w constraints, etc. */}
         {activeView === "dashboard" ? <MaterialsTable /> : <AuditLog />}
       </main>
-      <footer className="border-t mt-8 absolute bottom-0 w-full py-2 flex justify-center items-center">
+      <footer className="border-t shrink-0 w-full py-2 flex justify-center items-center">
         <p className="text-gray-400 text-xs">
           {/* #eb59ff to  #032a83*/}
           Built by{" "}
