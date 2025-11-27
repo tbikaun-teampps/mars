@@ -10,10 +10,9 @@ import {
 import { SortingPanel, ActiveSortBadge } from "@/components/sorting-panel";
 import { SearchInput, ActiveSearchBadge } from "@/components/search-input";
 import { format, formatDistanceToNow } from "date-fns";
+import { Lightbulb } from "lucide-react";
 import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useMaterials } from "@/api/queries";
 import { useTableUrlState } from "@/hooks/useTableUrlState";
@@ -60,8 +59,6 @@ function Sparkline({
   );
 }
 
-type Insight = components["schemas"]["Insight"];
-
 export function MaterialsTable() {
   const [selectedMaterialNumber, setSelectedMaterialNumber] = React.useState<
     number | null
@@ -69,10 +66,6 @@ export function MaterialsTable() {
   const [selectedMaterialDescription, setSelectedMaterialDescription] =
     React.useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
-
-  // Insights dialog state
-  const [isInsightsDialogOpen, setIsInsightsDialogOpen] = React.useState(false);
-  const [selectedInsights, setSelectedInsights] = React.useState<Insight[]>([]);
 
   // Use URL-based state for pagination, sorting, and filters
   const {
@@ -166,32 +159,6 @@ export function MaterialsTable() {
     }
   };
 
-  const groupInsightsByType = (insights: Insight[]) => {
-    return insights.reduce((acc, insight) => {
-      const type = insight.insight_type;
-      if (!acc[type]) {
-        acc[type] = [];
-      }
-      acc[type].push(insight);
-      return acc;
-    }, {} as Record<string, Insight[]>);
-  };
-
-  const getInsightBadgeColor = (type: string) => {
-    switch (type) {
-      case "error":
-        return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-      case "warning":
-        return "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
-      case "info":
-        return "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-      case "success":
-        return "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-      default:
-        return "bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
-    }
-  };
-
   const columns: ColumnDef<Material>[] = [
     {
       id: "insights",
@@ -200,83 +167,57 @@ export function MaterialsTable() {
       cell: ({ row }) => {
         const insights = row.original.insights;
         if (!insights || insights.length === 0) {
-          return;
+          return null;
         }
 
-        const grouped = groupInsightsByType(insights);
+        // Count insights by type
+        const counts = insights.reduce(
+          (acc, insight) => {
+            const type = insight.insight_type;
+            acc[type] = (acc[type] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>
+        );
+
+        // Build tooltip text
         const typePriority = ["error", "warning", "info", "success"];
+        const typeLabels: Record<string, string> = {
+          error: "Error",
+          warning: "Warning",
+          info: "Info",
+          success: "Success",
+        };
+        const tooltipParts = typePriority
+          .filter((type) => counts[type])
+          .map((type) => `${counts[type]} ${typeLabels[type]}${counts[type] > 1 ? "s" : ""}`);
+        const tooltipText = tooltipParts.join(", ");
 
         return (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                className="flex flex-col items-center gap-0.5 hover:opacity-80 transition-opacity cursor-pointer"
-                onClick={(e) => e.stopPropagation()}
+          <Tooltip>
+            <TooltipTrigger>
+              <Badge
+                className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 cursor-pointer hover:opacity-80 flex items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedMaterialNumber(row.original.material_number);
+                  setSelectedMaterialDescription(row.original.material_desc);
+                  setIsSheetOpen(true);
+                }}
               >
-                {typePriority.map((type) => {
-                  const count = grouped[type]?.length || 0;
-                  if (count === 0) return null;
-                  return (
-                    <Badge
-                      key={type}
-                      className={`${getInsightBadgeColor(
-                        type
-                      )} text-[10px] h-4 px-1.5`}
-                    >
-                      {type.charAt(0).toUpperCase()}: {count}
-                    </Badge>
-                  );
-                })}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="start">
-              <div className="space-y-3">
-                <div className="font-semibold text-sm">Insights Preview</div>
-                {typePriority.map((type) => {
-                  const typeInsights = grouped[type] || [];
-                  if (typeInsights.length === 0) return null;
-
-                  return (
-                    <div key={type} className="space-y-1">
-                      <div className="text-xs font-medium text-muted-foreground capitalize">
-                        {type}s ({typeInsights.length})
-                      </div>
-                      {typeInsights.slice(0, 2).map((insight, idx) => (
-                        <div
-                          key={idx}
-                          className="text-xs p-2 rounded bg-muted/50"
-                        >
-                          {insight.message}
-                        </div>
-                      ))}
-                      {typeInsights.length > 2 && (
-                        <div className="text-xs text-muted-foreground italic">
-                          +{typeInsights.length - 2} more...
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedInsights(insights);
-                    setIsInsightsDialogOpen(true);
-                  }}
-                >
-                  Show All Insights
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+                <Lightbulb className="h-3 w-3" />
+                {insights.length}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">{tooltipText}</p>
+            </TooltipContent>
+          </Tooltip>
         );
       },
       enableSorting: false,
       enableHiding: false,
-      size: 40,
+      size: 50,
     },
     {
       accessorKey: "material_number",
@@ -577,75 +518,6 @@ export function MaterialsTable() {
         isOpen={isSheetOpen}
         onOpenChange={setIsSheetOpen}
       />
-
-      <Dialog
-        open={isInsightsDialogOpen}
-        onOpenChange={setIsInsightsDialogOpen}
-      >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>All Insights</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            {(() => {
-              const grouped = groupInsightsByType(selectedInsights);
-              const typePriority: Array<{
-                type: string;
-                label: string;
-                icon: string;
-              }> = [
-                { type: "error", label: "Errors", icon: "❌" },
-                { type: "warning", label: "Warnings", icon: "⚠️" },
-                { type: "info", label: "Information", icon: "ℹ️" },
-                { type: "success", label: "Success", icon: "✓" },
-              ];
-
-              return typePriority.map(({ type, label, icon }) => {
-                const typeInsights = grouped[type] || [];
-                if (typeInsights.length === 0) return null;
-
-                return (
-                  <div key={type} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{icon}</span>
-                      <h3 className="font-semibold text-sm">
-                        {label} ({typeInsights.length})
-                      </h3>
-                    </div>
-                    <div className="space-y-2">
-                      {typeInsights.map((insight, idx) => (
-                        <div
-                          key={idx}
-                          className={`p-3 rounded-lg border ${
-                            type === "error"
-                              ? "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800"
-                              : type === "warning"
-                              ? "bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800"
-                              : type === "info"
-                              ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
-                              : "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
-                          }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <Badge
-                              className={`${getInsightBadgeColor(
-                                type
-                              )} text-xs mt-0.5`}
-                            >
-                              {type}
-                            </Badge>
-                            <p className="text-sm flex-1">{insight.message}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
