@@ -16,9 +16,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useMaterials } from "@/api/queries";
 import { useTableUrlState } from "@/hooks/useTableUrlState";
-import { cn } from "@/lib/utils";
 
 type Material = components["schemas"]["Material"];
+
+const NoDataText = () => <div className="text-muted-foreground">-</div>;
 
 // Simple Sparkline component for consumption history
 function Sparkline({
@@ -252,7 +253,7 @@ export function MaterialsTable() {
       accessorKey: "material_type",
       header: "Type",
       cell: ({ row }) => {
-        const type = row.getValue("material_type") as string;
+        const type = row.original.material_type;
         return (
           <div>
             <Badge className={getMaterialTypeBadgeColor(type)}>{type}</Badge>
@@ -265,7 +266,10 @@ export function MaterialsTable() {
       accessorKey: "total_quantity",
       header: "Total Qty",
       cell: ({ row }) => {
-        const qty = row.getValue("total_quantity") as number;
+        const qty = row.original.total_quantity;
+        if (qty === null || qty === undefined) {
+          return <NoDataText />;
+        }
         return (
           <div className="font-medium text-xs">{qty.toLocaleString()}</div>
         );
@@ -276,7 +280,10 @@ export function MaterialsTable() {
       accessorKey: "total_value",
       header: "Total Value",
       cell: ({ row }) => {
-        const value = row.getValue("total_value") as number;
+        const value = row.original.total_value;
+        if (value === null || value === undefined) {
+          return <NoDataText />;
+        }
         return (
           <div className="font-medium text-xs">{formatCurrency(value)}</div>
         );
@@ -287,7 +294,10 @@ export function MaterialsTable() {
       accessorKey: "unit_value",
       header: "Unit Value",
       cell: ({ row }) => {
-        const value = row.getValue("unit_value") as number;
+        const value = row.original.unit_value;
+        if (value === null || value === undefined) {
+          return <NoDataText />;
+        }
         return (
           <div className="font-medium text-xs">{formatCurrency(value)}</div>
         );
@@ -298,9 +308,13 @@ export function MaterialsTable() {
       accessorKey: "safety_stock",
       header: "Safety Stock Qty",
       cell: ({ row }) => {
+        const safety_stock = row.original.safety_stock;
+        if (safety_stock === null || safety_stock === undefined) {
+          return <NoDataText />;
+        }
         return (
           <div className="font-medium text-xs">
-            {(row.getValue("safety_stock") as number).toLocaleString()}
+            {safety_stock.toLocaleString()}
           </div>
         );
       },
@@ -310,9 +324,13 @@ export function MaterialsTable() {
       accessorKey: "coverage_ratio",
       header: "Coverage Ratio",
       cell: ({ row }) => {
+        const coverage_ratio = row.original.coverage_ratio;
+        if (coverage_ratio === null || coverage_ratio === undefined) {
+          return <NoDataText />;
+        }
         return (
           <div className="font-medium text-xs">
-            {(row.getValue("coverage_ratio") as number).toLocaleString()}
+            {coverage_ratio.toLocaleString()}
           </div>
         );
       },
@@ -356,7 +374,12 @@ export function MaterialsTable() {
       accessorKey: "reviews_count",
       header: "Reviews",
       cell: ({ row }) => {
-        const count = row.getValue("reviews_count") as number;
+        const count = row.original.reviews_count;
+        if (count === null || count === undefined) {
+          return (
+            <div className="font-medium text-xs text-muted-foreground">N/A</div>
+          );
+        }
         return (
           <Badge variant={count > 0 ? "secondary" : "destructive"}>
             {count}
