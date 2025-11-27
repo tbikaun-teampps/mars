@@ -117,7 +117,8 @@ export function DataTable<TData, TValue>({
   // These are the important styles to make sticky column pinning work!
   // Based on official TanStack Table example
   const getCommonPinningStyles = (
-    column: Column<TData>
+    column: Column<TData>,
+    isHeader?: boolean
   ): React.CSSProperties => {
     const isPinned = column.getIsPinned();
     const isLastLeftPinnedColumn =
@@ -127,16 +128,17 @@ export function DataTable<TData, TValue>({
 
     return {
       boxShadow: isLastLeftPinnedColumn
-        ? "-4px 0 4px -4px gray inset"
+        ? "-2px 0 2px -2px gray inset"
         : isFirstRightPinnedColumn
-        ? "4px 0 4px -4px gray inset"
+        ? "2px 0 2px -2px gray inset"
         : undefined,
       left: isPinned === "left" ? `${column.getStart("left")}px` : undefined,
       right: isPinned === "right" ? `${column.getAfter("right")}px` : undefined,
-      opacity: isPinned ? 0.95 : 1,
       position: isPinned ? "sticky" : "relative",
       zIndex: isPinned ? 1 : 0,
       backgroundColor: "white",
+      fontWeight: isHeader ? "600" : "normal",
+      fontSize: isHeader ? "12px" : "inherit",
     };
   };
 
@@ -188,7 +190,7 @@ export function DataTable<TData, TValue>({
                   return (
                     <TableHead
                       key={header.id}
-                      style={getCommonPinningStyles(header.column)}
+                      style={getCommonPinningStyles(header.column, true)}
                     >
                       {header.isPlaceholder
                         ? null

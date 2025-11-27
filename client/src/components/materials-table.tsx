@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useMaterials } from "@/api/queries";
 import { useTableUrlState } from "@/hooks/useTableUrlState";
+import { cn } from "@/lib/utils";
 
 type Material = components["schemas"]["Material"];
 
@@ -129,12 +130,20 @@ export function MaterialsTable() {
 
   const getMaterialTypeBadgeColor = (type: string) => {
     switch (type) {
+      case "CHEM":
+        return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+      case "CORE":
+        return "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400";
+      case "FING":
+        return "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+      case "OPER":
+        return "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+      case "RAWM":
+        return "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+      case "ROTG":
+        return "bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400";
       case "SPRS":
         return "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-      case "HALB":
-        return "bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400";
-      case "FERT":
-        return "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400";
       default:
         return "bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
     }
@@ -171,14 +180,11 @@ export function MaterialsTable() {
         }
 
         // Count insights by type
-        const counts = insights.reduce(
-          (acc, insight) => {
-            const type = insight.insight_type;
-            acc[type] = (acc[type] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>
-        );
+        const counts = insights.reduce((acc, insight) => {
+          const type = insight.insight_type;
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
 
         // Build tooltip text
         const typePriority = ["error", "warning", "info", "success"];
@@ -190,7 +196,12 @@ export function MaterialsTable() {
         };
         const tooltipParts = typePriority
           .filter((type) => counts[type])
-          .map((type) => `${counts[type]} ${typeLabels[type]}${counts[type] > 1 ? "s" : ""}`);
+          .map(
+            (type) =>
+              `${counts[type]} ${typeLabels[type]}${
+                counts[type] > 1 ? "s" : ""
+              }`
+          );
         const tooltipText = tooltipParts.join(", ");
 
         return (
@@ -221,9 +232,9 @@ export function MaterialsTable() {
     },
     {
       accessorKey: "material_number",
-      header: () => <div className="text-center">#</div>,
+      header: "Number",
       cell: ({ row }) => (
-        <div className="text-center font-medium text-xs">
+        <div className="font-medium text-xs">
           {row.getValue("material_number")}
         </div>
       ),
@@ -235,107 +246,101 @@ export function MaterialsTable() {
       cell: ({ row }) => (
         <div className="text-xs">{row.getValue("material_desc")}</div>
       ),
-      size: 200,
+      size: 300,
     },
     {
       accessorKey: "material_type",
-      header: () => <div className="text-center">Type</div>,
+      header: "Type",
       cell: ({ row }) => {
         const type = row.getValue("material_type") as string;
         return (
-          <div className="text-center">
+          <div>
             <Badge className={getMaterialTypeBadgeColor(type)}>{type}</Badge>
           </div>
+        );
+      },
+      size: 80,
+    },
+    {
+      accessorKey: "total_quantity",
+      header: "Total Qty",
+      cell: ({ row }) => {
+        const qty = row.getValue("total_quantity") as number;
+        return (
+          <div className="font-medium text-xs">{qty.toLocaleString()}</div>
         );
       },
       size: 100,
     },
     {
-      accessorKey: "total_quantity",
-      header: () => <div className="text-center">Total Qty</div>,
+      accessorKey: "total_value",
+      header: "Total Value",
       cell: ({ row }) => {
-        const qty = row.getValue("total_quantity") as number;
+        const value = row.getValue("total_value") as number;
         return (
-          <div className="text-center font-medium text-xs">
-            {qty.toLocaleString()}
+          <div className="font-medium text-xs">{formatCurrency(value)}</div>
+        );
+      },
+      size: 100,
+    },
+    {
+      accessorKey: "unit_value",
+      header: "Unit Value",
+      cell: ({ row }) => {
+        const value = row.getValue("unit_value") as number;
+        return (
+          <div className="font-medium text-xs">{formatCurrency(value)}</div>
+        );
+      },
+      size: 100,
+    },
+    {
+      accessorKey: "safety_stock",
+      header: "Safety Stock Qty",
+      cell: ({ row }) => {
+        return (
+          <div className="font-medium text-xs">
+            {(row.getValue("safety_stock") as number).toLocaleString()}
           </div>
         );
       },
       size: 120,
     },
     {
-      accessorKey: "total_value",
-      header: () => <div className="text-center">Total Value</div>,
-      cell: ({ row }) => {
-        const value = row.getValue("total_value") as number;
-        return (
-          <div className="text-center font-medium text-xs">
-            {formatCurrency(value)}
-          </div>
-        );
-      },
-      size: 140,
-    },
-    {
-      accessorKey: "unit_value",
-      header: () => <div className="text-center">Unit Value</div>,
-      cell: ({ row }) => {
-        const value = row.getValue("unit_value") as number;
-        return (
-          <div className="text-center font-medium text-xs">
-            {formatCurrency(value)}
-          </div>
-        );
-      },
-      size: 130,
-    },
-    {
-      accessorKey: "safety_stock",
-      header: () => <div className="text-center">Safety Stock Qty</div>,
-      cell: ({ row }) => {
-        return (
-          <div className="text-center font-medium text-xs">
-            {(row.getValue("safety_stock") as number).toLocaleString()}
-          </div>
-        );
-      },
-      size: 150,
-    },
-    {
       accessorKey: "coverage_ratio",
-      header: () => <div className="text-center">Coverage Ratio</div>,
+      header: "Coverage Ratio",
       cell: ({ row }) => {
         return (
-          <div className="text-center font-medium text-xs">
+          <div className="font-medium text-xs">
             {(row.getValue("coverage_ratio") as number).toLocaleString()}
           </div>
         );
       },
-      size: 150,
+      size: 120,
     },
     {
       accessorKey: "consumption_history_5yr",
-      header: () => <div className="text-center">5Y Consumption Trend</div>,
+      header: "Consumption Trend",
       cell: ({ row }) => {
         const history = row.getValue("consumption_history_5yr") as
           | Array<{ years_ago: number; quantity: number }>
           | null
           | undefined;
         return (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-start">
             <Sparkline data={history} />
           </div>
         );
       },
-      size: 200,
+      size: 140,
     },
     {
       accessorKey: "created_on",
-      header: () => <div className="text-center">Created</div>,
+      header: "Created",
       cell: ({ row }) => {
         const date = row.getValue("created_on") as string;
         return (
-          <div className="text-center text-xs">
+          <div className="text-xs">
             <div>
               {formatDistanceToNow(new Date(date), { addSuffix: true })}
             </div>
@@ -345,73 +350,55 @@ export function MaterialsTable() {
           </div>
         );
       },
-      size: 130,
+      size: 120,
     },
     {
       accessorKey: "reviews_count",
-      header: () => <div className="text-center">Reviews</div>,
+      header: "Reviews",
       cell: ({ row }) => {
         const count = row.getValue("reviews_count") as number;
         return (
-          <div className="text-center">
-            <Badge variant={count > 0 ? "secondary" : "destructive"}>
-              {count}
-            </Badge>
-          </div>
+          <Badge variant={count > 0 ? "secondary" : "destructive"}>
+            {count}
+          </Badge>
         );
       },
-      size: 100,
+      size: 60,
     },
     {
       accessorKey: "last_reviewed",
-      header: () => <div className="text-center">Last Reviewed</div>,
+      header: "Last Reviewed",
       cell: ({ row }) => {
         const date = row.getValue("last_reviewed") as string;
         if (!date) {
-          return (
-            <div className="text-center">
-              <Badge variant="destructive">Not Reviewed</Badge>
-            </div>
-          );
+          return <Badge variant="destructive">Not Reviewed</Badge>;
         }
         return (
-          <div className="text-center">
-            <Badge className={getLastReviewedBadgeColor(date)}>
-              {formatDistanceToNow(new Date(date), { addSuffix: true })}
-            </Badge>
-          </div>
+          <Badge className={getLastReviewedBadgeColor(date)}>
+            {formatDistanceToNow(new Date(date), { addSuffix: true })}
+          </Badge>
         );
       },
-      size: 160,
+      size: 140,
     },
     {
       accessorKey: "next_review",
-      header: () => <div className="text-center">Next Review</div>,
+      header: "Next Review",
       cell: ({ row }) => {
         const nextReviewDate = row.original.next_review;
         const lastReviewedDate = row.original.last_reviewed;
         if (!nextReviewDate && !lastReviewedDate) {
-          return (
-            <div className="text-center">
-              <Badge variant="destructive">Not Reviewed</Badge>
-            </div>
-          );
+          return <Badge variant="destructive">Not Reviewed</Badge>;
         }
         if (!nextReviewDate) {
-          return (
-            <div className="text-center">
-              <Badge variant="outline">Not Scheduled</Badge>
-            </div>
-          );
+          return <Badge variant="outline">Not Scheduled</Badge>;
         }
         return (
-          <div className="text-center">
-            <Badge className={getLastReviewedBadgeColor(nextReviewDate)}>
-              {formatDistanceToNow(new Date(nextReviewDate), {
-                addSuffix: true,
-              })}
-            </Badge>
-          </div>
+          <Badge className={getLastReviewedBadgeColor(nextReviewDate)}>
+            {formatDistanceToNow(new Date(nextReviewDate), {
+              addSuffix: true,
+            })}
+          </Badge>
         );
       },
       size: 160,
