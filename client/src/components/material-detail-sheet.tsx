@@ -1,5 +1,16 @@
 import * as React from "react";
-import { Info, Loader2, Plus, MessageSquare, AlertCircle, AlertTriangle, CheckCircle2, Check, X, Eye, EyeOff } from "lucide-react";
+import {
+  Info,
+  Loader2,
+  Plus,
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Check,
+  X,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { components } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -25,10 +36,15 @@ import {
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { ReviewCommentsDialog } from "@/components/review-comments-dialog";
 import { formatDate, formatDistanceToNow } from "date-fns";
-import { useMaterialDetails, useCancelReview, useAcknowledgeInsight, useUnacknowledgeInsight } from "@/api/queries";
+import {
+  useMaterialDetails,
+  useCancelReview,
+  useAcknowledgeInsight,
+  useUnacknowledgeInsight,
+} from "@/api/queries";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { cn, getMaterialReviewStatusBadgeColor } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReviewBase = components["schemas"]["MaterialReview"];
@@ -62,17 +78,14 @@ function InsightsPanel({ insights, materialNumber }: InsightsPanelProps) {
   const visibleInsights = showAcknowledged ? insights : unacknowledgedInsights;
 
   // Group insights by type
-  const groupedInsights = visibleInsights.reduce(
-    (acc, insight) => {
-      const type = insight.insight_type;
-      if (!acc[type]) {
-        acc[type] = [];
-      }
-      acc[type].push(insight);
-      return acc;
-    },
-    {} as Record<string, Insight[]>
-  );
+  const groupedInsights = visibleInsights.reduce((acc, insight) => {
+    const type = insight.insight_type;
+    if (!acc[type]) {
+      acc[type] = [];
+    }
+    acc[type].push(insight);
+    return acc;
+  }, {} as Record<string, Insight[]>);
 
   const handleAcknowledge = (insightId: number) => {
     acknowledgeInsight.mutate({ materialNumber, insightId });
@@ -84,7 +97,13 @@ function InsightsPanel({ insights, materialNumber }: InsightsPanelProps) {
 
   const insightConfig: Record<
     string,
-    { icon: React.ReactNode; bgColor: string; borderColor: string; textColor: string; label: string }
+    {
+      icon: React.ReactNode;
+      bgColor: string;
+      borderColor: string;
+      textColor: string;
+      label: string;
+    }
   > = {
     error: {
       icon: <AlertCircle className="h-4 w-4" />,
@@ -222,7 +241,9 @@ function InsightsPanel({ insights, materialNumber }: InsightsPanelProps) {
                                 Click to restore
                               </p>
                             ) : (
-                              <p className="text-xs">Acknowledge this insight</p>
+                              <p className="text-xs">
+                                Acknowledge this insight
+                              </p>
                             )}
                           </TooltipContent>
                         </Tooltip>
@@ -254,6 +275,42 @@ interface ReviewHistoryTimelineProps {
   onEditReview: (review: MaterialReview) => void;
   onCancelReview: (review: MaterialReview) => void;
   disabled: boolean;
+}
+
+// Helper functions for status-based coloring
+function getStatusColors(status: string): { border: string; badge: string } {
+  switch (status.toLowerCase()) {
+    case "draft":
+      return {
+        border: "border-l-yellow-500",
+        badge: "bg-yellow-500/10 text-yellow-600 border-yellow-500",
+      };
+    case "pending_sme":
+      return {
+        border: "border-l-blue-500",
+        badge: "bg-blue-500/10 text-blue-600 border-blue-500",
+      };
+    case "pending_decision":
+      return {
+        border: "border-l-purple-500",
+        badge: "bg-purple-500/10 text-purple-600 border-purple-500",
+      };
+    case "completed":
+      return {
+        border: "border-l-green-500",
+        badge: "bg-green-500/10 text-green-600 border-green-500",
+      };
+    case "cancelled":
+      return {
+        border: "border-l-red-500",
+        badge: "bg-red-500/10 text-red-600 border-red-500",
+      };
+    default:
+      return {
+        border: "border-l-gray-500",
+        badge: "bg-gray-500/10 text-gray-600 border-gray-500",
+      };
+  }
 }
 
 function ReviewHistoryTimeline({
@@ -296,157 +353,153 @@ function ReviewHistoryTimeline({
         </Button>
       </div>
       {reviews && reviews.length > 0 ? (
-        <div className="relative overflow-y-auto pr-2 flex-1">
-          {/* Timeline line */}
-          <div className="absolute left-[9px] top-2 bottom-2 w-[2px] bg-border" />
-
-          {/* Timeline items */}
-          <div className="space-y-6">
-            {[...reviews]
-              .sort((a, b) => (a.created_at! < b.created_at! ? 1 : -1))
-              .map((review: MaterialReview, index: number) => {
-                return (
-                  <div key={index} className="relative flex gap-4 group">
-                    {/* Timeline dot */}
-                    <div className="relative flex-shrink-0">
-                      <div className="w-5 h-5 rounded-full bg-background border-2 border-border" />
+        <div className="overflow-y-auto pr-2 flex-1 space-y-3">
+          {[...reviews]
+            .sort((a, b) => (a.created_at! < b.created_at! ? 1 : -1))
+            .map((review: MaterialReview, index: number) => {
+              const statusColors = getStatusColors(review.status);
+              return (
+                <div key={index} className="group">
+                  {/* Review content with colored left border */}
+                  <div
+                    className={cn(
+                      "flex-1 pl-4 py-2 border-l-4 rounded-l hover:bg-muted/50 transition-colors space-y-2",
+                      statusColors.border
+                    )}
+                  >
+                    {/* Row 1: Status badge + timestamps */}
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Badge
+                        variant="outline"
+                        className={cn("capitalize", statusColors.badge)}
+                      >
+                        {review.status.replace("_", " ").replace("sme", "SME")}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        Created {formatDate(review.created_at, "PP")}{" "}
+                        <span className="opacity-70">
+                          (
+                          {formatDistanceToNow(review.created_at, {
+                            addSuffix: true,
+                          })}
+                          )
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="text-muted-foreground">
+                        Updated {formatDate(review.updated_at, "PP")}{" "}
+                        <span className="opacity-70">
+                          (
+                          {formatDistanceToNow(review.updated_at, {
+                            addSuffix: true,
+                          })}
+                          )
+                        </span>
+                      </span>
                     </div>
 
-                    {/* Review card */}
-                    <div className="flex-1 rounded-md border p-3 space-y-2 bg-card">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-4 flex-1">
-                          <div className="grid grid-cols-2 gap-4">
-                            <p className="text-sm font-medium">
-                              Initiated by:{" "}
-                              <strong className="capitalize">
-                                {review.initiated_by_user?.full_name ??
-                                  "Unknown"}
-                              </strong>
-                            </p>
-                            <p className="text-sm font-medium">
-                              Decided by:{" "}
-                              <strong className="capitalize">
-                                {review.decided_by_user?.full_name ??
-                                  "No Decision"}
-                              </strong>
-                            </p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Created On
-                              </p>
-                              <div className="flex gap-2">
-                                <p className="text-xs font-medium">
-                                  {formatDate(review.created_at, "PP")}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  (
-                                  {formatDistanceToNow(review.created_at, {
-                                    addSuffix: true,
-                                  })}
-                                  )
-                                </p>
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Last Updated
-                              </p>
-                              <div className="flex gap-2">
-                                <p className="text-xs font-medium">
-                                  {formatDate(review.updated_at, "PP")}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  (
-                                  {formatDistanceToNow(review.updated_at, {
-                                    addSuffix: true,
-                                  })}
-                                  )
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <p className="text-xs text-muted-foreground">
-                                  Final Decision
-                                </p>
-                                <p className="text-xs capitalize">
-                                  {review.final_decision ?? "None provided"}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">
-                                  Final Qty. Adj.
-                                </p>
-                                <p className="text-xs capitalize">
-                                  {review.final_qty_adjustment?.toLocaleString() ??
-                                    "None provided"}
-                                </p>
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Final Notes
-                              </p>
-                              <p className="text-xs">
-                                {review.final_notes ?? "None provided"}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex justify-between w-full">
-                        <div className="flex gap-2 items-center">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "capitalize",
-                              getMaterialReviewStatusBadgeColor(review.status)
-                            )}
-                          >
-                            {review.status
-                              .replace("_", " ")
-                              .replace("sme", "SME")}
-                          </Badge>
-                          {review.comments_count != null &&
-                            review.comments_count > 0 && (
-                              <Badge
-                                variant="secondary"
-                                className="flex items-center gap-1"
-                              >
-                                <MessageSquare className="h-3 w-3" />
-                                {review.comments_count}
-                              </Badge>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                          <span
-                            className="text-xs text-muted-foreground underline cursor-pointer"
-                            onClick={() => onEditReview(review)}
-                          >
-                            {review.is_read_only
-                              ? "Show Details"
-                              : "Continue Review"}
-                          </span>
-                          {!review.is_read_only && (
-                            <span
-                              className="text-xs text-destructive underline cursor-pointer"
-                              onClick={() => handleCancelClick(review)}
-                            >
-                              Cancel Review
+                    {/* Row 2: People + comments */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                      <span>
+                        <span className="text-muted-foreground">
+                          Initiated by:
+                        </span>{" "}
+                        <span className="font-medium capitalize">
+                          {review.initiated_by_user?.full_name ?? "Unknown"}
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground">•</span>
+                      <span>
+                        <span className="text-muted-foreground">
+                          Decided by:
+                        </span>{" "}
+                        <span className="font-medium capitalize">
+                          {review.decided_by_user?.full_name ?? "—"}
+                        </span>
+                      </span>
+                      {review.comments_count != null &&
+                        review.comments_count > 0 && (
+                          <>
+                            <span className="text-muted-foreground">•</span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Comments:
+                              </span>{" "}
+                              {review.comments_count}
                             </span>
-                          )}
-                        </div>
+                          </>
+                        )}
+                    </div>
+
+                    {/* Row 3: Decision details */}
+                    {(review.final_decision ||
+                      review.final_qty_adjustment != null ||
+                      review.final_notes ||
+                      (review.comments_count != null &&
+                        review.comments_count > 0)) && (
+                      <div className="flex flex-wrap items-start gap-x-4 gap-y-1 text-xs">
+                        {review.final_decision && (
+                          <span>
+                            <span className="text-muted-foreground">
+                              Decision:
+                            </span>{" "}
+                            <span className="capitalize">
+                              {review.final_decision}
+                            </span>
+                          </span>
+                        )}
+                        {review.final_qty_adjustment != null && (
+                          <>
+                            <span className="text-muted-foreground">•</span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Qty Adj:
+                              </span>{" "}
+                              {review.final_qty_adjustment.toLocaleString()}
+                            </span>
+                          </>
+                        )}
+                        {review.final_notes && (
+                          <>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="flex-1 min-w-0">
+                              <span className="text-muted-foreground">
+                                Notes:
+                              </span>{" "}
+                              <span className="truncate">
+                                {review.final_notes}
+                              </span>
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Row 4: Actions */}
+                    <div className="flex justify-end items-center pt-1">
+                      <div className="flex gap-3">
+                        <span
+                          className="text-xs text-primary hover:underline cursor-pointer"
+                          onClick={() => onEditReview(review)}
+                        >
+                          {review.is_read_only
+                            ? "Show Details"
+                            : "Continue Review"}
+                        </span>
+                        {!review.is_read_only && (
+                          <span
+                            className="text-xs text-destructive hover:underline cursor-pointer"
+                            onClick={() => handleCancelClick(review)}
+                          >
+                            Cancel Review
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-          </div>
+                </div>
+              );
+            })}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground text-center">
@@ -674,7 +727,10 @@ function MaterialDetailsContent({
       ) : materialDetails ? (
         <div className="mt-6 flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
           {/* Insights Panel - displayed prominently at the top */}
-          <InsightsPanel insights={materialDetails.insights} materialNumber={materialNumber!} />
+          <InsightsPanel
+            insights={materialDetails.insights}
+            materialNumber={materialNumber!}
+          />
 
           <div>
             <div className="flex items-center gap-4 mb-4">
