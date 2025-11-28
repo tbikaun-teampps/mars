@@ -13,6 +13,7 @@ import {
   apiClient,
   MaterialReviewUpdate,
   UploadSAPDataResponse,
+  UploadJobListResponse,
   PaginatedReviewCommentsResponse,
   ReviewComment,
   ReviewCommentCreate,
@@ -245,10 +246,33 @@ export function useUploadSAPData(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: queryKeys.materials.all,
       });
+      // Invalidate upload jobs list to show new upload in history
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.uploadJobs.all,
+      });
     },
     onError: (error) => {
       console.error("Failed to upload SAP data:", error);
     },
+  });
+}
+
+/**
+ * Hook to fetch upload job history (paginated list of all upload jobs)
+ * @param limit Number of records to fetch (default 50)
+ * @param offset Number of records to skip (default 0)
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useUploadJobHistory(
+  limit: number = 50,
+  offset: number = 0,
+  enabled: boolean = true
+): UseQueryResult<UploadJobListResponse, Error> {
+  return useQuery({
+    queryKey: queryKeys.uploadJobs.list(limit, offset),
+    queryFn: () => apiClient.getUploadJobHistory(limit, offset),
+    enabled,
+    staleTime: 1000 * 60, // 1 minute
   });
 }
 

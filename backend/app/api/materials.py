@@ -350,6 +350,124 @@ async def list_materials(
     )
 
 
+# Upload jobs endpoints must be defined before /materials/{material_number}
+# to avoid FastAPI matching "upload-jobs" as a material_number parameter
+@router.get("/materials/upload-jobs")
+async def list_upload_jobs(
+    limit: int = Query(default=50, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get paginated list of all upload jobs for history display."""
+
+    # Get total count
+    count_result = await db.execute(
+        select(func.count()).select_from(UploadJobDB)
+    )
+    total = count_result.scalar() or 0
+
+    # Get jobs ordered by created_at DESC
+    result = await db.execute(
+        select(UploadJobDB)
+        .order_by(UploadJobDB.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    jobs = result.scalars().all()
+
+    job_list = []
+    for job in jobs:
+        progress_pct = 0.0
+        if job.total_records > 0:
+            progress_pct = round(job.processed_records / job.total_records * 100, 1)
+
+        job_data = {
+            "job_id": str(job.job_id),
+            "status": job.status,
+            "current_phase": job.current_phase,
+            "progress": {
+                "total": job.total_records,
+                "processed": job.processed_records,
+                "percentage": progress_pct,
+            },
+            "file_name": job.file_name,
+            "file_size_bytes": job.file_size_bytes,
+            "file_mime_type": job.file_mime_type,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        }
+
+        if job.status == "completed":
+            job_data["result"] = {
+                "inserted": job.inserted_count,
+                "updated": job.updated_count,
+                "insights": job.insights_count,
+                "reviews": job.reviews_count,
+            }
+        elif job.status == "failed":
+            job_data["error"] = job.error_message
+
+        job_list.append(job_data)
+
+    return {
+        "jobs": job_list,
+        "total": total,
+    }
+
+
+@router.get("/materials/upload-jobs/{job_id}")
+async def get_upload_job_status(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get the status and progress of an upload job."""
+
+    result = await db.execute(
+        select(UploadJobDB).where(UploadJobDB.job_id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Upload job not found",
+        )
+
+    progress_pct = 0.0
+    if job.total_records > 0:
+        progress_pct = round(job.processed_records / job.total_records * 100, 1)
+
+    response = {
+        "job_id": str(job.job_id),
+        "status": job.status,
+        "current_phase": job.current_phase,
+        "progress": {
+            "total": job.total_records,
+            "processed": job.processed_records,
+            "percentage": progress_pct,
+        },
+        "file_name": job.file_name,
+        "file_size_bytes": job.file_size_bytes,
+        "file_mime_type": job.file_mime_type,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+    }
+
+    if job.status == "completed":
+        response["result"] = {
+            "inserted": job.inserted_count,
+            "updated": job.updated_count,
+            "insights": job.insights_count,
+            "reviews": job.reviews_count,
+        }
+    elif job.status == "failed":
+        response["error"] = job.error_message
+
+    return response
+
+
 @router.get("/materials/{material_number}")
 async def get_material(
     material_number: int,
@@ -727,10 +845,13 @@ async def upload_sap_material_data(
             detail="CSV file is empty",
         )
 
-    # Create job record
+    # Create job record with file metadata
     job = UploadJobDB(
         status="pending",
         created_by=UUID(current_user.id),
+        file_name=csv_file.filename,
+        file_size_bytes=len(content),
+        file_mime_type=csv_file.content_type,
     )
     db.add(job)
     await db.commit()
@@ -748,55 +869,6 @@ async def upload_sap_material_data(
         "status": "pending",
         "message": "Upload started. Poll /materials/upload-jobs/{job_id} for progress.",
     }
-
-
-@router.get("/materials/upload-jobs/{job_id}")
-async def get_upload_job_status(
-    job_id: UUID,
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Get the status and progress of an upload job."""
-
-    result = await db.execute(
-        select(UploadJobDB).where(UploadJobDB.job_id == job_id)
-    )
-    job = result.scalar_one_or_none()
-
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Upload job not found",
-        )
-
-    progress_pct = 0.0
-    if job.total_records > 0:
-        progress_pct = round(job.processed_records / job.total_records * 100, 1)
-
-    response = {
-        "job_id": str(job.job_id),
-        "status": job.status,
-        "current_phase": job.current_phase,
-        "progress": {
-            "total": job.total_records,
-            "processed": job.processed_records,
-            "percentage": progress_pct,
-        },
-        "created_at": job.created_at.isoformat() if job.created_at else None,
-        "started_at": job.started_at.isoformat() if job.started_at else None,
-        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-    }
-
-    if job.status == "completed":
-        response["result"] = {
-            "inserted": job.inserted_count,
-            "updated": job.updated_count,
-            "insights": job.insights_count,
-            "reviews": job.reviews_count,
-        }
-    elif job.status == "failed":
-        response["error"] = job.error_message
-
-    return response
 
 
 async def process_sap_upload_background(job_id: UUID, file_content: bytes):

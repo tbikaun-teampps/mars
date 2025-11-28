@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { useUploadSAPData } from "@/api/queries";
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, History } from "lucide-react";
+import { useUploadSAPData, useUploadJobHistory } from "@/api/queries";
 import { apiClient, UploadJobStatus } from "@/api/client";
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useQueryClient } from "@tanstack/react-query";
+import { UploadHistoryModal } from "./upload-history-modal";
 
 interface UploadSAPDialogProps {
   open: boolean;
@@ -29,14 +30,31 @@ const phaseLabels: Record<string, string> = {
   reviews: "Creating reviews...",
 };
 
+function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatDate(dateString: string | null): string {
+  if (!dateString) return "—";
+  return new Date(dateString).toLocaleString();
+}
+
 export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<UploadJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const uploadMutation = useUploadSAPData();
   const queryClient = useQueryClient();
+
+  // Fetch last upload (only when dialog is open and not currently uploading)
+  const { data: historyData } = useUploadJobHistory(1, 0, open && !jobId);
+  const lastUpload = historyData?.jobs[0];
 
   // Determine upload state
   const isUploading = uploadMutation.isPending;
@@ -137,112 +155,152 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
     : "Starting...";
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload SAP Data</DialogTitle>
-          <DialogDescription>
-            Select a CSV file to upload SAP material data to the system.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload SAP Data</DialogTitle>
+            <DialogDescription>
+              Select a CSV file to upload SAP material data to the system.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="csv-file-input">CSV File</Label>
-            <Input
-              id="csv-file-input"
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              disabled={isBusy}
-            />
+          <div className="space-y-4 py-4">
+            {/* Last upload summary */}
+            {lastUpload && !jobId && !selectedFile && (
+              <div className="rounded-md border bg-muted/50 p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Last Upload</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setHistoryOpen(true)}
+                  >
+                    <History className="h-3 w-3 mr-1" />
+                    History
+                  </Button>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="truncate">{lastUpload.file_name || "Unknown file"}</span>
+                    <span className="text-xs">({formatFileSize(lastUpload.file_size_bytes)})</span>
+                  </div>
+                  <div className="text-xs">
+                    {formatDate(lastUpload.created_at)}
+                    {lastUpload.status === "completed" && lastUpload.result && (
+                      <span className="ml-2 text-green-600">
+                        {lastUpload.result.inserted.toLocaleString()} materials
+                      </span>
+                    )}
+                    {lastUpload.status === "failed" && (
+                      <span className="ml-2 text-red-600">Failed</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="csv-file-input">CSV File</Label>
+              <Input
+                id="csv-file-input"
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                disabled={isBusy}
+              />
+            </div>
+
+            {selectedFile && !isProcessing && !isPending && !isCompleted && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                <span>{selectedFile.name}</span>
+                <span className="text-xs">({(selectedFile.size / 1024).toFixed(2)} KB)</span>
+              </div>
+            )}
+
+            {/* Progress display during processing */}
+            {(isProcessing || isPending) && jobStatus && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-sm font-medium">{currentPhaseLabel}</span>
+                </div>
+
+                <Progress value={jobStatus.progress.percentage} />
+
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    {jobStatus.progress.processed.toLocaleString()} of{" "}
+                    {jobStatus.progress.total.toLocaleString()} records
+                  </span>
+                  <span>{jobStatus.progress.percentage.toFixed(1)}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* Success message */}
+            {isCompleted && jobStatus?.result && (
+              <div className="flex items-start gap-2 rounded-md bg-green-50 p-3 text-sm text-green-900">
+                <CheckCircle className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-medium">Upload completed successfully!</p>
+                  <p className="text-xs mt-1">
+                    {jobStatus.result.inserted.toLocaleString()} materials processed,{" "}
+                    {jobStatus.result.insights.toLocaleString()} insights generated,{" "}
+                    {jobStatus.result.reviews.toLocaleString()} reviews created.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Error message */}
+            {(error || isFailed) && (
+              <div className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-900">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <p>{error || jobStatus?.error || "Upload failed. Please try again."}</p>
+              </div>
+            )}
           </div>
 
-          {selectedFile && !isProcessing && !isPending && !isCompleted && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileText className="h-4 w-4" />
-              <span>{selectedFile.name}</span>
-              <span className="text-xs">({(selectedFile.size / 1024).toFixed(2)} KB)</span>
-            </div>
-          )}
-
-          {/* Progress display during processing */}
-          {(isProcessing || isPending) && jobStatus && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm font-medium">{currentPhaseLabel}</span>
-              </div>
-
-              <Progress value={jobStatus.progress.percentage} />
-
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>
-                  {jobStatus.progress.processed.toLocaleString()} of{" "}
-                  {jobStatus.progress.total.toLocaleString()} records
-                </span>
-                <span>{jobStatus.progress.percentage.toFixed(1)}%</span>
-              </div>
-            </div>
-          )}
-
-          {/* Success message */}
-          {isCompleted && jobStatus?.result && (
-            <div className="flex items-start gap-2 rounded-md bg-green-50 p-3 text-sm text-green-900">
-              <CheckCircle className="h-5 w-5 shrink-0" />
-              <div>
-                <p className="font-medium">Upload completed successfully!</p>
-                <p className="text-xs mt-1">
-                  {jobStatus.result.inserted.toLocaleString()} materials processed,{" "}
-                  {jobStatus.result.insights.toLocaleString()} insights generated,{" "}
-                  {jobStatus.result.reviews.toLocaleString()} reviews created.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Error message */}
-          {(error || isFailed) && (
-            <div className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-900">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <p>{error || jobStatus?.error || "Upload failed. Please try again."}</p>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={isBusy}
-          >
-            {isCompleted ? "Close" : "Cancel"}
-          </Button>
-          {!isCompleted && (
+          <DialogFooter>
             <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || isBusy}
+              variant="outline"
+              onClick={handleClose}
+              disabled={isBusy}
             >
-              {isUploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Starting...
-                </>
-              ) : isProcessing || isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload
-                </>
-              )}
+              {isCompleted ? "Close" : "Cancel"}
             </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {!isCompleted && (
+              <Button
+                onClick={handleUpload}
+                disabled={!selectedFile || isBusy}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : isProcessing || isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload
+                  </>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <UploadHistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />
+    </>
   );
 }

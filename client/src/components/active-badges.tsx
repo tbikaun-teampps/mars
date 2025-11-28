@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Badge } from "./ui/badge";
 import type { SortingState } from "@tanstack/react-table";
 import type { MaterialFilters } from "@/hooks/useTableUrlState";
+import type { AuditLogFilters } from "@/hooks/useAuditLogUrlState";
 
 // Helper to format currency for display
 const formatCurrency = (value: number) =>
@@ -30,6 +31,20 @@ interface SortableColumn {
   label: string;
 }
 
+// Type guard to check if filters is MaterialFilters
+function isMaterialFilters(
+  filters: MaterialFilters | AuditLogFilters
+): filters is MaterialFilters {
+  return "materialType" in filters;
+}
+
+// Type guard to check if filters is AuditLogFilters
+function isAuditLogFilters(
+  filters: MaterialFilters | AuditLogFilters
+): filters is AuditLogFilters {
+  return "materialNumber" in filters || "dateFrom" in filters;
+}
+
 interface ActiveBadgesProps {
   // Search
   search: string;
@@ -40,9 +55,9 @@ interface ActiveBadgesProps {
   sortableColumns: SortableColumn[];
   onClearSorting: () => void;
 
-  // Filters
-  filters: MaterialFilters;
-  onRemoveFilter: (key: keyof MaterialFilters, value?: string) => void;
+  // Filters - can be either MaterialFilters or AuditLogFilters
+  filters: MaterialFilters | AuditLogFilters;
+  onRemoveFilter: (key: string, value?: string) => void;
 
   // Unified clear
   onClearAll: () => void;
@@ -105,185 +120,258 @@ export function ActiveBadges({
     );
   }
 
-  // Material type badges
-  filters.materialType.forEach((type) => {
-    badges.push(
-      <Badge
-        key={`type-${type}`}
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
-      >
-        Type: {type}
-        <button
-          onClick={() => onRemoveFilter("materialType", type)}
-          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+  // MaterialFilters-specific badges
+  if (isMaterialFilters(filters)) {
+    // Material type badges
+    filters.materialType.forEach((type) => {
+      badges.push(
+        <Badge
+          key={`type-${type}`}
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
         >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
-  });
+          Type: {type}
+          <button
+            onClick={() => onRemoveFilter("materialType", type)}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    });
 
-  // Value range badges
-  if (
-    filters.minTotalValue !== undefined ||
-    filters.maxTotalValue !== undefined
-  ) {
-    const label =
-      filters.minTotalValue !== undefined && filters.maxTotalValue !== undefined
-        ? `Value: ${formatCurrency(filters.minTotalValue)} - ${formatCurrency(
-            filters.maxTotalValue
-          )}`
-        : filters.minTotalValue !== undefined
-        ? `Value: ≥${formatCurrency(filters.minTotalValue)}`
-        : `Value: ≤${formatCurrency(filters.maxTotalValue!)}`;
-    badges.push(
-      <Badge
-        key="value-range"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
-      >
-        {label}
-        <button
-          onClick={() => {
-            onRemoveFilter("minTotalValue");
-            onRemoveFilter("maxTotalValue");
-          }}
-          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+    // Value range badges
+    if (
+      filters.minTotalValue !== undefined ||
+      filters.maxTotalValue !== undefined
+    ) {
+      const label =
+        filters.minTotalValue !== undefined &&
+        filters.maxTotalValue !== undefined
+          ? `Value: ${formatCurrency(filters.minTotalValue)} - ${formatCurrency(
+              filters.maxTotalValue
+            )}`
+          : filters.minTotalValue !== undefined
+          ? `Value: ≥${formatCurrency(filters.minTotalValue)}`
+          : `Value: ≤${formatCurrency(filters.maxTotalValue!)}`;
+      badges.push(
+        <Badge
+          key="value-range"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
         >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
-  }
+          {label}
+          <button
+            onClick={() => {
+              onRemoveFilter("minTotalValue");
+              onRemoveFilter("maxTotalValue");
+            }}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
 
-  // Quantity range badges
-  if (
-    filters.minTotalQuantity !== undefined ||
-    filters.maxTotalQuantity !== undefined
-  ) {
-    const label =
-      filters.minTotalQuantity !== undefined &&
+    // Quantity range badges
+    if (
+      filters.minTotalQuantity !== undefined ||
       filters.maxTotalQuantity !== undefined
-        ? `Qty: ${filters.minTotalQuantity.toLocaleString()} - ${filters.maxTotalQuantity.toLocaleString()}`
-        : filters.minTotalQuantity !== undefined
-        ? `Qty: ≥${filters.minTotalQuantity.toLocaleString()}`
-        : `Qty: ≤${filters.maxTotalQuantity!.toLocaleString()}`;
-    badges.push(
-      <Badge
-        key="qty-range"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
-      >
-        {label}
-        <button
-          onClick={() => {
-            onRemoveFilter("minTotalQuantity");
-            onRemoveFilter("maxTotalQuantity");
-          }}
-          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+    ) {
+      const label =
+        filters.minTotalQuantity !== undefined &&
+        filters.maxTotalQuantity !== undefined
+          ? `Qty: ${filters.minTotalQuantity.toLocaleString()} - ${filters.maxTotalQuantity.toLocaleString()}`
+          : filters.minTotalQuantity !== undefined
+          ? `Qty: ≥${filters.minTotalQuantity.toLocaleString()}`
+          : `Qty: ≤${filters.maxTotalQuantity!.toLocaleString()}`;
+      badges.push(
+        <Badge
+          key="qty-range"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
         >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
+          {label}
+          <button
+            onClick={() => {
+              onRemoveFilter("minTotalQuantity");
+              onRemoveFilter("maxTotalQuantity");
+            }}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
+
+    // Last reviewed badge
+    if (filters.lastReviewedFilter) {
+      badges.push(
+        <Badge
+          key="last-reviewed"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
+        >
+          {LAST_REVIEWED_LABELS[filters.lastReviewedFilter] ||
+            filters.lastReviewedFilter}
+          <button
+            onClick={() => onRemoveFilter("lastReviewedFilter")}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
+
+    // Next review badge
+    if (filters.nextReviewFilter) {
+      badges.push(
+        <Badge
+          key="next-review"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
+        >
+          {NEXT_REVIEW_LABELS[filters.nextReviewFilter] ||
+            filters.nextReviewFilter}
+          <button
+            onClick={() => onRemoveFilter("nextReviewFilter")}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
+
+    // Has reviews badge
+    if (filters.hasReviews !== undefined) {
+      badges.push(
+        <Badge
+          key="has-reviews"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
+        >
+          Has reviews
+          <button
+            onClick={() => onRemoveFilter("hasReviews")}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
+
+    // Has errors badge
+    if (filters.hasErrors !== undefined) {
+      badges.push(
+        <Badge
+          key="has-errors"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+        >
+          Has errors
+          <button
+            onClick={() => onRemoveFilter("hasErrors")}
+            className="ml-1 hover:bg-red-200 dark:hover:bg-red-800 rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
+
+    // Has warnings badge
+    if (filters.hasWarnings !== undefined) {
+      badges.push(
+        <Badge
+          key="has-warnings"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+        >
+          Has warnings
+          <button
+            onClick={() => onRemoveFilter("hasWarnings")}
+            className="ml-1 hover:bg-yellow-200 dark:hover:bg-yellow-800 rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
   }
 
-  // Last reviewed badge
-  if (filters.lastReviewedFilter) {
-    badges.push(
-      <Badge
-        key="last-reviewed"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
-      >
-        {LAST_REVIEWED_LABELS[filters.lastReviewedFilter] ||
-          filters.lastReviewedFilter}
-        <button
-          onClick={() => onRemoveFilter("lastReviewedFilter")}
-          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+  // AuditLogFilters-specific badges
+  if (isAuditLogFilters(filters)) {
+    // Material number badge
+    if (filters.materialNumber !== undefined) {
+      badges.push(
+        <Badge
+          key="material-number"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
         >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
-  }
+          Material: {filters.materialNumber}
+          <button
+            onClick={() => onRemoveFilter("materialNumber")}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
 
-  // Next review badge
-  if (filters.nextReviewFilter) {
-    badges.push(
-      <Badge
-        key="next-review"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
-      >
-        {NEXT_REVIEW_LABELS[filters.nextReviewFilter] ||
-          filters.nextReviewFilter}
-        <button
-          onClick={() => onRemoveFilter("nextReviewFilter")}
-          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+    // Date range badges
+    if (filters.dateFrom || filters.dateTo) {
+      const label =
+        filters.dateFrom && filters.dateTo
+          ? `Date: ${filters.dateFrom} to ${filters.dateTo}`
+          : filters.dateFrom
+          ? `Date: from ${filters.dateFrom}`
+          : `Date: to ${filters.dateTo}`;
+      badges.push(
+        <Badge
+          key="date-range"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
         >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
-  }
+          {label}
+          <button
+            onClick={() => {
+              onRemoveFilter("dateFrom");
+              onRemoveFilter("dateTo");
+            }}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
 
-  // Has reviews badge
-  if (filters.hasReviews !== undefined) {
-    badges.push(
-      <Badge
-        key="has-reviews"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
-      >
-        Has reviews
-        <button
-          onClick={() => onRemoveFilter("hasReviews")}
-          className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+    // Changed by user badge
+    if (filters.changedByUserId) {
+      badges.push(
+        <Badge
+          key="changed-by"
+          variant="secondary"
+          className="gap-1 pl-2 pr-1 py-1 text-xs rounded-sm bg-blue-100 text-blue-500"
         >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
-  }
-
-  // Has errors badge
-  if (filters.hasErrors !== undefined) {
-    badges.push(
-      <Badge
-        key="has-errors"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-      >
-        Has errors
-        <button
-          onClick={() => onRemoveFilter("hasErrors")}
-          className="ml-1 hover:bg-red-200 dark:hover:bg-red-800 rounded-full p-0.5 cursor-pointer"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
-  }
-
-  // Has warnings badge
-  if (filters.hasWarnings !== undefined) {
-    badges.push(
-      <Badge
-        key="has-warnings"
-        variant="secondary"
-        className="gap-1 pl-2 pr-1 py-1 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
-      >
-        Has warnings
-        <button
-          onClick={() => onRemoveFilter("hasWarnings")}
-          className="ml-1 hover:bg-yellow-200 dark:hover:bg-yellow-800 rounded-full p-0.5 cursor-pointer"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </Badge>
-    );
+          User filter active
+          <button
+            onClick={() => onRemoveFilter("changedByUserId")}
+            className="ml-1 hover:bg-muted rounded-full p-0.5 cursor-pointer"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      );
+    }
   }
 
   if (badges.length === 0) return null;

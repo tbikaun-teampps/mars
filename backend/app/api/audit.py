@@ -2,7 +2,9 @@
 
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import cast, String, or_
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -245,6 +247,18 @@ async def list_material_audit_logs(
     date_to: Optional[datetime] = Query(
         None, description="Filter by date to (inclusive)"
     ),
+    search: Optional[str] = Query(
+        None, description="Search material number or description"
+    ),
+    sort_by: Optional[str] = Query(
+        None, description="Field to sort by (timestamp, material_number)"
+    ),
+    sort_order: Optional[str] = Query(
+        "desc", description="Sort order: asc or desc"
+    ),
+    changed_by_user_id: Optional[UUID] = Query(
+        None, description="Filter by user who made the change"
+    ),
 ) -> PaginatedMaterialAuditLogsResponse:
     """List material-related audit logs in a human-readable format."""
 
@@ -260,6 +274,24 @@ async def list_material_audit_logs(
         query = query.where(AuditLogDB.changed_at >= date_from)
     if date_to:
         query = query.where(AuditLogDB.changed_at <= date_to)
+
+    # Apply user filter
+    if changed_by_user_id:
+        query = query.where(AuditLogDB.changed_by == changed_by_user_id)
+
+    # Apply search filter (searches material_number in sap_material_data records)
+    # Also searches on user name
+    if search:
+        search_pattern = f"%{search}%"
+        # Search on record_id for sap_material_data (which is material_number)
+        # Also search on user name if profile exists
+        query = query.where(
+            or_(
+                (AuditLogDB.table_name == "sap_material_data")
+                & (cast(AuditLogDB.record_id, String).ilike(search_pattern)),
+                ProfileDB.full_name.ilike(search_pattern),
+            )
+        )
 
     # For material_number filter, we need to handle four tables differently
     if material_number is not None:
@@ -337,6 +369,22 @@ async def list_material_audit_logs(
         count_query = count_query.where(AuditLogDB.changed_at >= date_from)
     if date_to:
         count_query = count_query.where(AuditLogDB.changed_at <= date_to)
+    if changed_by_user_id:
+        count_query = count_query.where(AuditLogDB.changed_by == changed_by_user_id)
+    if search:
+        search_pattern = f"%{search}%"
+        # For count, we need to join ProfileDB to search on user name
+        count_query = (
+            count_query
+            .outerjoin(ProfileDB, AuditLogDB.changed_by == ProfileDB.id)
+            .where(
+                or_(
+                    (AuditLogDB.table_name == "sap_material_data")
+                    & (cast(AuditLogDB.record_id, String).ilike(search_pattern)),
+                    ProfileDB.full_name.ilike(search_pattern),
+                )
+            )
+        )
     # Apply same material_number filter logic to count
     if material_number is not None:
         if material_review_ids or checklist_ids or insight_ids:
@@ -377,8 +425,16 @@ async def list_material_audit_logs(
     total_result = await db.exec(count_query)
     total = total_result.one()
 
-    # Apply sorting (most recent first)
-    query = query.order_by(AuditLogDB.changed_at.desc())
+    # Apply sorting
+    sort_column_map = {
+        "timestamp": AuditLogDB.changed_at,
+        "material_number": AuditLogDB.record_id,  # For sap_material_data table
+    }
+    sort_column = sort_column_map.get(sort_by, AuditLogDB.changed_at)
+    if sort_order == "asc":
+        query = query.order_by(sort_column.asc().nulls_last())
+    else:
+        query = query.order_by(sort_column.desc().nulls_last())
 
     # Apply pagination
     query = query.offset(skip).limit(limit)

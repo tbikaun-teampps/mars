@@ -95,4 +95,11 @@ export const queryKeys = {
     all: ["user"] as const,
     current: () => [...queryKeys.user.all, "current"] as const,
   },
+
+  // Upload jobs queries
+  uploadJobs: {
+    all: ["uploadJobs"] as const,
+    list: (limit?: number, offset?: number) =>
+      [...queryKeys.uploadJobs.all, "list", limit, offset] as const,
+  },
 } as const;

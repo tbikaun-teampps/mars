@@ -4,41 +4,52 @@ import { components } from "@/types/api";
 import { DataTable } from "@/components/data-table";
 import { formatDistanceToNow, format } from "date-fns";
 import { useMaterialAuditLogs } from "@/api/queries";
+import { useAuditLogUrlState } from "@/hooks/useAuditLogUrlState";
+import { SearchInput } from "@/components/search-input";
+import { SortingPanel } from "@/components/sorting-panel";
+import { AuditLogFilterPanel } from "@/components/audit-log-filter-panel";
+import { ActiveBadges } from "@/components/active-badges";
 
 type MaterialAuditLogEntry = components["schemas"]["MaterialAuditLogEntry"];
 
 export function AuditLog() {
-  // Pagination state
-  const [pageIndex, setPageIndex] = React.useState(0);
-  const [pageSize, setPageSize] = React.useState(20);
+  // Use URL-based state for pagination, sorting, and filters
+  const {
+    pageIndex,
+    pageSize,
+    sorting,
+    filters,
+    activeFilterCount,
+    setPagination,
+    setSorting,
+    setFilters,
+    clearFilters,
+    clearAll,
+    removeFilter,
+    setSearch,
+  } = useAuditLogUrlState();
 
   // Build query params from UI state
   const skip = pageIndex * pageSize;
+  const sortBy = sorting.length > 0 ? sorting[0].id : undefined;
+  const sortOrder =
+    sorting.length > 0 ? (sorting[0].desc ? "desc" : "asc") : undefined;
 
-  // Fetch material audit logs using React Query
+  // Fetch material audit logs using React Query with filters
   const { data, isLoading, isError, error } = useMaterialAuditLogs({
     skip,
     limit: pageSize,
+    sort_by: sortBy,
+    sort_order: sortOrder,
+    material_number: filters.materialNumber,
+    date_from: filters.dateFrom,
+    date_to: filters.dateTo,
+    search: filters.search,
+    changed_by_user_id: filters.changedByUserId,
   });
 
   const auditLogs = data?.items ?? [];
   const total = data?.total ?? 0;
-
-  const handlePaginationChange = (
-    updater:
-      | { pageIndex: number; pageSize: number }
-      | ((old: { pageIndex: number; pageSize: number }) => {
-          pageIndex: number;
-          pageSize: number;
-        })
-  ) => {
-    const newPagination =
-      typeof updater === "function"
-        ? updater({ pageIndex, pageSize })
-        : updater;
-    setPageIndex(newPagination.pageIndex);
-    setPageSize(newPagination.pageSize);
-  };
 
   const pageCount = Math.ceil(total / pageSize);
 
@@ -125,6 +136,12 @@ export function AuditLog() {
     );
   }
 
+  // Sortable columns for the audit log
+  const sortableColumns = [
+    { value: "timestamp", label: "Timestamp" },
+    { value: "material_number", label: "Material Number" },
+  ];
+
   return (
     <DataTable
       columns={columns}
@@ -133,7 +150,44 @@ export function AuditLog() {
       pageCount={pageCount}
       pagination={{ pageIndex, pageSize }}
       totalRows={total}
-      onPaginationChange={handlePaginationChange}
+      onPaginationChange={setPagination}
+      manualSorting={true}
+      sorting={sorting}
+      onSortingChange={setSorting}
+      searchPanel={
+        <SearchInput
+          value={filters.search || ""}
+          onChange={setSearch}
+          placeholder="Search audit logs..."
+        />
+      }
+      sortPanel={
+        <SortingPanel
+          sortableColumns={sortableColumns}
+          sorting={sorting}
+          onSortingChange={setSorting}
+        />
+      }
+      filterPanel={
+        <AuditLogFilterPanel
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClearFilters={clearFilters}
+          activeFilterCount={activeFilterCount}
+        />
+      }
+      activeFilterBadges={
+        <ActiveBadges
+          search={filters.search || ""}
+          onClearSearch={() => setSearch("")}
+          sorting={sorting}
+          sortableColumns={sortableColumns}
+          onClearSorting={() => setSorting([])}
+          filters={filters}
+          onRemoveFilter={removeFilter}
+          onClearAll={clearAll}
+        />
+      }
     />
   );
 }

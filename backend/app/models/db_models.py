@@ -295,6 +295,9 @@ class UploadJobDB(SQLModel, table=True):
     insights_count: int = Field(default=0)
     reviews_count: int = Field(default=0)
     error_message: Optional[str] = None
+    file_name: Optional[str] = Field(default=None, max_length=255)
+    file_size_bytes: Optional[int] = Field(default=None)
+    file_mime_type: Optional[str] = Field(default=None, max_length=100)
     created_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))

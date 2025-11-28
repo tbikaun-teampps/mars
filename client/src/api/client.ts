@@ -64,6 +64,9 @@ export interface UploadJobStatus {
     processed: number;
     percentage: number;
   };
+  file_name?: string | null;
+  file_size_bytes?: number | null;
+  file_mime_type?: string | null;
   created_at: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -74,6 +77,12 @@ export interface UploadJobStatus {
     reviews: number;
   };
   error?: string;
+}
+
+// Type for upload job history list response
+export interface UploadJobListResponse {
+  jobs: UploadJobStatus[];
+  total: number;
 }
 
 // Type for updating a review (all fields optional for partial updates)
@@ -161,6 +170,10 @@ export interface MaterialAuditLogsQueryParams {
   material_number?: number;
   date_from?: string;
   date_to?: string;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  changed_by_user_id?: string;
 }
 
 export interface ReviewCommentsQueryParams {
@@ -372,6 +385,11 @@ export class ApiClient {
       queryParams.append("material_number", params.material_number.toString());
     if (params?.date_from) queryParams.append("date_from", params.date_from);
     if (params?.date_to) queryParams.append("date_to", params.date_to);
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.sort_by) queryParams.append("sort_by", params.sort_by);
+    if (params?.sort_order) queryParams.append("sort_order", params.sort_order);
+    if (params?.changed_by_user_id)
+      queryParams.append("changed_by_user_id", params.changed_by_user_id);
 
     const queryString = queryParams.toString();
     const endpoint = `/audit-logs/materials${
@@ -417,6 +435,16 @@ export class ApiClient {
   // Get upload job status (for progress polling)
   async getUploadJobStatus(jobId: string): Promise<UploadJobStatus> {
     return this.get<UploadJobStatus>(`/materials/upload-jobs/${jobId}`);
+  }
+
+  // Get upload job history (paginated list of all upload jobs)
+  async getUploadJobHistory(
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<UploadJobListResponse> {
+    return this.get<UploadJobListResponse>(
+      `/materials/upload-jobs?limit=${limit}&offset=${offset}`
+    );
   }
 
   // Review comments API methods
