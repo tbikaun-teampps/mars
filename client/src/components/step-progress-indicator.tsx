@@ -27,9 +27,8 @@ export function StepProgressIndicator() {
                 className={cn(
                   "flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors relative z-10",
                   isActive &&
-                    "border-blue-600 bg-blue-600 text-white font-semibold",
+                  "border-blue-600 bg-blue-600 text-white font-semibold",
                   isComplete &&
-                    !isActive &&
                     "border-green-600 bg-green-600 text-white",
                   !isActive &&
                     !isComplete &&
@@ -41,7 +40,7 @@ export function StepProgressIndicator() {
                 )}
                 aria-current={isActive ? "step" : undefined}
               >
-                {isComplete && !isActive ? (
+                {isComplete ? (
                   <Check className="w-5 h-5" />
                 ) : (
                   <span className="text-sm">{index + 1}</span>
@@ -66,7 +65,7 @@ export function StepProgressIndicator() {
                   className={cn(
                     "text-xs text-center font-medium",
                     isActive && "text-blue-600",
-                    isComplete && !isActive && "text-green-600",
+                    isComplete && "text-green-600",
                     !isActive && !isComplete && "text-gray-500"
                   )}
                 >
