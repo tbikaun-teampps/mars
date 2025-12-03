@@ -190,10 +190,11 @@ export function useAuditLogUrlState() {
   );
 
   // Remove a single filter (for badge dismiss)
+  // Uses string type for compatibility with ActiveBadges component
   const removeFilter = useCallback(
-    (key: keyof AuditLogFilters) => {
+    (key: string) => {
       const newFilters = { ...state.filters };
-      (newFilters[key] as unknown) = undefined;
+      (newFilters[key as keyof AuditLogFilters] as unknown) = undefined;
       setFilters(newFilters);
     },
     [state.filters, setFilters]

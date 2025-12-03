@@ -2,49 +2,19 @@
  * Query key factory for type-safe cache management
  * This pattern ensures consistent query keys across the application
  */
+import type {
+  MaterialsQueryParams,
+  AuditLogsQueryParams,
+  MaterialAuditLogsQueryParams,
+  ReviewCommentsQueryParams,
+} from "@/types/materials";
 
-export interface MaterialsQueryParams {
-  skip?: number;
-  limit?: number;
-  sort_by?: string;
-  sort_order?: "asc" | "desc";
-  search?: string;
-  // Filter parameters
-  material_type?: string[];
-  min_total_value?: number;
-  max_total_value?: number;
-  min_total_quantity?: number;
-  max_total_quantity?: number;
-  last_reviewed_filter?: string;
-  next_review_filter?: string;
-  has_reviews?: boolean;
-  has_errors?: boolean;
-  has_warnings?: boolean;
-}
-
-export interface AuditLogsQueryParams {
-  skip?: number;
-  limit?: number;
-  table_name?: string;
-  record_id?: number;
-  operation?: string;
-  changed_by?: string;
-  date_from?: string;
-  date_to?: string;
-}
-
-export interface MaterialAuditLogsQueryParams {
-  skip?: number;
-  limit?: number;
-  material_number?: number;
-  date_from?: string;
-  date_to?: string;
-}
-
-export interface ReviewCommentsQueryParams {
-  skip?: number;
-  limit?: number;
-}
+export type {
+  MaterialsQueryParams,
+  AuditLogsQueryParams,
+  MaterialAuditLogsQueryParams,
+  ReviewCommentsQueryParams,
+};
 
 export const queryKeys = {
   // All material-related queries

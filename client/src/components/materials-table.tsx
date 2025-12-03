@@ -159,9 +159,9 @@ export function MaterialsTable() {
     const now = new Date();
     const diffInDays = (now.getTime() - date.getTime()) / (1000 * 3600 * 24);
 
-    if (diffInDays <= 30) {
+    if (diffInDays <= 365) {
       return "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-    } else if (diffInDays <= 90) {
+    } else if (diffInDays <= 365 * 2) {
       return "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
     } else {
       return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400";

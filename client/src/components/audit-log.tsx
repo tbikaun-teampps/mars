@@ -1,4 +1,3 @@
-import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { components } from "@/types/api";
 import { DataTable } from "@/components/data-table";

@@ -268,18 +268,20 @@ export function useTableUrlState() {
   );
 
   // Remove a single filter (for badge dismiss)
+  // Uses string type for compatibility with ActiveBadges component
   const removeFilter = useCallback(
-    (key: keyof MaterialFilters, value?: string) => {
+    (key: string, value?: string) => {
       const newFilters = { ...state.filters };
+      const filterKey = key as keyof MaterialFilters;
 
-      if (key === "materialType" && value) {
+      if (filterKey === "materialType" && value) {
         // Remove specific material type from array
         newFilters.materialType = newFilters.materialType.filter(
           (t) => t !== value
         );
       } else {
         // Clear the filter value
-        (newFilters[key] as unknown) = undefined;
+        (newFilters[filterKey] as unknown) = undefined;
       }
 
       setFilters(newFilters);
