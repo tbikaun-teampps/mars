@@ -1,5 +1,6 @@
 """General materials endpoints."""
 
+from decimal import Decimal
 import io
 import numpy as np
 import pandas as pd
@@ -16,7 +17,7 @@ from fastapi import (
     status,
     UploadFile,
 )
-from sqlalchemy import func as sa_func, text, cast, String, delete
+from sqlalchemy import func as sa_func, text, cast, String, delete, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import aliased
 from sqlmodel import select, func
@@ -33,6 +34,7 @@ from app.models.db_models import (
     ReviewCommentDB,
     ProfileDB,
     UploadJobDB,
+    MaterialDataHistory
 )
 from app.models.user import UserProfile
 from app.core.database import get_db, async_session_maker
@@ -40,11 +42,22 @@ from app.models.material import (
     Material,
     PaginatedMaterialsResponse,
     MaterialWithReviews,
-    Insight,
+    Insight
 )
 from app.api.utils import transform_db_record_to_material
 
 router = APIRouter()
+
+# Fields that are automatically managed or don't represent meaningful data changes
+IGNORED_DIFF_FIELDS = {
+    "uploaded_at",
+    "last_reviewed",
+    "next_review",
+    "review_notes",
+    "last_upload_job_id",
+    "first_uploaded_at",
+    "last_modified_at",
+}
 
 
 @router.get("/materials")
@@ -56,7 +69,8 @@ async def list_materials(
         20, ge=1, le=100, description="Maximum number of items to return"
     ),
     sort_by: Optional[str] = Query(None, description="Field to sort by"),
-    sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
+    sort_order: Optional[str] = Query(
+        "asc", description="Sort order: asc or desc"),
     search: Optional[str] = Query(
         None,
         description="Search across material_number, material_desc, and material_type",
@@ -123,33 +137,13 @@ async def list_materials(
         .subquery()
     )
 
-    # Use LEFT JOIN to count reviews and get latest review data
-    # Create a JSON object for each insight and aggregate them
-    insight_json = sa_func.json_build_object(
-        "insight_type",
-        MaterialInsightDB.insight_type,
-        "message",
-        MaterialInsightDB.message,
-    )
-
-    # Aggregate insights into a JSON array, filtering out NULL values
-    # Only include unacknowledged insights (acknowledged_at IS NULL)
-    insights_agg = sa_func.coalesce(
-        sa_func.json_agg(insight_json).filter(
-            MaterialInsightDB.insight_type.isnot(None)
-            & MaterialInsightDB.acknowledged_at.is_(None)
-        ),
-        text("'[]'::json"),
-    ).label("insights")
-
     query = (
         select(
             SAPMaterialData,
-            func.count(MaterialReviewDB.review_id.distinct()).label("reviews_count"),
+            func.count(MaterialReviewDB.review_id.distinct()
+                       ).label("reviews_count"),
             latest_review.c.review_date.label("last_reviewed"),
             latest_review.c.next_review_date.label("next_review"),
-            # latest_review.c.notes.label("review_notes"),
-            insights_agg,
             (active_review.c.active_count > 0).label("has_active_review"),
         )
         .outerjoin(
@@ -161,10 +155,6 @@ async def list_materials(
             SAPMaterialData.material_number == latest_review.c.material_number,
         )
         .outerjoin(
-            MaterialInsightDB,
-            SAPMaterialData.material_number == MaterialInsightDB.material_number,
-        )
-        .outerjoin(
             active_review,
             SAPMaterialData.material_number == active_review.c.material_number,
         )
@@ -172,7 +162,6 @@ async def list_materials(
             SAPMaterialData.material_number,
             latest_review.c.review_date,
             latest_review.c.next_review_date,
-            # latest_review.c.notes,
             active_review.c.active_count,
         )
     )
@@ -198,9 +187,11 @@ async def list_materials(
 
     # Apply total quantity range filters
     if min_total_quantity is not None:
-        query = query.where(SAPMaterialData.total_quantity >= min_total_quantity)
+        query = query.where(
+            SAPMaterialData.total_quantity >= min_total_quantity)
     if max_total_quantity is not None:
-        query = query.where(SAPMaterialData.total_quantity <= max_total_quantity)
+        query = query.where(
+            SAPMaterialData.total_quantity <= max_total_quantity)
 
     # Apply has_reviews filter (uses HAVING since it's aggregated)
     if has_reviews is not None:
@@ -245,24 +236,30 @@ async def list_materials(
             )
 
     # Apply insights filters (has_errors, has_warnings)
-    # These need to filter based on aggregated insight data
+    # Use EXISTS subqueries since MaterialInsightDB is not directly joined
     if has_errors is not None and has_errors:
-        # Filter for materials that have at least one error insight
-        query = query.having(
-            sa_func.count(
-                sa_func.nullif(MaterialInsightDB.insight_type != "error", True)
+        error_exists = (
+            select(MaterialInsightDB.material_number)
+            .where(
+                MaterialInsightDB.material_number == SAPMaterialData.material_number,
+                MaterialInsightDB.insight_type == "error",
+                MaterialInsightDB.acknowledged_at.is_(None),
             )
-            > 0
+            .exists()
         )
+        query = query.where(error_exists)
 
     if has_warnings is not None and has_warnings:
-        # Filter for materials that have at least one warning insight
-        query = query.having(
-            sa_func.count(
-                sa_func.nullif(MaterialInsightDB.insight_type != "warning", True)
+        warning_exists = (
+            select(MaterialInsightDB.material_number)
+            .where(
+                MaterialInsightDB.material_number == SAPMaterialData.material_number,
+                MaterialInsightDB.insight_type == "warning",
+                MaterialInsightDB.acknowledged_at.is_(None),
             )
-            > 0
+            .exists()
         )
+        query = query.where(warning_exists)
 
     # Apply sorting if provided
     if sort_by:
@@ -295,7 +292,8 @@ async def list_materials(
     # Get total count before pagination
     # For complex queries with HAVING clauses, count distinct material_numbers from the filtered query
     # Create a subquery without pagination to count total matching rows
-    count_subquery = query.with_only_columns(SAPMaterialData.material_number).subquery()
+    count_subquery = query.with_only_columns(
+        SAPMaterialData.material_number).subquery()
     count_query = select(func.count()).select_from(count_subquery)
 
     total_result = await db.exec(count_query)
@@ -308,6 +306,30 @@ async def list_materials(
     results = await db.exec(query)
     rows = results.all()
 
+    # Get material numbers for fetching insights separately
+    material_numbers = [row[0].material_number for row in rows]
+
+    # Fetch insights for these materials in a separate query
+    insights_by_material: dict[int, list[Insight]] = {}
+    if material_numbers:
+        insights_query = (
+            select(MaterialInsightDB)
+            .where(
+                MaterialInsightDB.material_number.in_(material_numbers),
+                MaterialInsightDB.acknowledged_at.is_(None),
+            )
+        )
+        insights_result = await db.exec(insights_query)
+        for insight_db in insights_result.all():
+            if insight_db.material_number not in insights_by_material:
+                insights_by_material[insight_db.material_number] = []
+            insights_by_material[insight_db.material_number].append(
+                Insight(
+                    insight_type=insight_db.insight_type,
+                    message=insight_db.message,
+                )
+            )
+
     # Transform database records to Material models with reviews_count, review data, and insights
     materials = []
     for (
@@ -315,8 +337,6 @@ async def list_materials(
         reviews_count,
         last_reviewed,
         next_review,
-        # review_notes,
-        insights_json,
         has_active_review,
     ) in rows:
         material_dict = transform_db_record_to_material(
@@ -326,15 +346,10 @@ async def list_materials(
         # Override with data from material_reviews table (most recent review)
         material_dict["last_reviewed"] = last_reviewed
         material_dict["next_review"] = next_review
-        # material_dict["review_notes"] = review_notes
         material_dict["has_active_review"] = bool(has_active_review)
-        # Transform insights from JSON to Insight objects
-        if insights_json and isinstance(insights_json, list):
-            material_dict["insights"] = [
-                Insight(**insight) for insight in insights_json
-            ]
-        else:
-            material_dict["insights"] = []
+        # Attach insights from separate query
+        material_dict["insights"] = insights_by_material.get(
+            material_data.material_number, [])
         materials.append(Material(**material_dict))
 
     print(
@@ -379,7 +394,8 @@ async def list_upload_jobs(
     for job in jobs:
         progress_pct = 0.0
         if job.total_records > 0:
-            progress_pct = round(job.processed_records / job.total_records * 100, 1)
+            progress_pct = round(job.processed_records /
+                                 job.total_records * 100, 1)
 
         job_data = {
             "job_id": str(job.job_id),
@@ -436,7 +452,8 @@ async def get_upload_job_status(
 
     progress_pct = 0.0
     if job.total_records > 0:
-        progress_pct = round(job.processed_records / job.total_records * 100, 1)
+        progress_pct = round(job.processed_records /
+                             job.total_records * 100, 1)
 
     response = {
         "job_id": str(job.job_id),
@@ -828,7 +845,8 @@ async def upload_sap_material_data(
     try:
         # Just read header row to validate columns
         df_header = pd.read_csv(io.BytesIO(content), encoding="utf-8", nrows=0)
-        missing_columns = set(CSV_COLUMN_MAPPING.keys()) - set(df_header.columns)
+        missing_columns = set(CSV_COLUMN_MAPPING.keys()
+                              ) - set(df_header.columns)
         if missing_columns:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -871,14 +889,116 @@ async def upload_sap_material_data(
     }
 
 
+def prepare_csv(file_content: bytes) -> pd.DataFrame:
+    """Parse and validate CSV content, returning cleaned DataFrame."""
+    # Parse and validate CSV
+    df = pd.read_csv(
+        io.BytesIO(file_content),
+        encoding="utf-8",
+        thousands=",",
+        na_values=["", "NA", "N/A", "null", "NULL"],
+    )
+
+    if df.empty:
+        raise ValueError("CSV file contains no data rows")
+
+    # Select and rename columns
+    df = df[list(CSV_COLUMN_MAPPING.keys())].rename(
+        columns=CSV_COLUMN_MAPPING)
+
+    # Convert string columns
+    string_columns = ["material_desc", "material_type", "mat_group",
+                      "mat_group_desc", "mrp_controller", "review_notes"]
+    for col in string_columns:
+        df[col] = df[col].astype(str).replace(["nan", "None"], None)
+
+    # Validate material_number
+    if df["material_number"].isna().any():
+        first_null_idx = df["material_number"].isna().idxmax()
+        raise ValueError(
+            f"Row {first_null_idx + 2}: Material Number is required")
+
+    # Clean numeric columns
+    numeric_columns = ["total_quantity", "total_value", "unrestricted_quantity", "unrestricted_value",
+                       "safety_stock", "coverage_ratio", "max_cons_demand", "demand_fc_12m", "demand_fc_total",
+                       "cons_1y", "cons_2y", "cons_3y", "cons_4y", "cons_5y", "purchased_qty_2y"]
+    for col in numeric_columns:
+        df[col] = df[col].astype(str).str.replace(
+            "$", "", regex=False).str.strip()
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = df[col].replace([float("inf"), float("-inf")], pd.NA)
+
+    # Convert date columns
+    for date_col in ["created_on", "last_reviewed", "next_review"]:
+        df[date_col] = pd.to_datetime(
+            df[date_col], format="mixed", dayfirst=True, errors="coerce").dt.date
+
+    # Replace non-JSON values with None
+    df = df.replace([np.nan, np.inf, -np.inf, pd.NA, pd.NaT], None)
+
+    # Validate created_on
+    if df["created_on"].isna().any():
+        null_mask = df["created_on"].isna()
+        first_null_idx = df[null_mask].index.tolist()[0]
+        raise ValueError(
+            f"Row {first_null_idx + 2}: Created On date is required")
+
+    return df
+
+
+def json_serialize_value(val):
+    """Convert non-JSON-serializable types to JSON-safe equivalents."""
+    if isinstance(val, (date, datetime)):
+        return val.isoformat()
+    elif isinstance(val, Decimal):
+        return float(val)
+    elif isinstance(val, UUID):
+        return str(val)
+    return val
+
+
+def compute_diff(old: dict, new: dict, ignored_fields: set[str]) -> tuple[dict, dict, list[str]]:
+    """Compare two records and return (old_values, new_values, fields_changed).
+
+    Only includes fields that actually changed and aren't in ignored_fields.
+    Returns empty results if no meaningful changes detected.
+    """
+    old_values = {}
+    new_values = {}
+    fields_changed = []
+
+    all_keys = set(old.keys()) | set(new.keys())
+
+    for key in all_keys:
+        if key in ignored_fields:
+            continue
+
+        old_val = old.get(key)
+        new_val = new.get(key)
+
+        # Normalize for comparison (handle None vs NaN, etc.)
+        if old_val != new_val:
+            old_values[key] = json_serialize_value(old_val)
+            new_values[key] = json_serialize_value(new_val)
+            fields_changed.append(key)
+
+    return old_values, new_values, fields_changed
+
+
 async def process_sap_upload_background(job_id: UUID, file_content: bytes):
-    """Process CSV upload in background with batch operations and progress tracking."""
+    """Process CSV upload in background with batch operations and progress tracking.
+
+
+    This function handles updates of existing records and insertion of new records.
+    It processes the CSV in chunks to avoid exceeding PostgreSQL parameter limits.
+    """
 
     # Chunk sizes based on PostgreSQL parameter limit (32,767)
     MATERIAL_CHUNK_SIZE = 1000  # 25 columns
     INSIGHT_CHUNK_SIZE = 5000   # 3 columns
     REVIEW_CHUNK_SIZE = 500     # ~30 columns
-    CHECKLIST_CHUNK_SIZE = 2000 # ~13 columns
+    CHECKLIST_CHUNK_SIZE = 2000  # ~13 columns
+    HISTORY_CHUNK_SIZE = 2000
 
     # Get fresh DB session (background task runs outside request context)
     async with async_session_maker() as db:
@@ -894,53 +1014,11 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
         await db.commit()
 
         try:
-            # Parse and validate CSV
-            df = pd.read_csv(
-                io.BytesIO(file_content),
-                encoding="utf-8",
-                thousands=",",
-                na_values=["", "NA", "N/A", "null", "NULL"],
-            )
-
-            if df.empty:
-                raise ValueError("CSV file contains no data rows")
-
-            # Select and rename columns
-            df = df[list(CSV_COLUMN_MAPPING.keys())].rename(columns=CSV_COLUMN_MAPPING)
-
-            # Convert string columns
-            string_columns = ["material_desc", "material_type", "mat_group", "mat_group_desc", "mrp_controller", "review_notes"]
-            for col in string_columns:
-                df[col] = df[col].astype(str).replace(["nan", "None"], None)
-
-            # Validate material_number
-            if df["material_number"].isna().any():
-                first_null_idx = df["material_number"].isna().idxmax()
-                raise ValueError(f"Row {first_null_idx + 2}: Material Number is required")
-
-            # Clean numeric columns
-            numeric_columns = ["total_quantity", "total_value", "unrestricted_quantity", "unrestricted_value",
-                            "safety_stock", "coverage_ratio", "max_cons_demand", "demand_fc_12m", "demand_fc_total",
-                            "cons_1y", "cons_2y", "cons_3y", "cons_4y", "cons_5y", "purchased_qty_2y"]
-            for col in numeric_columns:
-                df[col] = df[col].astype(str).str.replace("$", "", regex=False).str.strip()
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-                df[col] = df[col].replace([float("inf"), float("-inf")], pd.NA)
-
-            # Convert date columns
-            for date_col in ["created_on", "last_reviewed", "next_review"]:
-                df[date_col] = pd.to_datetime(df[date_col], format="mixed", dayfirst=True, errors="coerce").dt.date
-
-            # Replace non-JSON values with None
-            df = df.replace([np.nan, np.inf, -np.inf, pd.NA, pd.NaT], None)
-
-            # Validate created_on
-            if df["created_on"].isna().any() or (df["created_on"] == None).any():
-                null_mask = df["created_on"].isna() | (df["created_on"] == None)
-                first_null_idx = df[null_mask].index.tolist()[0]
-                raise ValueError(f"Row {first_null_idx + 2}: Created On date is required")
-
+            # Prepare and validate CSV data
+            df = prepare_csv(file_content)
             records = df.to_dict("records")
+
+            # Update job with total records
             job.total_records = len(records)
             await db.commit()
 
@@ -948,9 +1026,67 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             job.current_phase = "materials"
             await db.commit()
 
+            # Track counts
+            total_inserted = 0
+            total_updated = 0
+            all_history_records = []
+            updated_material_numbers = []  # For stale review flagging
+
             for chunk_start in range(0, len(records), MATERIAL_CHUNK_SIZE):
-                chunk_end = min(chunk_start + MATERIAL_CHUNK_SIZE, len(records))
+                chunk_end = min(
+                    chunk_start + MATERIAL_CHUNK_SIZE, len(records))
                 chunk = records[chunk_start:chunk_end]
+
+                # Get material numbers in this chunk
+                chunk_material_numbers = [r["material_number"] for r in chunk]
+
+                # Fetch existing materials for comparison
+                existing_stmt = select(SAPMaterialData).where(
+                    SAPMaterialData.material_number.in_(chunk_material_numbers)
+                )
+                existing_result = await db.exec(existing_stmt)
+                existing_materials = {
+                    m.material_number: m.__dict__.copy()
+                    for m in existing_result.all()
+                }
+                # Clean up SQLAlchemy internal state from dicts
+                for mat_dict in existing_materials.values():
+                    mat_dict.pop('_sa_instance_state', None)
+
+                # Process each record and build history
+                for r in chunk:
+                    mat_num = r["material_number"]
+                    existing = existing_materials.get(mat_num)
+
+                    if existing is None:
+                        # INSERT - new material
+                        total_inserted += 1
+                        all_history_records.append({
+                            "upload_job_id": str(job_id),
+                            "material_number": mat_num,
+                            "change_type": "INSERT",
+                            "old_values": None,
+                            "new_values": {k: json_serialize_value(v) for k, v in r.items() if k not in IGNORED_DIFF_FIELDS},
+                            "fields_changed": None,
+                        })
+                    else:
+                        # Potential UPDATE - check for meaningful changes
+                        old_values, new_values, fields_changed = compute_diff(
+                            existing, r, IGNORED_DIFF_FIELDS
+                        )
+
+                        if fields_changed:
+                            total_updated += 1
+                            updated_material_numbers.append(mat_num)
+                            all_history_records.append({
+                                "upload_job_id": str(job_id),
+                                "material_number": mat_num,
+                                "change_type": "UPDATE",
+                                "old_values": old_values,
+                                "new_values": new_values,
+                                "fields_changed": fields_changed,
+                            })
+                        # else: no meaningful changes, skip history
 
                 # Prepare values for upsert
                 material_values = [{
@@ -979,6 +1115,10 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                     "last_reviewed": r.get("last_reviewed"),
                     "next_review": r.get("next_review"),
                     "review_notes": r.get("review_notes"),
+                    # Tracking fields
+                    "last_upload_job_id": str(job_id),
+                    "first_uploaded_at": datetime.utcnow(),  # Only used on insert
+                    "last_modified_at": datetime.utcnow(),
                 } for r in chunk]
 
                 # Upsert with ON CONFLICT
@@ -1011,16 +1151,53 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                         "next_review": stmt.excluded.next_review,
                         "review_notes": stmt.excluded.review_notes,
                         "uploaded_at": text("NOW()"),
+                        # Update tracking fields (but NOT first_uploaded_at)
+                        "last_upload_job_id": stmt.excluded.last_upload_job_id,
+                        "last_modified_at": stmt.excluded.last_modified_at,
                     }
                 )
                 await db.execute(stmt)
                 await db.commit()
 
                 job.processed_records = chunk_end
-                job.inserted_count = chunk_end
+                job.inserted_count = total_inserted
                 await db.commit()
 
-            # Phase 2: Generate and insert insights
+            # Phase 2: Insert history records
+            job.current_phase = "history"
+            await db.commit()
+
+            for i in range(0, len(all_history_records), HISTORY_CHUNK_SIZE):
+                chunk = all_history_records[i:i + HISTORY_CHUNK_SIZE]
+                if chunk:
+                    stmt = pg_insert(MaterialDataHistory).values(chunk)
+                    await db.execute(stmt)
+            await db.commit()
+
+            # Mark stale reviews for updated materials
+            if updated_material_numbers:
+                stale_stmt = (
+                    update(MaterialReviewDB)
+                    .where(
+                        MaterialReviewDB.material_number.in_(
+                            updated_material_numbers),
+                        MaterialReviewDB.status.notin_(
+                            ["completed", "cancelled"]),
+                        MaterialReviewDB.is_data_stale.is_(False),
+                    )
+                    .values(
+                        is_data_stale=True,
+                        data_stale_since=datetime.utcnow(),
+                    )
+                )
+                await db.execute(stale_stmt)
+                await db.commit()
+
+            # Update job counts
+            job.inserted_count = total_inserted
+            job.updated_count = total_updated
+
+            # Phase 3: Generate and insert insights
             job.current_phase = "insights"
             job.processed_records = 0
             await db.commit()
@@ -1037,7 +1214,8 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             all_insights = []
             for i, record in enumerate(records):
                 valid_fields = set(SAPMaterialData.model_fields.keys())
-                material = SAPMaterialData(**{k: v for k, v in record.items() if k in valid_fields})
+                material = SAPMaterialData(
+                    **{k: v for k, v in record.items() if k in valid_fields})
                 insights = generate_material_insight(material)
                 for insight in insights:
                     all_insights.append({
@@ -1063,20 +1241,67 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             job.processed_records = len(records)
             await db.commit()
 
-            # Phase 3: Create reviews for materials with last_reviewed
+            # Phase 4: Create reviews for materials with last_reviewed
             job.current_phase = "reviews"
             job.processed_records = 0
             await db.commit()
 
             system_user_id = "00000000-0000-0000-0000-000000000000"
+
+            # Get material numbers that have last_reviewed in the upload
+            materials_with_reviews = [
+                r["material_number"] for r in records if r.get("last_reviewed")
+            ]
+
+            # Fetch existing most recent completed reviews for these materials
+            existing_reviews: dict[int, tuple] = {}
+            if materials_with_reviews:
+                # Subquery to get most recent completed review per material
+                latest_review_subq = (
+                    select(
+                        MaterialReviewDB.material_number,
+                        MaterialReviewDB.review_date,
+                        MaterialReviewDB.next_review_date,
+                        MaterialReviewDB.final_notes,
+                    )
+                    .where(
+                        MaterialReviewDB.material_number.in_(
+                            materials_with_reviews),
+                        MaterialReviewDB.status == "completed",
+                    )
+                    .distinct(MaterialReviewDB.material_number)
+                    .order_by(
+                        MaterialReviewDB.material_number,
+                        MaterialReviewDB.review_date.desc()
+                    )
+                )
+                existing_result = await db.exec(latest_review_subq)
+                for row in existing_result.all():
+                    existing_reviews[row.material_number] = (
+                        row.review_date,
+                        row.next_review_date,
+                        row.final_notes,
+                    )
+
             all_reviews = []
 
             for record in records:
                 if record.get("last_reviewed"):
+                    # Check if review data has changed from existing
+                    existing = existing_reviews.get(record["material_number"])
+                    if existing:
+                        existing_date, existing_next, existing_notes = existing
+                        # Skip if review data is unchanged
+                        if (existing_date == record.get("last_reviewed") and
+                            existing_next == record.get("next_review") and
+                                existing_notes == record.get("review_notes")):
+                            continue
+
                     current_stock_value = 0
                     if record.get('total_quantity') and record.get('total_value') and record.get('unrestricted_quantity'):
                         current_stock_value = round(
-                            record.get("total_value") / record.get('total_quantity') * record.get('unrestricted_quantity'),
+                            record.get("total_value") / record.get('total_quantity') *
+                            record.get('unrestricted_quantity'),
                             2
                         )
 
@@ -1168,7 +1393,8 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             job.completed_at = datetime.utcnow()
             await db.commit()
 
-            print(f"Upload job {job_id} completed: {job.inserted_count} materials, {job.insights_count} insights, {job.reviews_count} reviews")
+            print(
+                f"Upload job {job_id} completed: {job.inserted_count} materials, {job.insights_count} insights, {job.reviews_count} reviews")
 
         except Exception as e:
             job.status = "failed"
@@ -1176,3 +1402,30 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             job.current_phase = None
             await db.commit()
             print(f"Upload job {job_id} failed: {str(e)}")
+
+
+@router.get("/materials/{material_number}/history", response_model=list[MaterialDataHistory])
+async def get_material_history(material_number: int,
+                               current_user: User = Depends(get_current_user),
+                               db: AsyncSession = Depends(get_db)
+                               ):
+    """Get the change history of a given material"""
+
+    # Verify material exists
+    material = await db.exec(
+        select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
+    )
+    if not material.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Material {material_number} not found",
+        )
+
+    history = await db.exec(
+        select(MaterialDataHistory)
+        .where(MaterialDataHistory.material_number == material_number)
+        .where(MaterialDataHistory.change_type == "UPDATE")
+        .order_by(MaterialDataHistory.created_at.desc())
+    )
+
+    return history.all()

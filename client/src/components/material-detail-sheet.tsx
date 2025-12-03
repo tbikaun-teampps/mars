@@ -10,6 +10,7 @@ import {
   X,
   Eye,
   EyeOff,
+  History,
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { components } from "@/types/api";
@@ -41,6 +42,7 @@ import {
   useCancelReview,
   useAcknowledgeInsight,
   useUnacknowledgeInsight,
+  useMaterialHistory,
 } from "@/api/queries";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -534,6 +536,63 @@ function ReviewHistoryTimeline({
   );
 }
 
+function ChangeHistory({ materialNumber }: { materialNumber: number }) {
+  const { data, isLoading } = useMaterialHistory(materialNumber, true);
+
+  return (
+    <div className="mt-6">
+      <h4 className="font-medium mb-3 flex items-center gap-2">
+        <History className="h-4 w-4" />
+        Change History
+      </h4>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : !data || data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No history available</p>
+      ) : (
+        <div className="overflow-y-auto max-h-64 space-y-3 pr-2">
+          {data.map((hist) => (
+            <div
+              key={hist.history_id}
+              className="border-l-4 border-l-blue-500 pl-3 py-2 rounded-l hover:bg-muted/50 transition-colors"
+            >
+              <span className="text-xs text-muted-foreground">
+                {formatDistanceToNow(new Date(hist.created_at), {
+                  addSuffix: true,
+                })}
+              </span>
+              {hist.fields_changed && hist.fields_changed.length > 0 && (
+                <div className="mt-1">
+                  <p className="text-xs font-medium mb-1">Changed:</p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    {hist.fields_changed.map((field) => (
+                      <li key={field}>
+                        - {field.replace(/_/g, " ")}
+                        {hist.old_values?.[field] !== undefined &&
+                          hist.new_values?.[field] !== undefined &&
+                          hist.old_values?.[field] != null &&
+                          hist.new_values?.[field] != null && (
+                            <span className="text-muted-foreground/70">
+                              {" "}
+                              ({String(hist.old_values[field])} to{" "}
+                              {String(hist.new_values[field])})
+                            </span>
+                          )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Internal component for rendering material details
 interface MaterialDetailsContentProps {
   materialNumber: number;
@@ -560,7 +619,9 @@ function MaterialDetailsContent({
   onEditReview,
   onCancelReview,
 }: MaterialDetailsContentProps) {
-  const [commentsDialogOpen, setCommentsDialogOpen] = React.useState(false);
+  const [commentsDialogOpen, setCommentsDialogOpen] =
+    React.useState<boolean>(false);
+  const [showHistory, setShowHistory] = React.useState<boolean>(false);
 
   // Get the most recent review for comments
   const mostRecentReview = React.useMemo(() => {
@@ -696,8 +757,9 @@ function MaterialDetailsContent({
     <div className="flex flex-col h-full">
       <SheetHeader className="sticky top-0">
         <SheetTitle>
-          <div className="flex items-center gap-4">
-            {/* <div className="flex gap-2">
+          <div className="flex justify-between mr-6 gap-4">
+            <div className="flex items-center gap-4">
+              {/* <div className="flex gap-2">
               <Button variant="outline" size="sm">
                 <ChevronUp />
               </Button>
@@ -705,8 +767,17 @@ function MaterialDetailsContent({
                 <ChevronDown />
               </Button>
             </div> */}
-            {materialDescription}{" "}
-            <span className="text-muted-foreground">(#{materialNumber})</span>
+              {materialDescription}{" "}
+              <span className="text-muted-foreground">(#{materialNumber})</span>
+            </div>
+            <Button
+              size="sm"
+              variant={showHistory ? "default" : "outline"}
+              onClick={() => setShowHistory(!showHistory)}
+            >
+              <History />
+              Change History
+            </Button>
           </div>
         </SheetTitle>
       </SheetHeader>
@@ -724,6 +795,8 @@ function MaterialDetailsContent({
             </p>
           </div>
         </div>
+      ) : showHistory ? (
+        <ChangeHistory materialNumber={materialNumber!} />
       ) : materialDetails ? (
         <>
           {/* Insights Panel - fixed at top, does not scroll */}
@@ -737,200 +810,200 @@ function MaterialDetailsContent({
           {/* Scrollable content */}
           <div className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
             <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1 border-t border-gray-300" />
-              <h3 className="text-md font-semibold whitespace-nowrap">
-                Basic Information
-              </h3>
-              <div className="flex-1 border-t border-gray-300" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {basicInformation.map((info, index) => (
-                <div key={index}>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      {info.label}
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs max-w-[200px] whitespace-pre-line">
-                          {info.description}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-1 border-t border-gray-300" />
+                <h3 className="text-md font-semibold whitespace-nowrap">
+                  Basic Information
+                </h3>
+                <div className="flex-1 border-t border-gray-300" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {basicInformation.map((info, index) => (
+                  <div key={index}>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {info.label}
+                      </p>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-[200px] whitespace-pre-line">
+                            {info.description}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <p className="text-sm font-medium">{info.value}</p>
                   </div>
-                  <p className="text-sm font-medium">{info.value}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1 border-t border-gray-300" />
-              <h3 className="text-md font-semibold whitespace-nowrap">
-                Inventory
-              </h3>
-              <div className="flex-1 border-t border-gray-300" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {inventoryMetrics.map((metric, index) => (
-                <div key={index}>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      {metric.label}
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs max-w-[200px] whitespace-pre-line">
-                          {metric.description}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-1 border-t border-gray-300" />
+                <h3 className="text-md font-semibold whitespace-nowrap">
+                  Inventory
+                </h3>
+                <div className="flex-1 border-t border-gray-300" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {inventoryMetrics.map((metric, index) => (
+                  <div key={index}>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {metric.label}
+                      </p>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-[200px] whitespace-pre-line">
+                            {metric.description}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <p className="text-sm font-medium">{metric.value}</p>
                   </div>
-                  <p className="text-sm font-medium">{metric.value}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1 border-t border-gray-300" />
-              <h3 className="text-md font-semibold whitespace-nowrap">
-                Consumption
-              </h3>
-              <div className="flex-1 border-t border-gray-300" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {consumptionProcurementMetrics.map((metric, index) => (
-                <div key={index}>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      {metric.label}
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs max-w-[200px] whitespace-pre-line">
-                          {metric.description}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-1 border-t border-gray-300" />
+                <h3 className="text-md font-semibold whitespace-nowrap">
+                  Consumption
+                </h3>
+                <div className="flex-1 border-t border-gray-300" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {consumptionProcurementMetrics.map((metric, index) => (
+                  <div key={index}>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {metric.label}
+                      </p>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-[200px] whitespace-pre-line">
+                            {metric.description}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <p className="text-sm font-medium">{metric.value}</p>
                   </div>
-                  <p className="text-sm font-medium">{metric.value}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1 border-t border-gray-300" />
-              <h3 className="text-md font-semibold whitespace-nowrap">
-                5-Year Consumption History
-              </h3>
-              <div className="flex-1 border-t border-gray-300" />
-            </div>
-            <div className="mx-auto">
-              {materialDetails.consumption_history_5yr &&
-              materialDetails.consumption_history_5yr.length > 0 ? (
-                <ChartContainer
-                  config={{
-                    quantity: {
-                      label: "Quantity",
-                      color: "hsl(var(--chart-1))",
-                    },
-                  }}
-                  style={{ height: "150px", width: "100%" }}
-                >
-                  <AreaChart
-                    data={[...materialDetails.consumption_history_5yr]
-                      .sort((a, b) => b.years_ago - a.years_ago)
-                      .map((item) => ({
-                        year: `${item.years_ago}Y ago`,
-                        quantity: item.quantity,
-                      }))}
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-1 border-t border-gray-300" />
+                <h3 className="text-md font-semibold whitespace-nowrap">
+                  5-Year Consumption History
+                </h3>
+                <div className="flex-1 border-t border-gray-300" />
+              </div>
+              <div className="mx-auto">
+                {materialDetails.consumption_history_5yr &&
+                materialDetails.consumption_history_5yr.length > 0 ? (
+                  <ChartContainer
+                    config={{
+                      quantity: {
+                        label: "Quantity",
+                        color: "hsl(var(--chart-1))",
+                      },
+                    }}
+                    style={{ height: "150px", width: "100%" }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="year"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      tickFormatter={(value) => value.toLocaleString()}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Area
-                      type="linear"
-                      dataKey="quantity"
-                      stroke="var(--color-quantity)"
-                      fill="var(--color-quantity)"
-                      fillOpacity={0.2}
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ChartContainer>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No consumption history available
-                </p>
-              )}
+                    <AreaChart
+                      data={[...materialDetails.consumption_history_5yr]
+                        .sort((a, b) => b.years_ago - a.years_ago)
+                        .map((item) => ({
+                          year: `${item.years_ago}Y ago`,
+                          quantity: item.quantity,
+                        }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="year"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                        tickFormatter={(value) => value.toLocaleString()}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Area
+                        type="linear"
+                        dataKey="quantity"
+                        stroke="var(--color-quantity)"
+                        fill="var(--color-quantity)"
+                        fillOpacity={0.2}
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ChartContainer>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No consumption history available
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1 border-t border-gray-300" />
-              <h3 className="text-md font-semibold whitespace-nowrap">
-                Review History
-              </h3>
-              <div className="flex-1 border-t border-gray-300" />
-            </div>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              {reviewMetrics.map((metric, index) => (
-                <div key={index}>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      {metric.label}
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs max-w-[200px] whitespace-pre-line">
-                          {metric.description}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-1 border-t border-gray-300" />
+                <h3 className="text-md font-semibold whitespace-nowrap">
+                  Review History
+                </h3>
+                <div className="flex-1 border-t border-gray-300" />
+              </div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                {reviewMetrics.map((metric, index) => (
+                  <div key={index}>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {metric.label}
+                      </p>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-pointer" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-[200px] whitespace-pre-line">
+                            {metric.description}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <p className="text-sm font-medium">{metric.value}</p>
                   </div>
-                  <p className="text-sm font-medium">{metric.value}</p>
-                </div>
-              ))}
+                ))}
+              </div>
+              <ReviewHistoryTimeline
+                reviews={materialDetails.reviews}
+                isReviewMode={isReviewMode}
+                onPerformReview={onPerformReview}
+                onEditReview={onEditReview}
+                onCancelReview={onCancelReview}
+                disabled={hasActiveReview}
+              />
             </div>
-            <ReviewHistoryTimeline
-              reviews={materialDetails.reviews}
-              isReviewMode={isReviewMode}
-              onPerformReview={onPerformReview}
-              onEditReview={onEditReview}
-              onCancelReview={onCancelReview}
-              disabled={hasActiveReview}
-            />
-          </div>
           </div>
         </>
       ) : null}

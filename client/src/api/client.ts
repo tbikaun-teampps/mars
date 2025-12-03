@@ -26,7 +26,7 @@ type PaginatedAuditLogsResponse =
 type PaginatedMaterialAuditLogsResponse =
   components["schemas"]["PaginatedMaterialAuditLogsResponse"];
 export type UserResponse = components["schemas"]["UserResponse"];
-
+type MaterialDataHistory = components["schemas"]["MaterialDataHistory"];
 
 // Comment types
 export interface ReviewComment {
@@ -160,7 +160,9 @@ export class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     // Get the current session token from Supabase
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const token = session?.access_token;
 
     const url = `${this.baseUrl}${endpoint}`;
@@ -177,12 +179,16 @@ export class ApiClient {
 
     // Handle unauthorized errors - user might need to re-authenticate
     if (response.status === 401) {
-      throw new Error('Unauthorized - please log in again');
+      throw new Error("Unauthorized - please log in again");
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `API request failed: ${response.statusText}`);
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: response.statusText }));
+      throw new Error(
+        errorData.detail || `API request failed: ${response.statusText}`
+      );
     }
 
     return response.json();
@@ -369,7 +375,9 @@ export class ApiClient {
   // Upload SAP CSV data (returns job_id for progress polling)
   async uploadSAPData(file: File): Promise<UploadSAPDataResponse> {
     // Get the current session token from Supabase
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const token = session?.access_token;
 
     // Create FormData and append the file
@@ -388,12 +396,16 @@ export class ApiClient {
 
     // Handle unauthorized errors
     if (response.status === 401) {
-      throw new Error('Unauthorized - please log in again');
+      throw new Error("Unauthorized - please log in again");
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Upload failed: ${response.statusText}`);
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: response.statusText }));
+      throw new Error(
+        errorData.detail || `Upload failed: ${response.statusText}`
+      );
     }
 
     return response.json();
@@ -471,6 +483,11 @@ export class ApiClient {
     return this.put<{ message: string }>(
       `/materials/${materialNumber}/insights/${insightId}/unacknowledge`
     );
+  }
+
+  // Material history
+  async getMaterialHistory(materialNumber: number): Promise<MaterialDataHistory[]> {
+    return this.get<MaterialDataHistory[]>(`/materials/${materialNumber}/history`);
   }
 }
 
