@@ -1,10 +1,16 @@
 import { useMultiStepForm } from "./multi-step-form";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
+import { useReviewModeOptional } from "@/contexts/ReviewModeContext";
+import { REVIEW_MODE_CONFIGS, DEFAULT_REVIEW_MODE } from "@/lib/review-modes";
 
 export function StepProgressIndicator() {
   const { currentStep, steps, goToStep, canGoToStep, isStepComplete } =
     useMultiStepForm();
+
+  // Get mode-specific colors
+  const modeContext = useReviewModeOptional();
+  const colors = modeContext?.config.color ?? REVIEW_MODE_CONFIGS[DEFAULT_REVIEW_MODE].color;
 
   return (
     <nav aria-label="Progress">
@@ -26,16 +32,14 @@ export function StepProgressIndicator() {
                 disabled={!isClickable}
                 className={cn(
                   "flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors relative z-10",
-                  isActive &&
-                  "border-blue-600 bg-blue-600 text-white font-semibold",
-                  isComplete &&
-                    "border-green-600 bg-green-600 text-white",
+                  isActive && colors.progressActive + " text-white font-semibold",
+                  isComplete && colors.progressComplete + " text-white",
                   !isActive &&
                     !isComplete &&
                     "border-gray-300 bg-white text-gray-500",
                   isClickable &&
                     !isActive &&
-                    "hover:border-blue-400 cursor-pointer",
+                    "hover:opacity-80 cursor-pointer",
                   !isClickable && "cursor-not-allowed opacity-50"
                 )}
                 aria-current={isActive ? "step" : undefined}
@@ -52,7 +56,7 @@ export function StepProgressIndicator() {
                 <div
                   className={cn(
                     "absolute top-5 left-1/2 w-full h-0.5 transition-colors",
-                    isComplete ? "bg-green-600" : "bg-gray-300"
+                    isComplete ? colors.progressComplete.split(" ")[1] : "bg-gray-300"
                   )}
                   aria-hidden="true"
                 />
@@ -64,8 +68,8 @@ export function StepProgressIndicator() {
                 <span
                   className={cn(
                     "text-xs text-center font-medium",
-                    isActive && "text-blue-600",
-                    isComplete && "text-green-600",
+                    isActive && colors.text,
+                    isComplete && colors.text,
                     !isActive && !isComplete && "text-gray-500"
                   )}
                 >

@@ -22,6 +22,9 @@ import { Step4FollowUp } from "./review-steps/step4-follow-up";
 import { Step5FinalDecision } from "./review-steps/step5-final-decision";
 import { ReviewCommentsDialog } from "./review-comments-dialog";
 import { Badge } from "./ui/badge";
+import { useReviewModeOptional } from "@/contexts/ReviewModeContext";
+import { REVIEW_MODE_CONFIGS, DEFAULT_REVIEW_MODE } from "@/lib/review-modes";
+import { cn } from "@/lib/utils";
 import {
   step1Schema,
   step2Schema,
@@ -553,14 +556,22 @@ function MaterialReviewFormInner({
     }
   }, [materialData, existingReview, isEditMode, form, markStepComplete]);
 
+  // Get review mode from context, fallback to default if not available
+  const modeContext = useReviewModeOptional();
+  const modeConfig = modeContext?.config ?? REVIEW_MODE_CONFIGS[DEFAULT_REVIEW_MODE];
+  const ModeIcon = modeConfig.icon;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <div className="flex-1 border-t border-gray-300" />
-        <h3 className="text-lg font-semibold whitespace-nowrap">
-          Reviewing Material
-        </h3>
-        <div className="flex-1 border-t border-gray-300" />
+        <div className={cn("flex-1 border-t-2", modeConfig.color.border)} />
+        <div className="flex items-center gap-2">
+          <ModeIcon className={cn("h-5 w-5", modeConfig.color.text)} />
+          <h3 className={cn("text-lg font-semibold whitespace-nowrap", modeConfig.color.text)}>
+            {modeConfig.label}
+          </h3>
+        </div>
+        <div className={cn("flex-1 border-t-2", modeConfig.color.border)} />
       </div>
 
       <StepProgressIndicator />
