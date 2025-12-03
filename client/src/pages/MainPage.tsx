@@ -5,7 +5,7 @@ import { MaterialsTable } from "@/components/materials-table";
 import { AuditLog } from "@/components/audit-log";
 import { UploadSAPDialog } from "@/components/upload-sap-dialog";
 import { Button } from "@/components/ui/button";
-import { FerrisWheel, Upload, LayoutDashboard, ScrollText } from "lucide-react";
+import { Upload, LayoutDashboard, ScrollText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { HexagonalBackground } from "@/components/hexagonal-bg";
 import { UserMenu } from "@/components/user-menu";
@@ -53,11 +53,14 @@ export function MainPage() {
       <header className="border-b shrink-0">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FerrisWheel className="h-8 w-8" />
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold">MARS</h1>
-              <span className="text-sm text-muted-foreground">
-                Material Analysis & Review System{" "}
+              <div className="flex">
+                <h1 className="text-xl font-bold bg-gradient-to-r from-[#eb59ff] to-[#032a83] bg-clip-text text-transparent hover:from-[#f472b6] hover:to-[#1e40af] transition-all duration-300">
+                  MARS
+                </h1>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                Material Analysis & Review System
               </span>
             </div>
           </div>
