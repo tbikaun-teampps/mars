@@ -33,6 +33,10 @@ export const queryKeys = {
     // Material reviews (can be used for granular invalidation)
     reviews: (materialNumber: number) =>
       [...queryKeys.materials.detail(materialNumber), "reviews"] as const,
+
+    // Material history
+    history: (materialNumber: number) =>
+      [...queryKeys.materials.detail(materialNumber), "history"] as const,
   },
 
   // Health check query (if needed in the future)

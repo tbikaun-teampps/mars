@@ -36,6 +36,7 @@ type PaginatedAuditLogsResponse =
   components["schemas"]["PaginatedAuditLogsResponse"];
 type PaginatedMaterialAuditLogsResponse =
   components["schemas"]["PaginatedMaterialAuditLogsResponse"];
+type MaterialDataHistory = components["schemas"]["MaterialDataHistory"];
 
 /**
  * Hook to fetch paginated materials list
@@ -105,7 +106,9 @@ export function useUpdateReview(): UseMutationResult<
           {
             ...previousMaterial,
             reviews: extendedReviews.map((review) =>
-              review.review_id === reviewId ? ({ ...review, ...data } as MaterialReview) : review
+              review.review_id === reviewId
+                ? ({ ...review, ...data } as MaterialReview)
+                : review
             ),
           }
         );
@@ -291,7 +294,8 @@ export function useReviewComments(
 ): UseQueryResult<PaginatedReviewCommentsResponse, Error> {
   return useQuery({
     queryKey: queryKeys.reviewComments.list(materialNumber!, reviewId!, params),
-    queryFn: () => apiClient.getReviewComments(materialNumber!, reviewId!, params),
+    queryFn: () =>
+      apiClient.getReviewComments(materialNumber!, reviewId!, params),
     enabled: enabled && materialNumber !== null && reviewId !== null,
     staleTime: 1000 * 30, // 30 seconds
   });
@@ -420,5 +424,21 @@ export function useUnacknowledgeInsight(): UseMutationResult<
     onError: (error) => {
       console.error("Failed to unacknowledge insight:", error);
     },
+  });
+}
+
+/** * Hook to fetch material history
+ * @param materialNumber The material number to fetch history for
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useMaterialHistory(
+  materialNumber: number | null,
+  enabled: boolean = true
+): UseQueryResult<MaterialDataHistory[], Error> {
+  return useQuery({
+    queryKey: queryKeys.materials.history(materialNumber!),
+    queryFn: () => apiClient.getMaterialHistory(materialNumber!),
+    enabled: enabled && materialNumber !== null,
+    staleTime: 1000 * 30, // 30 seconds
   });
 }
