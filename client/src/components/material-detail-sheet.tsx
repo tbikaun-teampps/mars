@@ -725,14 +725,18 @@ function MaterialDetailsContent({
           </div>
         </div>
       ) : materialDetails ? (
-        <div className="mt-6 flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
-          {/* Insights Panel - displayed prominently at the top */}
-          <InsightsPanel
-            insights={materialDetails.insights}
-            materialNumber={materialNumber!}
-          />
+        <>
+          {/* Insights Panel - fixed at top, does not scroll */}
+          <div className="mt-6 flex-shrink-0">
+            <InsightsPanel
+              insights={materialDetails.insights}
+              materialNumber={materialNumber!}
+            />
+          </div>
 
-          <div>
+          {/* Scrollable content */}
+          <div className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pb-8 pr-2">
+            <div>
             <div className="flex items-center gap-4 mb-4">
               <div className="flex-1 border-t border-gray-300" />
               <h3 className="text-md font-semibold whitespace-nowrap">
@@ -927,7 +931,8 @@ function MaterialDetailsContent({
               disabled={hasActiveReview}
             />
           </div>
-        </div>
+          </div>
+        </>
       ) : null}
 
       {/* Comments dialog */}
