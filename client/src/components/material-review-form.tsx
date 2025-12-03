@@ -306,8 +306,8 @@ function MaterialReviewFormInner({
       // General step
       reviewReason: "",
       reviewReasonOther: "",
-      currentStockQty: undefined,
-      currentStockValue: undefined,
+      currentStockQty: materialData?.total_quantity ?? undefined,
+      currentStockValue: materialData?.total_value ?? undefined,
       monthsNoMovement: undefined,
       proposedAction: "",
       proposedQtyAdjustment: undefined,
@@ -669,7 +669,9 @@ function MaterialReviewFormInner({
                 : "Save Step"}
             </Button>
             {/* Comments button - only show when editing */}
-            {isEditMode && reviewId && (
+            {
+            // isEditMode && reviewId && 
+            (
               <Button
                 type="button"
                 variant="outline"
