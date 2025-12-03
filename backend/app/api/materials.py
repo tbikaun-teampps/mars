@@ -48,6 +48,7 @@ from app.api.utils import transform_db_record_to_material
 
 router = APIRouter()
 
+# Fields that are automatically managed or don't represent meaningful data changes
 IGNORED_DIFF_FIELDS = {
     "uploaded_at",
     "last_reviewed",
@@ -936,9 +937,8 @@ def prepare_csv(file_content: bytes) -> pd.DataFrame:
     df = df.replace([np.nan, np.inf, -np.inf, pd.NA, pd.NaT], None)
 
     # Validate created_on
-    if df["created_on"].isna().any() or (df["created_on"] == None).any():
-        null_mask = df["created_on"].isna() | (
-            df["created_on"] == None)
+    if df["created_on"].isna().any():
+        null_mask = df["created_on"].isna()
         first_null_idx = df[null_mask].index.tolist()[0]
         raise ValueError(
             f"Row {first_null_idx + 2}: Created On date is required")
@@ -1160,7 +1160,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                 await db.commit()
 
                 job.processed_records = chunk_end
-                job.inserted_count = chunk_end
+                job.inserted_count = total_inserted
                 await db.commit()
 
             # Phase 2: Insert history records
@@ -1183,7 +1183,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                             updated_material_numbers),
                         MaterialReviewDB.status.notin_(
                             ["completed", "cancelled"]),
-                        MaterialReviewDB.is_data_stale == False,
+                        MaterialReviewDB.is_data_stale.is_(False),
                     )
                     .values(
                         is_data_stale=True,
@@ -1410,6 +1410,16 @@ async def get_material_history(material_number: int,
                                db: AsyncSession = Depends(get_db)
                                ):
     """Get the change history of a given material"""
+
+    # Verify material exists
+    material = await db.exec(
+        select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
+    )
+    if not material.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Material {material_number} not found",
+        )
 
     history = await db.exec(
         select(MaterialDataHistory)

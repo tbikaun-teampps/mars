@@ -1,7 +1,7 @@
 """SQLModel database models."""
 
 from datetime import date, datetime
-from typing import Optional, Any
+from typing import Any, Optional, Literal
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel, Column, JSON
@@ -355,7 +355,7 @@ class MaterialDataHistory(SQLModel, table=True):
     upload_job_id: UUID = Field(foreign_key="upload_jobs.job_id")
     material_number: int = Field(
         foreign_key="sap_material_data.material_number")
-    change_type: str = Field(max_length=10)  # 'INSERT' or 'UPDATE'
+    change_type: Literal['INSERT', 'UPDATE'] = Field(sa_column=Column(String(10)))
     old_values: Optional[dict[str, Any]] = Field(
         default=None, sa_column=Column(JSON))
     new_values: Optional[dict[str, Any]] = Field(

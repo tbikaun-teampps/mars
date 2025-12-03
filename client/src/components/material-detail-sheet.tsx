@@ -539,7 +539,6 @@ function ReviewHistoryTimeline({
 function ChangeHistory({ materialNumber }: { materialNumber: number }) {
   const { data, isLoading } = useMaterialHistory(materialNumber, true);
 
-
   return (
     <div className="mt-6">
       <h4 className="font-medium mb-3 flex items-center gap-2">
@@ -572,7 +571,9 @@ function ChangeHistory({ materialNumber }: { materialNumber: number }) {
                       <li key={field}>
                         - {field.replace(/_/g, " ")}
                         {hist.old_values?.[field] !== undefined &&
-                          hist.new_values?.[field] !== undefined && (
+                          hist.new_values?.[field] !== undefined &&
+                          hist.old_values?.[field] != null &&
+                          hist.new_values?.[field] != null && (
                             <span className="text-muted-foreground/70">
                               {" "}
                               ({String(hist.old_values[field])} to{" "}

@@ -427,7 +427,7 @@ export function useUnacknowledgeInsight(): UseMutationResult<
   });
 }
 
-/** * Hook to fetch material history
+/** Hook to fetch material history
  * @param materialNumber The material number to fetch history for
  * @param enabled Whether the query should run (default: true)
  */
@@ -437,7 +437,14 @@ export function useMaterialHistory(
 ): UseQueryResult<MaterialDataHistory[], Error> {
   return useQuery({
     queryKey: queryKeys.materials.history(materialNumber!),
-    queryFn: () => apiClient.getMaterialHistory(materialNumber!),
+    queryFn: () => {
+      if (materialNumber === null) {
+        throw new Error(
+          "materialNumber cannot be null when fetching material history."
+        );
+      }
+      return apiClient.getMaterialHistory(materialNumber);
+    },
     enabled: enabled && materialNumber !== null,
     staleTime: 1000 * 30, // 30 seconds
   });
