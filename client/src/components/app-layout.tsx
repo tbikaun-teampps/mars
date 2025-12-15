@@ -4,7 +4,7 @@ import { LoginForm } from "@/components/login-form";
 import { HexagonalBackground } from "@/components/hexagonal-bg";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { UploadSAPDialog } from "@/components/upload-sap-dialog";
+import { UploadDataDialog } from "@/components/upload-data-dialog";
 import { DebugFAB } from "@/components/debug-fab";
 import {
   Breadcrumb,
@@ -96,7 +96,7 @@ export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps
           </div>
         </SidebarInset>
       </SidebarProvider>
-      <UploadSAPDialog
+      <UploadDataDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
       />
