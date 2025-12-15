@@ -247,7 +247,8 @@ async def update_material_review(
             "procurement_feedback",
         ]
 
-        checklist_data = {k: v for k, v in update_data.items() if k in checklist_fields}
+        checklist_data = {k: v for k,
+                          v in update_data.items() if k in checklist_fields}
 
         # Validate that all required boolean fields are present
         required_checks = [
@@ -259,7 +260,8 @@ async def update_material_review(
             "checked_supersession",
             "checked_historical_usage",
         ]
-        missing_fields = [f for f in required_checks if f not in checklist_data]
+        missing_fields = [
+            f for f in required_checks if f not in checklist_data]
         if missing_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -283,7 +285,8 @@ async def update_material_review(
             db.add(existing_checklist)
         else:
             # Create new checklist
-            new_checklist = ReviewChecklistDB(review_id=review_id, **checklist_data, created_by=current_user.id, last_updated_by=current_user.id)
+            new_checklist = ReviewChecklistDB(
+                review_id=review_id, **checklist_data, created_by=current_user.id, last_updated_by=current_user.id)
             db.add(new_checklist)
 
         # Mark checklist as completed on the review
@@ -390,6 +393,22 @@ async def update_material_review(
     )
     comments_count_result = await db.exec(comments_count_query)
     comments_count = comments_count_result.one() or 0
+
+    # If the review is marked as completed, ensure all other reviews are marked as superseded
+    if review_db.status == ReviewStatus.COMPLETED.value:
+        print("Marking other reviews as superseded")
+        completed_reviews_query = select(MaterialReviewDB).where(
+            MaterialReviewDB.material_number == material_number,
+            MaterialReviewDB.status == "completed",
+            MaterialReviewDB.is_superseded == False,
+        )
+        completed_reviews_result = await db.exec(completed_reviews_query)
+        completed_reviews = completed_reviews_result.all()
+
+        for review in completed_reviews:
+            review.is_superseded = True
+            db.add(review)
+        await db.commit()
 
     # Return as MaterialReview response model
     return MaterialReview(

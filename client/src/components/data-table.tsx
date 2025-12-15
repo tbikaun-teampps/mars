@@ -15,7 +15,7 @@ import {
   PaginationState,
   OnChangeFn,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -205,22 +205,26 @@ export function DataTable<TData, TValue>({
     };
   };
 
+  const hasPanels = searchPanel || sortPanel || filterPanel || activeFilterBadges;
+
   return (
     <div className="w-full">
-      <div
-        className={cn(
-          "flex items-center gap-2 py-2 sticky top-0 z-30 bg-background",
-          activeFilterBadges ? "justify-between" : "justify-end"
-        )}
-      >
-        <div>{activeFilterBadges}</div>
-        <div className="flex gap-2">
-          {searchPanel}
-          {sortPanel}
-          {filterPanel}
+      {hasPanels && (
+        <div
+          className={cn(
+            "flex items-center gap-2 py-2 sticky top-0 z-30 bg-background",
+            activeFilterBadges ? "justify-between" : "justify-end"
+          )}
+        >
+          <div>{activeFilterBadges}</div>
+          <div className="flex gap-2">
+            {searchPanel}
+            {sortPanel}
+            {filterPanel}
+          </div>
         </div>
-      </div>
-      <div className="border relative">
+      )}
+      <div className="border relative rounded-xl overflow-hidden">
         {canScrollLeft && (
           <button
             type="button"
@@ -257,13 +261,28 @@ export function DataTable<TData, TValue>({
                     <TableHead
                       key={header.id}
                       style={getCommonPinningStyles(header.column, true)}
+                      className={header.column.getCanSort() ? "cursor-pointer select-none" : ""}
+                      onClick={header.column.getToggleSortingHandler()}
                     >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                      <div className="flex items-center gap-1">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                        {header.column.getCanSort() && (
+                          <span className="text-muted-foreground">
+                            {header.column.getIsSorted() === "asc" ? (
+                              <ArrowUp className="h-3 w-3" />
+                            ) : header.column.getIsSorted() === "desc" ? (
+                              <ArrowDown className="h-3 w-3" />
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-50" />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </TableHead>
                   );
                 })}

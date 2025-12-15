@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, History } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useUploadSAPData, useUploadJobHistory } from "@/api/queries";
+import { queryKeys } from "@/api/query-keys";
 import { apiClient, UploadJobStatus } from "@/api/client";
 import {
   Dialog,
@@ -15,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadHistoryModal } from "./upload-history-modal";
 
 interface UploadSAPDialogProps {
   open: boolean;
@@ -30,30 +31,17 @@ const phaseLabels: Record<string, string> = {
   reviews: "Creating reviews...",
 };
 
-function formatFileSize(bytes: number | null | undefined): string {
-  if (!bytes) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-function formatDate(dateString: string | null): string {
-  if (!dateString) return "—";
-  return new Date(dateString).toLocaleString();
-}
-
 export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<UploadJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   const uploadMutation = useUploadSAPData();
   const queryClient = useQueryClient();
 
   // Fetch last upload (only when dialog is open and not currently uploading)
-  const { data: historyData } = useUploadJobHistory(1, 0, open && !jobId);
+  const { data: historyData } = useUploadJobHistory({ limit: 1, skip: 0 }, open && !jobId);
   const lastUpload = historyData?.jobs[0];
 
   // Determine upload state
@@ -73,8 +61,10 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
       setJobStatus(status);
 
       if (status.status === "completed") {
-        // Invalidate materials query to refresh the data
-        queryClient.invalidateQueries({ queryKey: ["materials"] });
+        // Invalidate queries to refresh data across the app
+        queryClient.invalidateQueries({ queryKey: queryKeys.materials.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.uploadJobs.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       } else if (status.status === "failed") {
         setError(status.error || "Upload processing failed");
       }
@@ -168,36 +158,28 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
           <div className="space-y-4 py-4">
             {/* Last upload summary */}
             {lastUpload && !jobId && !selectedFile && (
-              <div className="rounded-md border bg-muted/50 p-3 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Last Upload</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setHistoryOpen(true)}
-                  >
-                    <History className="h-3 w-3 mr-1" />
-                    History
-                  </Button>
-                </div>
-                <div className="text-sm text-muted-foreground space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-3.5 w-3.5" />
-                    <span className="truncate">{lastUpload.file_name || "Unknown file"}</span>
-                    <span className="text-xs">({formatFileSize(lastUpload.file_size_bytes)})</span>
-                  </div>
-                  <div className="text-xs">
-                    {formatDate(lastUpload.created_at)}
+              <div className="rounded-md border bg-muted/50 p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate font-medium">{lastUpload.file_name || "Unknown file"}</span>
                     {lastUpload.status === "completed" && lastUpload.result && (
-                      <span className="ml-2 text-green-600">
+                      <span className="text-green-600 text-xs shrink-0">
                         {lastUpload.result.inserted.toLocaleString()} materials
                       </span>
                     )}
                     {lastUpload.status === "failed" && (
-                      <span className="ml-2 text-red-600">Failed</span>
+                      <span className="text-red-600 text-xs shrink-0">Failed</span>
                     )}
                   </div>
+                  <Link
+                    to="/app/uploads"
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0 ml-2"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    View all
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
                 </div>
               </div>
             )}
@@ -299,8 +281,6 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <UploadHistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />
     </>
   );
 }

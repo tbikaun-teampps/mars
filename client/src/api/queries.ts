@@ -25,6 +25,7 @@ import {
   AuditLogsQueryParams,
   MaterialAuditLogsQueryParams,
   ReviewCommentsQueryParams,
+  UploadJobsQueryParams,
 } from "./query-keys";
 import type { components } from "@/types/api";
 
@@ -133,6 +134,11 @@ export function useUpdateReview(): UseMutationResult<
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.materials.all,
+      });
+
+      // Invalidate dashboard summary as metrics might have changed (acceptance, overdue, etc.)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.all,
       });
     },
   });
@@ -253,6 +259,10 @@ export function useUploadSAPData(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: queryKeys.uploadJobs.all,
       });
+      // Invalidate dashboard summary as metrics will have changed
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.all,
+      });
     },
     onError: (error) => {
       console.error("Failed to upload SAP data:", error);
@@ -262,18 +272,16 @@ export function useUploadSAPData(): UseMutationResult<
 
 /**
  * Hook to fetch upload job history (paginated list of all upload jobs)
- * @param limit Number of records to fetch (default 50)
- * @param offset Number of records to skip (default 0)
+ * @param params Query parameters for pagination, sorting, and filtering
  * @param enabled Whether the query should run (default: true)
  */
 export function useUploadJobHistory(
-  limit: number = 50,
-  offset: number = 0,
+  params?: UploadJobsQueryParams,
   enabled: boolean = true
 ): UseQueryResult<UploadJobListResponse, Error> {
   return useQuery({
-    queryKey: queryKeys.uploadJobs.list(limit, offset),
-    queryFn: () => apiClient.getUploadJobHistory(limit, offset),
+    queryKey: queryKeys.uploadJobs.list(params),
+    queryFn: () => apiClient.getUploadJobHistory(params),
     enabled,
     staleTime: 1000 * 60, // 1 minute
   });
@@ -447,5 +455,31 @@ export function useMaterialHistory(
     },
     enabled: enabled && materialNumber !== null,
     staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+/** Hook to fetch dashboard summary data
+ */
+export function useDashboardSummary(
+  enabled: boolean
+): UseQueryResult<components["schemas"]["DashboardSummary"], Error> {
+  return useQuery({
+    queryKey: queryKeys.dashboard.summary(),
+    queryFn: () => apiClient.getDashboardSummary(),
+    staleTime: 1000 * 60, // 1 minute
+    enabled,
+  });
+}
+
+/** Hook to fetch recent dashboard activity
+ */
+export function useDashboardRecentActivity(
+  enabled: boolean
+): UseQueryResult<components["schemas"]["MaterialAuditLogEntry"][], Error> {
+  return useQuery({
+    queryKey: queryKeys.dashboard.recentActivity(),
+    queryFn: () => apiClient.getDashboardRecentActivity(),
+    staleTime: 1000 * 60, // 1 minute
+    enabled,
   });
 }

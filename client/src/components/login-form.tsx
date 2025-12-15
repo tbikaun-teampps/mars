@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
-import { FerrisWheel, Loader } from "lucide-react";
+import { Loader } from "lucide-react";
 import { getVersionInfo } from "@/lib/version";
 
 export function LoginForm({
@@ -18,7 +18,7 @@ export function LoginForm({
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const {displayVersion} = getVersionInfo();
+  const { displayVersion } = getVersionInfo();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,11 +42,10 @@ export function LoginForm({
       <CardContent className="p-6">
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2">
-            <div className="flex flex-col items-center gap-3 font-medium">
-              <div className="relative text-muted-foreground">
-                <FerrisWheel className="h-12 w-12" />
-              </div>
-              <h1 className="text-2xl font-bold">MARS</h1>
+            <div className="flex flex-col items-center font-medium">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-[#eb59ff] to-[#032a83] bg-clip-text text-transparent hover:from-[#f472b6] hover:to-[#1e40af] transition-all duration-300">
+                MARS
+              </h1>
               <p className="text-sm text-muted-foreground text-center">
                 Material Analysis & Review System
               </p>

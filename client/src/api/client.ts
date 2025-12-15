@@ -11,6 +11,7 @@ import type {
   AuditLogsQueryParams,
   MaterialAuditLogsQueryParams,
   ReviewCommentsQueryParams,
+  UploadJobsQueryParams,
 } from "@/types/materials";
 import { supabase } from "@/lib/supabase";
 
@@ -146,6 +147,7 @@ export type {
   AuditLogsQueryParams,
   MaterialAuditLogsQueryParams,
   ReviewCommentsQueryParams,
+  UploadJobsQueryParams,
 } from "@/types/materials";
 
 export class ApiClient {
@@ -418,12 +420,24 @@ export class ApiClient {
 
   // Get upload job history (paginated list of all upload jobs)
   async getUploadJobHistory(
-    limit: number = 50,
-    offset: number = 0
+    params?: UploadJobsQueryParams
   ): Promise<UploadJobListResponse> {
-    return this.get<UploadJobListResponse>(
-      `/materials/upload-jobs?limit=${limit}&offset=${offset}`
-    );
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined)
+      queryParams.append("offset", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+    if (params?.sort_by) queryParams.append("sort_by", params.sort_by);
+    if (params?.sort_order) queryParams.append("sort_order", params.sort_order);
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.date_from) queryParams.append("date_from", params.date_from);
+    if (params?.date_to) queryParams.append("date_to", params.date_to);
+    if (params?.search) queryParams.append("search", params.search);
+
+    const queryString = queryParams.toString();
+    const endpoint = `/materials/upload-jobs${queryString ? `?${queryString}` : ""}`;
+
+    return this.get<UploadJobListResponse>(endpoint);
   }
 
   // Review comments API methods
@@ -486,8 +500,28 @@ export class ApiClient {
   }
 
   // Material history
-  async getMaterialHistory(materialNumber: number): Promise<MaterialDataHistory[]> {
-    return this.get<MaterialDataHistory[]>(`/materials/${materialNumber}/history`);
+  async getMaterialHistory(
+    materialNumber: number
+  ): Promise<MaterialDataHistory[]> {
+    return this.get<MaterialDataHistory[]>(
+      `/materials/${materialNumber}/history`
+    );
+  }
+
+  // Dashboard summary
+  async getDashboardSummary(): Promise<
+    components["schemas"]["DashboardSummary"]
+  > {
+    return this.get<components["schemas"]["DashboardSummary"]>(`/dashboard`);
+  }
+
+  // Dashboard recent activity
+  async getDashboardRecentActivity(): Promise<
+    components["schemas"]["MaterialAuditLogEntry"][]
+  > {
+    return this.get<components["schemas"]["MaterialAuditLogEntry"][]>(
+      `/dashboard/recent-activity`
+    );
   }
 }
 

@@ -38,6 +38,18 @@ export type AuditLogsQueryParams = NullToUndefined<RawAuditLogsQueryParams>;
 export type MaterialAuditLogsQueryParams = NullToUndefined<RawMaterialAuditLogsQueryParams>;
 export type ReviewCommentsQueryParams = NullToUndefined<RawReviewCommentsQueryParams>;
 
+// Upload jobs query params (manually defined since it's a simple type)
+export interface UploadJobsQueryParams {
+  skip?: number;
+  limit?: number;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+}
+
 // Schema types (re-exported for convenience)
 export type Material = components["schemas"]["Material"];
 export type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
