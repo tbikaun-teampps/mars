@@ -6,8 +6,7 @@ CREATE TABLE profiles (
     id UUID PRIMARY KEY,
     full_name TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    is_admin BOOLEAN DEFAULT false
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Add trigger function to add a profile on user creation

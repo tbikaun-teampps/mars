@@ -497,6 +497,118 @@ export class ApiClient {
   async deleteLookupOption(optionId: number): Promise<void> {
     await this.delete<void>(`/lookup-options/${optionId}`);
   }
+
+  // RBAC - Roles API methods (Read-only)
+  async getRoles(params?: {
+    includeInactive?: boolean;
+    roleType?: string;
+  }): Promise<components["schemas"]["RoleListItem"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.includeInactive) queryParams.append("include_inactive", "true");
+    if (params?.roleType) queryParams.append("role_type", params.roleType);
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["RoleListItem"][]>(
+      `/roles${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async getRole(roleId: number): Promise<components["schemas"]["RoleResponse"]> {
+    return this.get<components["schemas"]["RoleResponse"]>(`/roles/${roleId}`);
+  }
+
+  // RBAC - User-Role Assignments API methods
+  async getUserRoles(params?: {
+    userId?: string;
+    roleId?: number;
+    includeInactive?: boolean;
+  }): Promise<components["schemas"]["UserRoleResponse"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.userId) queryParams.append("user_id", params.userId);
+    if (params?.roleId) queryParams.append("role_id", params.roleId.toString());
+    if (params?.includeInactive) queryParams.append("include_inactive", "true");
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["UserRoleResponse"][]>(
+      `/user-roles${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async createUserRole(
+    data: components["schemas"]["UserRoleCreate"]
+  ): Promise<components["schemas"]["UserRoleResponse"]> {
+    return this.post<components["schemas"]["UserRoleResponse"]>(
+      `/user-roles`,
+      data
+    );
+  }
+
+  async updateUserRole(
+    userRoleId: number,
+    data: components["schemas"]["UserRoleUpdate"]
+  ): Promise<components["schemas"]["UserRoleResponse"]> {
+    return this.put<components["schemas"]["UserRoleResponse"]>(
+      `/user-roles/${userRoleId}`,
+      data
+    );
+  }
+
+  async deleteUserRole(userRoleId: number): Promise<void> {
+    await this.delete<void>(`/user-roles/${userRoleId}`);
+  }
+
+  // RBAC - SME Expertise API methods
+  async getSMEExpertise(params?: {
+    userId?: string;
+    smeType?: string;
+    isAvailable?: boolean;
+  }): Promise<components["schemas"]["SMEExpertiseResponse"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.userId) queryParams.append("user_id", params.userId);
+    if (params?.smeType) queryParams.append("sme_type", params.smeType);
+    if (params?.isAvailable !== undefined)
+      queryParams.append("is_available", params.isAvailable.toString());
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["SMEExpertiseResponse"][]>(
+      `/sme-expertise${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async createSMEExpertise(
+    data: components["schemas"]["SMEExpertiseCreate"]
+  ): Promise<components["schemas"]["SMEExpertiseResponse"]> {
+    return this.post<components["schemas"]["SMEExpertiseResponse"]>(
+      `/sme-expertise`,
+      data
+    );
+  }
+
+  async updateSMEExpertise(
+    expertiseId: number,
+    data: components["schemas"]["SMEExpertiseUpdate"]
+  ): Promise<components["schemas"]["SMEExpertiseResponse"]> {
+    return this.put<components["schemas"]["SMEExpertiseResponse"]>(
+      `/sme-expertise/${expertiseId}`,
+      data
+    );
+  }
+
+  async deleteSMEExpertise(expertiseId: number): Promise<void> {
+    await this.delete<void>(`/sme-expertise/${expertiseId}`);
+  }
+
+  // RBAC - Users list for picker
+  async getUsers(params?: {
+    search?: string;
+    isActive?: boolean;
+  }): Promise<components["schemas"]["UserListItem"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.isActive !== undefined)
+      queryParams.append("is_active", params.isActive.toString());
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["UserListItem"][]>(
+      `/users${queryString ? `?${queryString}` : ""}`
+    );
+  }
 }
 
 // Export a default instance

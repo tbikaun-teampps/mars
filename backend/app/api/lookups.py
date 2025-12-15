@@ -11,6 +11,7 @@ from fastapi import (
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.rbac import check_user_is_admin
 from app.models.lookup import (
     LookupOption,
     LookupOptionCreate,
@@ -33,7 +34,9 @@ async def require_admin(current_user: User, db: AsyncSession) -> None:
     profile_result = await db.exec(profile_query)
     profile = profile_result.first()
 
-    if not profile or not profile.is_admin:
+    is_admin = await check_user_is_admin(current_user.id, db)
+
+    if not profile or not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required to manage lookup options",

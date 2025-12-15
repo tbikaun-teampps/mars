@@ -158,9 +158,9 @@ INSERT INTO "auth"."identities" ("provider_id", "user_id", "identity_data", "pro
 -- Data for Name: profiles; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO "public"."profiles" ("id", "full_name", "created_at", "updated_at", "is_admin") VALUES
-	('e1e806b1-c51b-46dd-97e5-d2f7913d1145', 'test', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00', false),
-	('00000000-0000-0000-0000-000000000000', 'system', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00', true);
+INSERT INTO "public"."profiles" ("id", "full_name", "created_at", "updated_at") VALUES
+	('e1e806b1-c51b-46dd-97e5-d2f7913d1145', 'test', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00'),
+	('00000000-0000-0000-0000-000000000000', 'system', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00');
 
 
 --
@@ -319,5 +319,23 @@ SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 --
 
 -- \unrestrict WeY2qHvIzEhgHubYdvuNIlJZ0frOjuQf4JrgMeOqfPTqEWh71F5IhHI6pDHIS8c
+
+
+-- Seed system user with admin role
+INSERT INTO "public"."user_roles" ("user_role_id", "user_id", "role_id", "valid_from", "valid_to", "assigned_by", "assigned_at", "revoked_by", "revoked_at", "is_active") 
+VALUES
+('1', '00000000-0000-0000-0000-000000000000', '14', '2025-12-15', null, '00000000-0000-0000-0000-000000000000', '2025-12-14 22:02:59.237365+00', null, null, 'true');
+
+-- Reset the sequence for user_roles
+SELECT setval(pg_get_serial_sequence('"public"."user_roles"', 'user_role_id'), (SELECT MAX("user_role_id") FROM "public"."user_roles"));
+
+-- Log the assignment in user_role_history
+INSERT INTO "public"."user_role_history" ("history_id", "user_role_id", "action", "old_values", "new_values", "performed_by", "performed_at")
+VALUES
+('1', '1', 'assigned', 'null', '{"role_id": 14, "valid_to": null, "role_code": "system_admin", "valid_from": "2025-12-15"}', '00000000-0000-0000-0000-000000000000', '2025-12-14 22:02:59.254483+00');
+
+-- Reset the sequence for user_role_history
+SELECT setval(pg_get_serial_sequence('"public"."user_role_history"', 'history_id'), (SELECT MAX("history_id") FROM "public"."user_role_history"));
+
 
 RESET ALL;

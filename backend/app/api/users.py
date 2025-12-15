@@ -8,6 +8,7 @@ from app.core.auth import get_current_user, User
 from app.core.database import get_db
 from app.models.db_models import ProfileDB
 from app.models.user import UserResponse
+from app.api.rbac import get_user_permissions, check_user_is_admin
 
 router = APIRouter()
 
@@ -20,7 +21,8 @@ async def get_current_user_profile(
     """Get current user's profile information."""
 
     # Query the profiles table to get full user information
-    profile_query = select(ProfileDB).where(ProfileDB.id == current_user.id)
+    profile_query = select(ProfileDB).where(
+        ProfileDB.id == current_user.id)
     profile_result = await db.exec(profile_query)
     profile = profile_result.first()
 
@@ -30,9 +32,15 @@ async def get_current_user_profile(
             detail="User profile not found",
         )
 
+    permissions = await get_user_permissions(current_user.id, db)
+    is_admin = await check_user_is_admin(current_user.id, db)
+
+    print(f'permissions: {permissions}, is_admin: {is_admin}')
+
     return UserResponse(
         id=profile.id,
         email=current_user.email,
         full_name=profile.full_name,
-        is_admin=profile.is_admin,
+        is_admin=is_admin,
+        permissions=permissions
     )

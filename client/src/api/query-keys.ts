@@ -108,4 +108,31 @@ export const queryKeys = {
     history: (optionId: number) =>
       [...queryKeys.lookups.all, "history", optionId] as const,
   },
+
+  // RBAC queries
+  roles: {
+    all: ["roles"] as const,
+    list: (params?: { includeInactive?: boolean; roleType?: string }) =>
+      [...queryKeys.roles.all, "list", params] as const,
+    detail: (roleId: number) =>
+      [...queryKeys.roles.all, "detail", roleId] as const,
+  },
+
+  userRoles: {
+    all: ["userRoles"] as const,
+    list: (params?: { userId?: string; roleId?: number; includeInactive?: boolean }) =>
+      [...queryKeys.userRoles.all, "list", params] as const,
+  },
+
+  smeExpertise: {
+    all: ["smeExpertise"] as const,
+    list: (params?: { userId?: string; smeType?: string; isAvailable?: boolean }) =>
+      [...queryKeys.smeExpertise.all, "list", params] as const,
+  },
+
+  usersList: {
+    all: ["usersList"] as const,
+    list: (params?: { search?: string; isActive?: boolean }) =>
+      [...queryKeys.usersList.all, "list", params] as const,
+  },
 } as const;

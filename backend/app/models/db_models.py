@@ -23,7 +23,6 @@ class ProfileDB(SQLModel, table=True):
         sa_column=Column(TIMESTAMP(timezone=True),
                          server_default=text("NOW()"))
     )
-    is_admin: bool = Field(default=False)
 
 
 class SAPMaterialData(SQLModel, table=True):
@@ -455,6 +454,129 @@ class LookupOptionHistoryDB(SQLModel, table=True):
         sa_column_kwargs={"server_default": text("auth.uid()")}
     )
     changed_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+
+
+# ============================================================================
+# RBAC Models
+# ============================================================================
+
+
+class RoleDB(SQLModel, table=True):
+    """Role table model for RBAC."""
+
+    __tablename__ = "roles"
+
+    role_id: Optional[int] = Field(default=None, primary_key=True)
+    role_code: str = Field(max_length=50, unique=True)
+    role_name: str = Field(max_length=100)
+    role_type: str = Field(max_length=30)  # 'workflow', 'sme', 'approval', 'admin'
+    description: Optional[str] = None
+
+    # Permission flags
+    can_create_reviews: bool = Field(default=False)
+    can_edit_reviews: bool = Field(default=False)
+    can_delete_reviews: bool = Field(default=False)
+    can_approve_reviews: bool = Field(default=False)
+    can_provide_sme_review: bool = Field(default=False)
+    can_assign_reviews: bool = Field(default=False)
+    can_manage_users: bool = Field(default=False)
+    can_manage_settings: bool = Field(default=False)
+    can_view_all_reviews: bool = Field(default=False)
+    can_export_data: bool = Field(default=False)
+
+    # Approval authority
+    approval_limit: Optional[float] = None
+
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+
+
+class UserRoleDB(SQLModel, table=True):
+    """User-Role assignment table model."""
+
+    __tablename__ = "user_roles"
+
+    user_role_id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: UUID = Field(foreign_key="profiles.id")
+    role_id: int = Field(foreign_key="roles.role_id")
+
+    # Validity period
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+
+    # Audit
+    assigned_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    assigned_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+    revoked_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    revoked_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
+    )
+
+    is_active: bool = Field(default=True)
+
+
+class UserRoleHistoryDB(SQLModel, table=True):
+    """User-Role assignment history for audit trail."""
+
+    __tablename__ = "user_role_history"
+
+    history_id: Optional[int] = Field(default=None, primary_key=True)
+    user_role_id: int = Field(foreign_key="user_roles.user_role_id")
+    action: str = Field(max_length=30)  # 'assigned', 'revoked', 'updated'
+    old_values: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON))
+    new_values: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON))
+    performed_by: UUID = Field(foreign_key="profiles.id")
+    performed_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+
+
+class SMEExpertiseDB(SQLModel, table=True):
+    """SME Expertise table model."""
+
+    __tablename__ = "sme_expertise"
+
+    expertise_id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: UUID = Field(foreign_key="profiles.id")
+
+    # What they're expert in
+    sme_type: str = Field(max_length=50)  # From lookup_options
+    material_group: Optional[str] = Field(default=None, max_length=50)
+    plant: Optional[str] = Field(default=None, max_length=50)
+
+    # Capacity management
+    max_concurrent_reviews: int = Field(default=10)
+    current_review_count: int = Field(default=0)
+
+    # Availability
+    is_available: bool = Field(default=True)
+    unavailable_until: Optional[date] = None
+    unavailable_reason: Optional[str] = Field(default=None, max_length=200)
+
+    # Backup SME
+    backup_user_id: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+
+    created_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+    updated_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True),
                          server_default=text("NOW()"))
     )
