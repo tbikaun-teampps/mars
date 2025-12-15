@@ -582,6 +582,14 @@ function LookupOptionForm({
   onColorChange,
   isNew,
 }: LookupOptionFormProps) {
+  // Local state for color to avoid lag when dragging color picker
+  const [localColor, setLocalColor] = React.useState(formData.color);
+
+  // Sync when formData changes from outside (e.g., opening different option)
+  React.useEffect(() => {
+    setLocalColor(formData.color);
+  }, [formData.color]);
+
   return (
     <div className="grid gap-4 py-4">
       <div className="grid grid-cols-4 items-center gap-4">
@@ -646,13 +654,15 @@ function LookupOptionForm({
             id="color"
             name="color"
             type="color"
-            value={formData.color}
-            onChange={(e) => onColorChange(e.target.value)}
+            value={localColor}
+            onChange={(e) => setLocalColor(e.target.value)}
+            onBlur={() => onColorChange(localColor)}
             className="w-16 h-10 p-1"
           />
           <Input
-            value={formData.color}
-            onChange={(e) => onColorChange(e.target.value)}
+            value={localColor}
+            onChange={(e) => setLocalColor(e.target.value)}
+            onBlur={() => onColorChange(localColor)}
             className="flex-1"
             placeholder="#3b82f6"
           />
