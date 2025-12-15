@@ -87,16 +87,16 @@ async def get_user_permissions(user_id: str, db: AsyncSession) -> list[str]:
     return [perm for perm in permissions if permissions[perm]]
 
 
-async def require_user_admin(current_user: User, db: AsyncSession) -> dict:
+async def require_user_admin(current_user: User, db: AsyncSession) -> list[str]:
     """
     Check if current user has can_manage_users permission.
-    Returns their permissions dict for use in privilege escalation checks.
+    Returns their permissions list for use in privilege escalation checks.
     """
     return await get_user_permissions(current_user.id, db)
 
 
 async def check_privilege_escalation(
-    assigner_permissions: dict,
+    assigner_permissions: list[str],
     role: RoleDB,
 ) -> None:
     """
@@ -105,7 +105,7 @@ async def check_privilege_escalation(
     """
     for perm in PERMISSION_FIELDS:
         role_has_perm = getattr(role, perm, False)
-        assigner_has_perm = assigner_permissions.get(perm, False)
+        assigner_has_perm = perm in assigner_permissions
 
         if role_has_perm and not assigner_has_perm:
             raise HTTPException(
