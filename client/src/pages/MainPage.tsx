@@ -281,7 +281,7 @@ export function MainPage({ view }: MainPageProps) {
                       />
                       <ChartBarLabel
                         title="Outstanding Opportunities"
-                        data={(dashboardSummary?.outstanding_opportunties_chart_data ?? []) as Record<string, string | number>[]}
+                        data={(dashboardSummary?.outstanding_opportunities_chart_data ?? []) as Record<string, string | number>[]}
                         config={opportunitiesConfig}
                         xAxisKey="materialType"
                         dataKey="value"

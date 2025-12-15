@@ -42,7 +42,7 @@ class DashboardSummary(BaseModel):
     acceptance_rate_change: float
 
     # chart data
-    outstanding_opportunties_chart_data: Optional[list[dict]] = None
+    outstanding_opportunities_chart_data: Optional[list[dict]] = None
     review_status_chart_data: Optional[list[dict]] = None
 
     last_upload_date: Optional[datetime] = None
@@ -200,7 +200,7 @@ async def get_dashboard_summary(
         total_overdue_reviews_change=total_overdue_reviews_change,
         acceptance_rate=current_metrics["acceptance_rate"],
         acceptance_rate_change=acceptance_rate_change,
-        outstanding_opportunties_chart_data=opportunities_chart_data,
+        outstanding_opportunities_chart_data=opportunities_chart_data,
         review_status_chart_data=rejections_chart_data,
         last_upload_date=last_upload_date,
     )
