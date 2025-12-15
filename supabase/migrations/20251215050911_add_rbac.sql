@@ -20,7 +20,8 @@ CREATE TABLE public.roles (
     can_manage_settings BOOLEAN DEFAULT false,
     can_view_all_reviews BOOLEAN DEFAULT false,
     can_export_data BOOLEAN DEFAULT false,
-    
+    can_manage_acknowledgements BOOLEAN DEFAULT false,
+
     -- Approval authority
     approval_limit NUMERIC,                      -- Max value this role can approve (NULL = unlimited)
     
@@ -161,73 +162,73 @@ CREATE INDEX idx_assignment_history_assignment ON review_assignment_history(assi
 -- SEED DEFAULT ROLES
 -- ============================================================================
 
-INSERT INTO roles (role_code, role_name, role_type, description, 
-                   can_create_reviews, can_edit_reviews, can_approve_reviews, 
+INSERT INTO roles (role_code, role_name, role_type, description,
+                   can_create_reviews, can_edit_reviews, can_approve_reviews,
                    can_provide_sme_review, can_assign_reviews, can_view_all_reviews,
-                   can_manage_users, can_manage_settings, approval_limit) VALUES
+                   can_manage_users, can_manage_settings, can_manage_acknowledgements, approval_limit) VALUES
 
 -- Workflow roles
-('inventory_analyst', 'Inventory Analyst', 'workflow', 
+('inventory_analyst', 'Inventory Analyst', 'workflow',
  'Creates and manages material reviews',
- true, true, false, false, false, false, false, false, NULL),
+ true, true, false, false, false, false, false, false, true, NULL),
 
-('inventory_controller', 'Inventory Controller', 'workflow', 
+('inventory_controller', 'Inventory Controller', 'workflow',
  'Senior analyst with assignment capability',
- true, true, true, false, true, true, false, false, 5000),
+ true, true, true, false, true, true, false, false, true, 5000),
 
-('inventory_manager', 'Inventory Manager', 'approval', 
+('inventory_manager', 'Inventory Manager', 'approval',
  'Approves reviews and manages team',
- true, true, true, false, true, true, false, false, 50000),
+ true, true, true, false, true, true, false, false, true, 50000),
 
-('supply_chain_manager', 'Supply Chain Manager', 'approval', 
+('supply_chain_manager', 'Supply Chain Manager', 'approval',
  'Senior approval authority',
- true, true, true, false, true, true, false, false, 500000),
+ true, true, true, false, true, true, false, false, true, 500000),
 
-('supply_chain_director', 'Supply Chain Director', 'approval', 
+('supply_chain_director', 'Supply Chain Director', 'approval',
  'Executive approval authority',
- false, false, true, false, true, true, false, true, NULL),
+ false, false, true, false, true, true, false, true, true, NULL),
 
-('finance_director', 'Finance Director', 'approval', 
+('finance_director', 'Finance Director', 'approval',
  'Final approval for high-value write-offs',
- false, false, true, false, false, true, false, false, NULL),
+ false, false, true, false, false, true, false, false, false, NULL),
 
 -- SME roles (these map to sme_type in lookup_options)
-('sme_mechanical', 'SME - Mechanical Engineering', 'sme', 
+('sme_mechanical', 'SME - Mechanical Engineering', 'sme',
  'Mechanical engineering subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
-('sme_electrical', 'SME - Electrical Engineering', 'sme', 
+('sme_electrical', 'SME - Electrical Engineering', 'sme',
  'Electrical engineering subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
-('sme_reliability', 'SME - Reliability Engineering', 'sme', 
+('sme_reliability', 'SME - Reliability Engineering', 'sme',
  'Reliability engineering subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
-('sme_maintenance_planning', 'SME - Maintenance Planning', 'sme', 
+('sme_maintenance_planning', 'SME - Maintenance Planning', 'sme',
  'Maintenance planning subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
-('sme_workshop', 'SME - Workshop / Repairs', 'sme', 
+('sme_workshop', 'SME - Workshop / Repairs', 'sme',
  'Workshop and repairs subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
-('sme_procurement', 'SME - Procurement', 'sme', 
+('sme_procurement', 'SME - Procurement', 'sme',
  'Procurement and supply chain subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
-('sme_safety', 'SME - Safety / HSE', 'sme', 
+('sme_safety', 'SME - Safety / HSE', 'sme',
  'Health, safety and environment subject matter expert',
- false, false, false, true, false, false, false, false, NULL),
+ false, false, false, true, false, false, false, false, false, NULL),
 
 -- Admin roles
-('system_admin', 'System Administrator', 'admin', 
+('system_admin', 'System Administrator', 'admin',
  'Full system access',
- true, true, true, true, true, true, true, true, NULL),
+ true, true, true, true, true, true, true, true, true, NULL),
 
-('user_admin', 'User Administrator', 'admin', 
+('user_admin', 'User Administrator', 'admin',
  'Manages users and roles',
- false, false, false, false, false, true, true, false, NULL);
+ false, false, false, false, false, true, true, false, false, NULL);
 
 
  -- ============================================================================
