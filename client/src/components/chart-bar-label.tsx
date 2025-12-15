@@ -11,6 +11,7 @@ import {
   CardDescription,
   CardHeader,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChartBarLabelProps {
   title: string;
@@ -25,6 +26,7 @@ interface ChartBarLabelProps {
   secondaryFormatter?: (value: number) => string;
   colorKey?: string;
   colorFn?: (value: string) => string;
+  loading?: boolean;
 }
 
 export function ChartBarLabel({
@@ -40,7 +42,36 @@ export function ChartBarLabel({
   secondaryFormatter,
   colorKey,
   colorFn,
+  loading,
 }: ChartBarLabelProps) {
+  if (loading) {
+    return (
+      <Card className="@container/card">
+        <CardHeader>
+          <Skeleton className="h-4 w-32" />
+        </CardHeader>
+        <CardContent className="px-4">
+          <Skeleton className="aspect-[3/1] w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>{title}</CardDescription>
+        </CardHeader>
+        <CardContent className="px-4">
+          <div className="aspect-[3/1] flex items-center justify-center">
+            <span className="text-sm text-muted-foreground">No data available</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="@container/card">
       <CardHeader>
