@@ -386,6 +386,14 @@ export class ApiClient {
     return this.get<UserResponse>("/users/me");
   }
 
+  async updateProfile(data: {
+    display_name?: string | null;
+    phone?: string | null;
+    notification_preferences?: { [key: string]: unknown } | null;
+  }): Promise<UserResponse> {
+    return this.put<UserResponse>("/users/me", data);
+  }
+
   // Insight acknowledgement methods
   async acknowledgeInsight(
     materialNumber: number,

@@ -27,6 +27,14 @@ class UserResponse(BaseModel):
     permissions: list[str] = []
 
 
+class ProfileUpdate(BaseModel):
+    """Schema for updating user profile."""
+
+    display_name: str | None = None
+    phone: str | None = None
+    notification_preferences: Optional[dict] = None
+
+
 class CurrentUser(BaseModel):
     """Current authenticated user schema."""
 

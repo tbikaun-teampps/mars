@@ -15,6 +15,18 @@ class ProfileDB(SQLModel, table=True):
 
     id: UUID = Field(primary_key=True)
     full_name: Optional[str] = None
+    display_name: Optional[str] = Field(default=None, max_length=100)
+    job_title: Optional[str] = Field(default=None, max_length=100)
+    department: Optional[str] = Field(default=None, max_length=100)
+    site: Optional[str] = Field(default=None, max_length=50)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    is_active: bool = Field(default=True)
+    last_login_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
+    )
+    notification_preferences: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON)
+    )
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True),
                          server_default=text("NOW()"))
@@ -486,6 +498,7 @@ class RoleDB(SQLModel, table=True):
     can_manage_settings: bool = Field(default=False)
     can_view_all_reviews: bool = Field(default=False)
     can_export_data: bool = Field(default=False)
+    can_manage_acknowledgements: bool = Field(default=False)
 
     # Approval authority
     approval_limit: Optional[float] = None

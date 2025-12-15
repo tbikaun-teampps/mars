@@ -378,6 +378,31 @@ export function useCurrentUser(): UseQueryResult<UserResponse, Error> {
 }
 
 /**
+ * Hook to update current user's profile
+ */
+export function useUpdateProfile(): UseMutationResult<
+  UserResponse,
+  Error,
+  {
+    display_name?: string | null;
+    phone?: string | null;
+    notification_preferences?: { [key: string]: unknown } | null;
+  }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => apiClient.updateProfile(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.user.current() });
+    },
+    onError: (error) => {
+      console.error("Failed to update profile:", error);
+    },
+  });
+}
+
+/**
  * Hook to acknowledge an insight
  */
 export function useAcknowledgeInsight(): UseMutationResult<
