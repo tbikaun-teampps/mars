@@ -18,6 +18,7 @@ class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     full_name: str | None = None
+    is_admin: bool = False
 
 
 class CurrentUser(BaseModel):

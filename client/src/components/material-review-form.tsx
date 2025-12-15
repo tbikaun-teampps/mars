@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { apiClient, MaterialReviewUpdate } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
-import { useReviewComments } from "@/api/queries";
+import { useReviewComments, useLookupOptions } from "@/api/queries";
 import {
   MultiStepFormProvider,
   Step,
@@ -26,6 +26,7 @@ import {
   step1Schema,
   step2Schema,
   step3Schema,
+  step3RequiredSchema,
   step4Schema,
   step5Schema,
   CombinedMaterialReviewSchema,
@@ -34,37 +35,17 @@ import {
 import { toast } from "sonner";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
-type MaterialReviewBase = components["schemas"]["MaterialReview"];
+type MaterialReview = components["schemas"]["MaterialReview"];
 type MaterialReviewCreate = components["schemas"]["MaterialReviewCreate"];
 
-// Extended type to include all fields returned by the API but missing from generated types
-type MaterialReview = MaterialReviewBase & {
-  review_id?: number | null;
-  review_reason?: string | null;
-  current_stock_qty?: number | null;
-  current_stock_value?: number | null;
-  months_no_movement?: number | null;
-  proposed_action?: string | null;
-  proposed_qty_adjustment?: number | null;
-  business_justification?: string | null;
-  sme_name?: string | null;
-  sme_email?: string | null;
-  sme_department?: string | null;
-  sme_feedback_method?: string | null;
-  sme_contacted_date?: string | null;
-  sme_responded_date?: string | null;
-  sme_recommendation?: string | null;
-  sme_recommended_qty?: number | null;
-  sme_analysis?: string | null;
-  alternative_applications?: string | null;
-  risk_assessment?: string | null;
-  final_decision?: string | null;
-  final_qty_adjustment?: number | null;
-  final_notes?: string | null;
-  requires_follow_up?: boolean | null;
-  follow_up_reason?: string | null;
-  review_frequency_weeks?: number | null;
-};
+// Interface for all predefined lookup options
+interface PredefinedOptions {
+  reviewReasons: string[];
+  proposedActions: string[];
+  smeTypes: string[];
+  feedbackMethods: string[];
+  followUpTriggers: string[];
+}
 
 interface MaterialReviewFormProps {
   materialData: MaterialWithReviews | null | undefined;
@@ -74,31 +55,40 @@ interface MaterialReviewFormProps {
 }
 
 // Define the steps for the multi-step form
-const REVIEW_STEPS: Step[] = [
+// SME Review is optional when no proposed qty is set for either stock type
+const getReviewSteps = (hasProposedQty: boolean): Step[] => [
   { id: "general-info", title: "General Info" },
   { id: "checklist", title: "Checklist" },
-  { id: "sme-investigation", title: "SME Review" },
+  { id: "sme-investigation", title: "SME Review", isOptional: !hasProposedQty },
   { id: "follow-up", title: "Follow-up", isOptional: true },
   { id: "final-decision", title: "Final Decision" },
 ];
+
+// Default steps for initial render (before form values are available)
+const DEFAULT_REVIEW_STEPS: Step[] = getReviewSteps(false);
 
 // Step-specific payload extraction functions
 function extractStep1Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
-  // If "other" is selected, use the custom reason; otherwise use the selected reason
+  // If "other" is selected, use the custom value; otherwise use the selected value
   const reviewReason =
     formData.reviewReason === "other"
       ? formData.reviewReasonOther || null
       : formData.reviewReason || null;
 
+  const proposedAction =
+    formData.proposedAction === "other"
+      ? formData.proposedActionOther || null
+      : formData.proposedAction || null;
+
   return {
     review_reason: reviewReason,
-    current_stock_qty: formData.currentStockQty ?? null,
-    current_stock_value: formData.currentStockValue ?? null,
+    // current_stock_qty and current_stock_value are captured by the backend from material data
     months_no_movement: formData.monthsNoMovement ?? null,
-    proposed_action: formData.proposedAction || null,
-    proposed_qty_adjustment: formData.proposedQtyAdjustment ?? null,
+    proposed_action: proposedAction,
+    proposed_safety_stock_qty: formData.proposedSafetyStockQty ?? null,
+    proposed_unrestricted_qty: formData.proposedUnrestrictedQty ?? null,
     business_justification: formData.businessJustification || null,
   };
 }
@@ -124,19 +114,36 @@ function extractStep2Payload(
 function extractStep3Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
+  // If "other" is selected, use the custom value; otherwise use the selected value
+  const smeDepartment =
+    formData.smeDepartment === "other"
+      ? formData.smeDepartmentOther || null
+      : formData.smeDepartment || null;
+
+  const smeFeedbackMethod =
+    formData.smeFeedbackMethod === "other"
+      ? formData.smeFeedbackMethodOther || null
+      : formData.smeFeedbackMethod || null;
+
+  const smeRecommendation =
+    formData.smeRecommendation === "other"
+      ? formData.smeRecommendationOther || null
+      : formData.smeRecommendation || null;
+
   return {
     sme_name: formData.smeName || null,
     sme_email: formData.smeEmail || null,
-    sme_department: formData.smeDepartment || null,
-    sme_feedback_method: formData.smeFeedbackMethod || null,
+    sme_department: smeDepartment,
+    sme_feedback_method: smeFeedbackMethod,
     sme_contacted_date: formData.smeContactedDate
       ? new Date(formData.smeContactedDate).toISOString()
       : null,
     sme_responded_date: formData.smeRespondedDate
       ? new Date(formData.smeRespondedDate).toISOString()
       : null,
-    sme_recommendation: formData.smeRecommendation || null,
-    sme_recommended_qty: formData.smeRecommendedQty ?? null,
+    sme_recommendation: smeRecommendation,
+    sme_recommended_safety_stock_qty: formData.smeRecommendedSafetyStockQty ?? null,
+    sme_recommended_unrestricted_qty: formData.smeRecommendedUnrestrictedQty ?? null,
     sme_analysis: formData.smeAnalysis || null,
     alternative_applications: formData.smeAlternativeApplications || null,
     risk_assessment: formData.smeRiskAssessment || null,
@@ -146,12 +153,18 @@ function extractStep3Payload(
 function extractStep4Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
+  // If "other" is selected, use the custom value; otherwise use the selected value
+  const followUpReason =
+    formData.scheduleFollowUpReason === "other"
+      ? formData.scheduleFollowUpReasonOther || null
+      : formData.scheduleFollowUpReason || null;
+
   return {
     requires_follow_up: formData.scheduleFollowUp || false,
     next_review_date: formData.scheduleFollowUpDate
       ? new Date(formData.scheduleFollowUpDate).toISOString()
       : null,
-    follow_up_reason: formData.scheduleFollowUpReason || null,
+    follow_up_reason: followUpReason,
     review_frequency_weeks: formData.scheduleReviewFrequencyWeeks ?? null,
   };
 }
@@ -159,9 +172,16 @@ function extractStep4Payload(
 function extractStep5Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
+  // If "other" is selected, use the custom value; otherwise use the selected value
+  const finalDecision =
+    formData.finalDecision === "other"
+      ? formData.finalDecisionOther || null
+      : formData.finalDecision || null;
+
   return {
-    final_decision: formData.finalDecision || null,
-    final_qty_adjustment: formData.finalQtyAdjustment ?? null,
+    final_decision: finalDecision,
+    final_safety_stock_qty: formData.finalSafetyStockQty ?? null,
+    final_unrestricted_qty: formData.finalUnrestrictedQty ?? null,
     final_notes: formData.finalNotes || null,
   };
 }
@@ -182,23 +202,42 @@ function extractPayloadForStep(
   return extractors[step](formData);
 }
 
+// Helper to detect if a value is custom (not in predefined list)
+function mapLookupField(value: string | null | undefined, predefined: string[]): { selected: string; other: string } {
+  const val = value || "";
+  // Value is custom if it exists and is not in predefined list
+  const isCustom = val !== "" && !predefined.includes(val);
+  return {
+    selected: isCustom ? "other" : val,
+    other: isCustom ? val : "",
+  };
+}
+
 // Helper function to map MaterialReview API data to MaterialReviewFormData format
-function mapReviewToFormData(review: MaterialReview): MaterialReviewFormData {
-  // Check if review_reason is a predefined option or custom
-  const predefinedReasons = ["annual_review", "usage_spike", "supplier_change"];
-  const existingReason = review.review_reason || "";
-  const isCustomReason =
-    existingReason && !predefinedReasons.includes(existingReason);
+function mapReviewToFormData(
+  review: MaterialReview,
+  predefinedOptions: PredefinedOptions
+): MaterialReviewFormData {
+  // Map all lookup fields using the helper
+  const reviewReason = mapLookupField(review.review_reason, predefinedOptions.reviewReasons);
+  const proposedAction = mapLookupField(review.proposed_action, predefinedOptions.proposedActions);
+  const smeDepartment = mapLookupField(review.sme_department, predefinedOptions.smeTypes);
+  const smeFeedbackMethod = mapLookupField(review.sme_feedback_method, predefinedOptions.feedbackMethods);
+  const smeRecommendation = mapLookupField(review.sme_recommendation, predefinedOptions.proposedActions);
+  const scheduleFollowUpReason = mapLookupField(review.follow_up_reason, predefinedOptions.followUpTriggers);
+  const finalDecision = mapLookupField(review.final_decision, predefinedOptions.proposedActions);
 
   return {
     // General step
-    reviewReason: isCustomReason ? "other" : existingReason,
-    reviewReasonOther: isCustomReason ? existingReason : "",
+    reviewReason: reviewReason.selected,
+    reviewReasonOther: reviewReason.other,
     currentStockQty: review.current_stock_qty ?? undefined,
     currentStockValue: review.current_stock_value ?? undefined,
     monthsNoMovement: review.months_no_movement ?? undefined,
-    proposedAction: review.proposed_action || "",
-    proposedQtyAdjustment: review.proposed_qty_adjustment ?? undefined,
+    proposedAction: proposedAction.selected,
+    proposedActionOther: proposedAction.other,
+    proposedSafetyStockQty: review.proposed_safety_stock_qty ?? undefined,
+    proposedUnrestrictedQty: review.proposed_unrestricted_qty ?? undefined,
     businessJustification: review.business_justification || "",
     // Checklist step
     hasOpenOrders: review.checklist?.has_open_orders ?? undefined,
@@ -217,29 +256,36 @@ function mapReviewToFormData(review: MaterialReview): MaterialReviewFormData {
     // SME step
     smeName: review.sme_name || "",
     smeEmail: review.sme_email || "",
-    smeDepartment: review.sme_department || "",
-    smeFeedbackMethod: review.sme_feedback_method || "",
+    smeDepartment: smeDepartment.selected,
+    smeDepartmentOther: smeDepartment.other,
+    smeFeedbackMethod: smeFeedbackMethod.selected,
+    smeFeedbackMethodOther: smeFeedbackMethod.other,
     smeContactedDate: review.sme_contacted_date
       ? new Date(review.sme_contacted_date)
       : undefined,
     smeRespondedDate: review.sme_responded_date
       ? new Date(review.sme_responded_date)
       : undefined,
-    smeRecommendation: review.sme_recommendation || "",
-    smeRecommendedQty: review.sme_recommended_qty ?? undefined,
+    smeRecommendation: smeRecommendation.selected,
+    smeRecommendationOther: smeRecommendation.other,
+    smeRecommendedSafetyStockQty: review.sme_recommended_safety_stock_qty ?? undefined,
+    smeRecommendedUnrestrictedQty: review.sme_recommended_unrestricted_qty ?? undefined,
     smeAnalysis: review.sme_analysis || "",
     smeAlternativeApplications: review.alternative_applications || "",
     smeRiskAssessment: review.risk_assessment || "",
     // Follow-up step
     scheduleFollowUp: review.requires_follow_up ?? false,
-    scheduleFollowUpReason: review.follow_up_reason || "",
+    scheduleFollowUpReason: scheduleFollowUpReason.selected,
+    scheduleFollowUpReasonOther: scheduleFollowUpReason.other,
     scheduleFollowUpDate: review.next_review_date
       ? new Date(review.next_review_date)
       : undefined,
     scheduleReviewFrequencyWeeks: review.review_frequency_weeks ?? undefined,
     // Final decision step
-    finalDecision: review.final_decision || "",
-    finalQtyAdjustment: review.final_qty_adjustment ?? undefined,
+    finalDecision: finalDecision.selected,
+    finalDecisionOther: finalDecision.other,
+    finalSafetyStockQty: review.final_safety_stock_qty ?? undefined,
+    finalUnrestrictedQty: review.final_unrestricted_qty ?? undefined,
     finalNotes: review.final_notes || "",
   };
 }
@@ -255,6 +301,7 @@ function MaterialReviewFormInner({
   const {
     currentStep,
     markStepComplete,
+    markStepIncomplete,
     prevStep,
     nextStep,
     totalSteps,
@@ -298,6 +345,31 @@ function MaterialReviewFormInner({
 
   const commentCount = commentsData?.total ?? 0;
 
+  // Fetch all lookup options for predefined values check
+  const { data: reviewReasonOptions } = useLookupOptions("review_reason");
+  const { data: proposedActionOptions } = useLookupOptions("proposed_action");
+  const { data: smeTypeOptions } = useLookupOptions("sme_type");
+  const { data: feedbackMethodOptions } = useLookupOptions("feedback_method");
+  const { data: followUpTriggerOptions } = useLookupOptions("follow_up_trigger");
+
+  // Build predefined options object from fetched lookup options
+  const predefinedOptions = React.useMemo((): PredefinedOptions => ({
+    reviewReasons: reviewReasonOptions?.options?.map((opt) => opt.value) ?? ["annual_review", "usage_spike", "supplier_change"],
+    proposedActions: proposedActionOptions?.options?.map((opt) => opt.value) ?? [],
+    smeTypes: smeTypeOptions?.options?.map((opt) => opt.value) ?? [],
+    feedbackMethods: feedbackMethodOptions?.options?.map((opt) => opt.value) ?? [],
+    followUpTriggers: followUpTriggerOptions?.options?.map((opt) => opt.value) ?? [],
+  }), [reviewReasonOptions, proposedActionOptions, smeTypeOptions, feedbackMethodOptions, followUpTriggerOptions]);
+
+  // Check if all lookup options are loaded
+  const lookupOptionsLoaded = !!(
+    reviewReasonOptions &&
+    proposedActionOptions &&
+    smeTypeOptions &&
+    feedbackMethodOptions &&
+    followUpTriggerOptions
+  );
+
   // Initialize form with combined schema (we'll validate per-step)
   const form = useForm<MaterialReviewFormData>({
     resolver: zodResolver(CombinedMaterialReviewSchema),
@@ -306,11 +378,14 @@ function MaterialReviewFormInner({
       // General step
       reviewReason: "",
       reviewReasonOther: "",
-      currentStockQty: materialData?.total_quantity ?? undefined,
-      currentStockValue: materialData?.total_value ?? undefined,
+      // currentStockQty and currentStockValue are captured by backend from material data
+      currentStockQty: undefined,
+      currentStockValue: undefined,
       monthsNoMovement: undefined,
       proposedAction: "",
-      proposedQtyAdjustment: undefined,
+      proposedActionOther: "",
+      proposedSafetyStockQty: undefined,
+      proposedUnrestrictedQty: undefined,
       businessJustification: "",
       // Checklist step
       hasOpenOrders: undefined,
@@ -328,22 +403,29 @@ function MaterialReviewFormInner({
       smeName: "",
       smeEmail: "",
       smeDepartment: "",
+      smeDepartmentOther: "",
       smeFeedbackMethod: "",
+      smeFeedbackMethodOther: "",
       smeContactedDate: undefined,
       smeRespondedDate: undefined,
       smeRecommendation: "",
-      smeRecommendedQty: undefined,
+      smeRecommendationOther: "",
+      smeRecommendedSafetyStockQty: undefined,
+      smeRecommendedUnrestrictedQty: undefined,
       smeAnalysis: "",
       smeAlternativeApplications: "",
       smeRiskAssessment: "",
       // Follow-up step
       scheduleFollowUp: false,
       scheduleFollowUpReason: "",
+      scheduleFollowUpReasonOther: "",
       scheduleFollowUpDate: undefined,
       scheduleReviewFrequencyWeeks: undefined,
       // Final decision step
       finalDecision: "",
-      finalQtyAdjustment: undefined,
+      finalDecisionOther: "",
+      finalSafetyStockQty: undefined,
+      finalUnrestrictedQty: undefined,
       finalNotes: "",
     },
   });
@@ -353,6 +435,38 @@ function MaterialReviewFormInner({
   const {
     formState: { isDirty },
   } = form;
+
+  // Watch proposed qty fields to determine if SME review is required
+  const proposedSafetyStockQty = form.watch("proposedSafetyStockQty");
+  const proposedUnrestrictedQty = form.watch("proposedUnrestrictedQty");
+
+  // Check if any qty change is proposed for either stock type
+  // 0 means "no change" (keep current), non-zero means a change is proposed
+  const hasProposedQty = (proposedSafetyStockQty !== undefined && proposedSafetyStockQty !== null && proposedSafetyStockQty !== 0) ||
+                         (proposedUnrestrictedQty !== undefined && proposedUnrestrictedQty !== null && proposedUnrestrictedQty !== 0);
+
+  // Compute dynamic review steps based on qty adjustment
+  // SME Review is optional when no proposed qty is set for either stock type
+  const reviewSteps = React.useMemo(
+    () => getReviewSteps(hasProposedQty),
+    [hasProposedQty]
+  );
+
+  // Determine if SME review is required (any qty change is proposed)
+  const isSmeRequired = hasProposedQty;
+
+  // Revalidate SME step when requirements change (optional -> required)
+  React.useEffect(() => {
+    // When SME becomes required, check if the current data passes the required schema
+    if (isSmeRequired && isStepComplete(2)) {
+      const formValues = form.getValues();
+      const result = step3RequiredSchema.safeParse(formValues);
+      if (!result.success) {
+        // SME step no longer valid with required schema - unmark it
+        markStepIncomplete(2);
+      }
+    }
+  }, [isSmeRequired, isStepComplete, form, markStepIncomplete]);
 
   // Mutation for saving/updating review
   const saveReviewMutation = useMutation({
@@ -398,7 +512,7 @@ function MaterialReviewFormInner({
       // Reset the form immediately with the saved data from the server
       // This eliminates race conditions and provides instant UI feedback
       if (savedReview) {
-        const formData = mapReviewToFormData(savedReview);
+        const formData = mapReviewToFormData(savedReview, predefinedOptions);
         form.reset(formData, { keepErrors: false, keepDirty: false });
 
         // Set the ref to prevent the useEffect from resetting again
@@ -416,6 +530,11 @@ function MaterialReviewFormInner({
           queryKey: queryKeys.materials.all,
         });
       }
+
+      // Invalidate dashboard to refresh widgets (metrics may change)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.all,
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to save review. Please try again.");
@@ -431,15 +550,16 @@ function MaterialReviewFormInner({
     }
 
     // Get the appropriate schema for current step
+    // Use step3RequiredSchema when SME is required (qty adjustment is non-zero)
     const stepSchemas = [
       step1Schema,
       step2Schema,
-      step3Schema,
+      isSmeRequired ? step3RequiredSchema : step3Schema,
       step4Schema,
       step5Schema,
     ];
     const currentSchema = stepSchemas[currentStep];
-    const currentStepInfo = REVIEW_STEPS[currentStep];
+    const currentStepInfo = reviewSteps[currentStep];
 
     if (!currentSchema) {
       return false;
@@ -510,9 +630,59 @@ function MaterialReviewFormInner({
     }
   };
 
+  // Handle "Next" navigation with validation for optional steps
+  const handleNextNavigation = () => {
+    const currentStepInfo = reviewSteps[currentStep];
+
+    // For optional steps, validate and mark complete if valid
+    if (currentStepInfo?.isOptional) {
+      const stepSchemas = [
+        step1Schema,
+        step2Schema,
+        isSmeRequired ? step3RequiredSchema : step3Schema,
+        step4Schema,
+        step5Schema,
+      ];
+      const currentSchema = stepSchemas[currentStep];
+      const formValues = form.getValues();
+      const result = currentSchema.safeParse(formValues);
+
+      if (result.success) {
+        // Valid (either empty or complete) - mark complete and navigate
+        markStepComplete(currentStep);
+      } else {
+        // Check if there's partial data that needs validation
+        const hasNonEmptyData = result.error.issues.some((issue) => {
+          const fieldValue = issue.path.reduce<unknown>((obj, key) => {
+            if (typeof key === "string" || typeof key === "number") {
+              return (obj as Record<string, unknown>)?.[key];
+            }
+            return obj;
+          }, formValues);
+          return (
+            fieldValue !== "" &&
+            fieldValue !== null &&
+            fieldValue !== undefined &&
+            fieldValue !== false
+          );
+        });
+
+        if (!hasNonEmptyData) {
+          // No data entered in optional step - mark complete and navigate
+          markStepComplete(currentStep);
+        }
+        // If partial data exists, don't mark complete (user needs to fix or clear)
+      }
+    }
+
+    // Navigate to next step
+    nextStep();
+  };
+
   // Pre-fill form with existing review data if editing
+  // Wait for lookup options to load before mapping to correctly detect custom values
   React.useEffect(() => {
-    if (existingReview && isEditMode) {
+    if (existingReview && isEditMode && lookupOptionsLoaded) {
       // Only reset the form if this is a NEW review or we haven't reset for this review yet
       // This prevents the form from resetting on every refetch (which would overwrite user changes)
       const currentReviewId = existingReview.review_id ?? null;
@@ -526,7 +696,7 @@ function MaterialReviewFormInner({
       lastResetReviewIdRef.current = currentReviewId;
 
       // Use the helper function to map API data to form format
-      const formData = mapReviewToFormData(existingReview);
+      const formData = mapReviewToFormData(existingReview, predefinedOptions);
 
       form.reset(formData);
 
@@ -551,7 +721,7 @@ function MaterialReviewFormInner({
         markStepComplete(4);
       }
     }
-  }, [materialData, existingReview, isEditMode, form, markStepComplete]);
+  }, [materialData, existingReview, isEditMode, form, markStepComplete, predefinedOptions, lookupOptionsLoaded]);
 
   return (
     <div className="space-y-6">
@@ -647,7 +817,7 @@ function MaterialReviewFormInner({
               <Button
                 type="button"
                 variant="outline"
-                onClick={nextStep}
+                onClick={handleNextNavigation}
                 className="flex-1"
                 disabled={saveReviewMutation.isPending}
               >
@@ -708,7 +878,7 @@ function MaterialReviewFormInner({
 // Main export wrapper with MultiStepFormProvider
 export function MaterialReviewForm(props: MaterialReviewFormProps) {
   return (
-    <MultiStepFormProvider steps={REVIEW_STEPS}>
+    <MultiStepFormProvider steps={DEFAULT_REVIEW_STEPS}>
       <MaterialReviewFormInner {...props} />
     </MultiStepFormProvider>
   );

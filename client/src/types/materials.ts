@@ -31,6 +31,9 @@ type RawMaterialAuditLogsQueryParams = NonNullable<
 type RawReviewCommentsQueryParams = NonNullable<
   operations["list_review_comments_api_materials__material_number__review__review_id__comments_get"]["parameters"]["query"]
 >;
+type RawUploadJobsQueryParams = NonNullable<
+  operations["list_upload_jobs_api_materials_upload_jobs_get"]["parameters"]["query"]
+>;
 
 // Normalized query param types (null -> undefined)
 export type MaterialsQueryParams = NullToUndefined<RawMaterialsQueryParams>;
@@ -38,16 +41,11 @@ export type AuditLogsQueryParams = NullToUndefined<RawAuditLogsQueryParams>;
 export type MaterialAuditLogsQueryParams = NullToUndefined<RawMaterialAuditLogsQueryParams>;
 export type ReviewCommentsQueryParams = NullToUndefined<RawReviewCommentsQueryParams>;
 
-// Upload jobs query params (manually defined since it's a simple type)
-export interface UploadJobsQueryParams {
+// Upload jobs query params (from OpenAPI, with skip alias for offset)
+type BaseUploadJobsQueryParams = NullToUndefined<RawUploadJobsQueryParams>;
+export interface UploadJobsQueryParams extends Omit<BaseUploadJobsQueryParams, "offset"> {
+  // Frontend uses 'skip' which maps to 'offset' in the API
   skip?: number;
-  limit?: number;
-  sort_by?: string;
-  sort_order?: "asc" | "desc";
-  status?: string;
-  date_from?: string;
-  date_to?: string;
-  search?: string;
 }
 
 // Schema types (re-exported for convenience)

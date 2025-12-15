@@ -45,6 +45,13 @@ from app.models.material import (
     MaterialWithReviews,
     Insight
 )
+from app.models.upload import (
+    UploadJobStatus,
+    UploadJobListResponse,
+    UploadSAPDataResponse,
+    UploadJobProgress,
+    UploadJobResult,
+)
 from app.api.utils import transform_db_record_to_material
 
 router = APIRouter()
@@ -395,7 +402,7 @@ async def list_materials(
 
 # Upload jobs endpoints must be defined before /materials/{material_number}
 # to avoid FastAPI matching "upload-jobs" as a material_number parameter
-@router.get("/materials/upload-jobs")
+@router.get("/materials/upload-jobs", response_model=UploadJobListResponse)
 async def list_upload_jobs(
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
@@ -424,7 +431,7 @@ async def list_upload_jobs(
         description="Search by file name"
     ),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> UploadJobListResponse:
     """Get paginated list of all upload jobs for history display."""
 
     # Build base query with filters
@@ -492,46 +499,47 @@ async def list_upload_jobs(
             progress_pct = round(job.processed_records /
                                  job.total_records * 100, 1)
 
-        job_data = {
-            "job_id": str(job.job_id),
-            "status": job.status,
-            "current_phase": job.current_phase,
-            "progress": {
-                "total": job.total_records,
-                "processed": job.processed_records,
-                "percentage": progress_pct,
-            },
-            "file_name": job.file_name,
-            "file_size_bytes": job.file_size_bytes,
-            "file_mime_type": job.file_mime_type,
-            "created_at": job.created_at.isoformat() if job.created_at else None,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-        }
-
+        result = None
         if job.status == "completed":
-            job_data["result"] = {
-                "inserted": job.inserted_count,
-                "updated": job.updated_count,
-                "insights": job.insights_count,
-                "reviews": job.reviews_count,
-            }
-        elif job.status == "failed":
-            job_data["error"] = job.error_message
+            result = UploadJobResult(
+                inserted=job.inserted_count,
+                updated=job.updated_count,
+                insights=job.insights_count,
+                reviews=job.reviews_count,
+            )
+
+        job_data = UploadJobStatus(
+            job_id=str(job.job_id),
+            status=job.status,
+            current_phase=job.current_phase,
+            progress=UploadJobProgress(
+                total=job.total_records,
+                processed=job.processed_records,
+                percentage=progress_pct,
+            ),
+            file_name=job.file_name,
+            file_size_bytes=job.file_size_bytes,
+            file_mime_type=job.file_mime_type,
+            created_at=job.created_at.isoformat() if job.created_at else None,
+            started_at=job.started_at.isoformat() if job.started_at else None,
+            completed_at=job.completed_at.isoformat() if job.completed_at else None,
+            result=result,
+            error=job.error_message if job.status == "failed" else None,
+        )
 
         job_list.append(job_data)
 
-    return {
-        "jobs": job_list,
-        "total": total,
-    }
+    return UploadJobListResponse(
+        jobs=job_list,
+        total=total,
+    )
 
 
-@router.get("/materials/upload-jobs/{job_id}")
+@router.get("/materials/upload-jobs/{job_id}", response_model=UploadJobStatus)
 async def get_upload_job_status(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> UploadJobStatus:
     """Get the status and progress of an upload job."""
 
     result = await db.execute(
@@ -550,34 +558,33 @@ async def get_upload_job_status(
         progress_pct = round(job.processed_records /
                              job.total_records * 100, 1)
 
-    response = {
-        "job_id": str(job.job_id),
-        "status": job.status,
-        "current_phase": job.current_phase,
-        "progress": {
-            "total": job.total_records,
-            "processed": job.processed_records,
-            "percentage": progress_pct,
-        },
-        "file_name": job.file_name,
-        "file_size_bytes": job.file_size_bytes,
-        "file_mime_type": job.file_mime_type,
-        "created_at": job.created_at.isoformat() if job.created_at else None,
-        "started_at": job.started_at.isoformat() if job.started_at else None,
-        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-    }
-
+    result = None
     if job.status == "completed":
-        response["result"] = {
-            "inserted": job.inserted_count,
-            "updated": job.updated_count,
-            "insights": job.insights_count,
-            "reviews": job.reviews_count,
-        }
-    elif job.status == "failed":
-        response["error"] = job.error_message
+        result = UploadJobResult(
+            inserted=job.inserted_count,
+            updated=job.updated_count,
+            insights=job.insights_count,
+            reviews=job.reviews_count,
+        )
 
-    return response
+    return UploadJobStatus(
+        job_id=str(job.job_id),
+        status=job.status,
+        current_phase=job.current_phase,
+        progress=UploadJobProgress(
+            total=job.total_records,
+            processed=job.processed_records,
+            percentage=progress_pct,
+        ),
+        file_name=job.file_name,
+        file_size_bytes=job.file_size_bytes,
+        file_mime_type=job.file_mime_type,
+        created_at=job.created_at.isoformat() if job.created_at else None,
+        started_at=job.started_at.isoformat() if job.started_at else None,
+        completed_at=job.completed_at.isoformat() if job.completed_at else None,
+        result=result,
+        error=job.error_message if job.status == "failed" else None,
+    )
 
 
 @router.get("/materials/{material_number}")
@@ -678,7 +685,8 @@ async def get_material(
             current_stock_value=r.current_stock_value,
             months_no_movement=r.months_no_movement,
             proposed_action=r.proposed_action,
-            proposed_qty_adjustment=r.proposed_qty_adjustment,
+            proposed_safety_stock_qty=r.proposed_safety_stock_qty,
+            proposed_unrestricted_qty=r.proposed_unrestricted_qty,
             business_justification=r.business_justification,
             sme_name=r.sme_name,
             sme_email=r.sme_email,
@@ -687,12 +695,14 @@ async def get_material(
             sme_contacted_date=r.sme_contacted_date,
             sme_responded_date=r.sme_responded_date,
             sme_recommendation=r.sme_recommendation,
-            sme_recommended_qty=r.sme_recommended_qty,
+            sme_recommended_safety_stock_qty=r.sme_recommended_safety_stock_qty,
+            sme_recommended_unrestricted_qty=r.sme_recommended_unrestricted_qty,
             sme_analysis=r.sme_analysis,
             alternative_applications=r.alternative_applications,
             risk_assessment=r.risk_assessment,
             final_decision=r.final_decision,
-            final_qty_adjustment=r.final_qty_adjustment,
+            final_safety_stock_qty=r.final_safety_stock_qty,
+            final_unrestricted_qty=r.final_unrestricted_qty,
             # final_notes=r.final_notes,
             decided_by=r.decided_by,
             decided_by_user=decided_by_user,
@@ -918,13 +928,13 @@ CSV_COLUMN_MAPPING = {
 }
 
 
-@router.post("/materials/upload-sap-data", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/materials/upload-sap-data", status_code=status.HTTP_202_ACCEPTED, response_model=UploadSAPDataResponse)
 async def upload_sap_material_data(
     background_tasks: BackgroundTasks,
     csv_file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> UploadSAPDataResponse:
     """Upload SAP material data CSV. Returns job_id for progress polling."""
 
     # Validate file extension
@@ -978,11 +988,11 @@ async def upload_sap_material_data(
         file_content=content,
     )
 
-    return {
-        "job_id": str(job.job_id),
-        "status": "pending",
-        "message": "Upload started. Poll /materials/upload-jobs/{job_id} for progress.",
-    }
+    return UploadSAPDataResponse(
+        job_id=str(job.job_id),
+        status="pending",
+        message="Upload started. Poll /materials/upload-jobs/{job_id} for progress.",
+    )
 
 
 def prepare_csv(file_content: bytes) -> pd.DataFrame:
@@ -1107,9 +1117,33 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
     overdue_reviews_result = await db.exec(overdue_reviews_query)
     total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
 
-    # Get total acceptance rate of completed reviews
-    # TODO: Implement this logic
-    acceptance_rate = 0.0
+    # Get acceptance rate: % of SME reviews that didn't reject planner's proposed changes
+    # Rejection = Planner proposed a change, but SME said 'keep_no_change'
+
+    # Total: reviews where planner proposed change AND SME gave feedback
+    total_with_sme_query = select(func.count()).where(
+        MaterialReviewDB.proposed_action.isnot(None),
+        MaterialReviewDB.proposed_action != 'keep_no_change',
+        MaterialReviewDB.sme_recommendation.isnot(None),
+        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.is_superseded == False,
+    )
+    total_with_sme_result = await db.exec(total_with_sme_query)
+    total_with_sme = total_with_sme_result.one_or_none() or 0
+
+    # Accepted: of those, SME didn't say "keep_no_change"
+    accepted_query = select(func.count()).where(
+        MaterialReviewDB.proposed_action.isnot(None),
+        MaterialReviewDB.proposed_action != 'keep_no_change',
+        MaterialReviewDB.sme_recommendation.isnot(None),
+        MaterialReviewDB.sme_recommendation != 'keep_no_change',
+        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.is_superseded == False,
+    )
+    accepted_result = await db.exec(accepted_query)
+    accepted_count = accepted_result.one_or_none() or 0
+
+    acceptance_rate = accepted_count / total_with_sme if total_with_sme > 0 else 0.0
 
     return {
         "total_inventory_value": total_inventory_value,
@@ -1492,7 +1526,8 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                         "current_stock_value": current_stock_value,
                         "months_no_movement": 0,
                         "proposed_action": "No action proposed (historical data)",
-                        "proposed_qty_adjustment": 0,
+                        "proposed_safety_stock_qty": None,
+                        "proposed_unrestricted_qty": None,
                         "business_justification": "N/A",
                         "sme_name": "System",
                         "sme_email": "system@mars.teampps.com",
@@ -1501,12 +1536,14 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                         "sme_contacted_date": record.get("last_reviewed"),
                         "sme_responded_date": record.get("last_reviewed"),
                         "sme_recommendation": "N/A",
-                        "sme_recommended_qty": 0,
+                        "sme_recommended_safety_stock_qty": None,
+                        "sme_recommended_unrestricted_qty": None,
                         "sme_analysis": "N/A",
                         "alternative_applications": "N/A",
                         "risk_assessment": "N/A",
                         "final_decision": "no change",
-                        "final_qty_adjustment": 0,
+                        "final_safety_stock_qty": None,
+                        "final_unrestricted_qty": None,
                         "final_notes": record.get("review_notes"),
                         "decided_by": system_user_id,
                         "decided_at": record.get("last_reviewed"),

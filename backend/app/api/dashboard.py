@@ -106,14 +106,18 @@ async def get_opportunities_by_material_type(db: AsyncSession) -> list[dict]:
 
 
 async def get_rejection_rates_by_material_type(db: AsyncSession) -> list[dict]:
-    """Get rejection rates aggregated by material type."""
+    """Get rejection rates aggregated by material type.
+
+    Rejection = SME said 'keep_no_change' when planner proposed a change.
+    This aligns with the acceptance rate logic in get_metrics_for_snapshot.
+    """
 
     query = (
         select(
             SAPMaterialData.material_type,
             func.count(
                 case(
-                    (MaterialReviewDB.final_decision == "reject", 1),
+                    (MaterialReviewDB.sme_recommendation == "keep_no_change", 1),
                 )
             ).label("rejection_count"),
             func.count(MaterialReviewDB.review_id).label("total_count"),
@@ -123,6 +127,9 @@ async def get_rejection_rates_by_material_type(db: AsyncSession) -> list[dict]:
             SAPMaterialData.material_number == MaterialReviewDB.material_number,
         )
         .where(
+            MaterialReviewDB.proposed_action.isnot(None),
+            MaterialReviewDB.proposed_action != "keep_no_change",
+            MaterialReviewDB.sme_recommendation.isnot(None),
             MaterialReviewDB.status == "completed",
             MaterialReviewDB.is_superseded == False,
         )

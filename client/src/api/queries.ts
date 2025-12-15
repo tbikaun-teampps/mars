@@ -483,3 +483,149 @@ export function useDashboardRecentActivity(
     enabled,
   });
 }
+
+// Lookup options types
+type LookupOptionsGrouped = components["schemas"]["LookupOptionsGrouped"];
+type LookupOption = components["schemas"]["LookupOption"];
+type LookupOptionHistory = components["schemas"]["LookupOptionHistory"];
+type LookupOptionCreate = components["schemas"]["LookupOptionCreate"];
+type LookupOptionUpdate = components["schemas"]["LookupOptionUpdate"];
+
+/**
+ * Hook to fetch lookup options by category (with grouping)
+ * @param category The category to fetch (e.g., 'review_reason')
+ * @param includeInactive Whether to include inactive options (default: false)
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useLookupOptions(
+  category: string,
+  includeInactive: boolean = false,
+  enabled: boolean = true
+): UseQueryResult<LookupOptionsGrouped, Error> {
+  return useQuery({
+    queryKey: queryKeys.lookups.byCategory(category, includeInactive),
+    queryFn: () => apiClient.getLookupOptions(category, includeInactive),
+    enabled,
+    staleTime: 1000 * 60 * 5, // 5 minutes - lookup options rarely change
+  });
+}
+
+/**
+ * Hook to fetch all lookup options grouped by category
+ * @param includeInactive Whether to include inactive options (default: false)
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useAllLookupOptions(
+  includeInactive: boolean = false,
+  enabled: boolean = true
+): UseQueryResult<Record<string, LookupOptionsGrouped>, Error> {
+  return useQuery({
+    queryKey: queryKeys.lookups.allCategories(includeInactive),
+    queryFn: () => apiClient.getAllLookupOptions(includeInactive),
+    enabled,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/**
+ * Hook to fetch a single lookup option by ID
+ */
+export function useLookupOptionDetail(
+  optionId: number | null,
+  enabled: boolean = true
+): UseQueryResult<LookupOption, Error> {
+  return useQuery({
+    queryKey: queryKeys.lookups.detail(optionId!),
+    queryFn: () => apiClient.getLookupOptionDetail(optionId!),
+    enabled: enabled && optionId !== null,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/**
+ * Hook to fetch lookup option change history
+ */
+export function useLookupOptionHistory(
+  optionId: number | null,
+  enabled: boolean = true
+): UseQueryResult<LookupOptionHistory[], Error> {
+  return useQuery({
+    queryKey: queryKeys.lookups.history(optionId!),
+    queryFn: () => apiClient.getLookupOptionHistory(optionId!),
+    enabled: enabled && optionId !== null,
+    staleTime: 1000 * 60, // 1 minute
+  });
+}
+
+/**
+ * Hook to create a new lookup option
+ */
+export function useCreateLookupOption(): UseMutationResult<
+  LookupOption,
+  Error,
+  LookupOptionCreate
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: LookupOptionCreate) => apiClient.createLookupOption(data),
+    onSuccess: () => {
+      // Invalidate all lookup queries (handles includeInactive parameter variations)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lookups.all,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to create lookup option:", error);
+    },
+  });
+}
+
+/**
+ * Hook to update a lookup option
+ */
+export function useUpdateLookupOption(): UseMutationResult<
+  LookupOption,
+  Error,
+  { optionId: number; data: LookupOptionUpdate; category: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ optionId, data }) =>
+      apiClient.updateLookupOption(optionId, data),
+    onSuccess: () => {
+      // Invalidate all lookup queries (handles includeInactive parameter variations)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lookups.all,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to update lookup option:", error);
+    },
+  });
+}
+
+/**
+ * Hook to delete (soft-delete) a lookup option
+ */
+export function useDeleteLookupOption(): UseMutationResult<
+  void,
+  Error,
+  { optionId: number; category: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ optionId }) => apiClient.deleteLookupOption(optionId),
+    onSuccess: () => {
+      // Invalidate all lookup queries (handles includeInactive parameter variations)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lookups.all,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to delete lookup option:", error);
+    },
+  });
+}

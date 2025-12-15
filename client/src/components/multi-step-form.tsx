@@ -17,6 +17,7 @@ interface MultiStepFormContextValue {
   canGoToStep: (step: number) => boolean;
   completedSteps: Set<number>;
   markStepComplete: (step: number) => void;
+  markStepIncomplete: (step: number) => void;
   isStepComplete: (step: number) => boolean;
 }
 
@@ -84,6 +85,14 @@ export function MultiStepFormProvider({
     setCompletedSteps((prev) => new Set(prev).add(step));
   }, []);
 
+  const markStepIncomplete = React.useCallback((step: number) => {
+    setCompletedSteps((prev) => {
+      const next = new Set(prev);
+      next.delete(step);
+      return next;
+    });
+  }, []);
+
   const isStepComplete = React.useCallback(
     (step: number) => {
       return completedSteps.has(step);
@@ -101,6 +110,7 @@ export function MultiStepFormProvider({
     canGoToStep,
     completedSteps,
     markStepComplete,
+    markStepIncomplete,
     isStepComplete,
   };
 

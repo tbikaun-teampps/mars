@@ -22,7 +22,10 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectItemWithDescription,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -237,7 +240,9 @@ function FormInputField<
                 {...field}
                 onChange={(e) => {
                   if (type === "number") {
-                    field.onChange(e.target.valueAsNumber);
+                    // Convert NaN (from cleared input) to null for proper validation
+                    const value = e.target.valueAsNumber;
+                    field.onChange(Number.isNaN(value) ? null : value);
                   } else if (type === "date") {
                     field.onChange(stringToDate(e.target.value));
                   } else {
@@ -493,6 +498,86 @@ function FormSelectField<
   );
 }
 
+interface GroupedSelectOption {
+  value: string;
+  label: string;
+  description?: string | null;
+}
+
+interface GroupedSelectGroup {
+  group_name: string | null;
+  group_order: number;
+  options: GroupedSelectOption[];
+}
+
+type FormGroupedSelectFieldProps<
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+> = {
+  name: TName;
+  label?: string;
+  placeholder?: string;
+  groups: GroupedSelectGroup[];
+  className?: string;
+  disabled?: boolean;
+};
+
+function FormGroupedSelectField<
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+>({
+  name,
+  label,
+  placeholder = "Select...",
+  groups,
+  className,
+  disabled,
+}: FormGroupedSelectFieldProps<TFieldValues, TName>) {
+  const { control } = useFormContext<TFieldValues>();
+
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className={className}>
+          {label && <FormLabel>{label}</FormLabel>}
+          <Select
+            onValueChange={field.onChange}
+            value={field.value as string}
+            disabled={disabled}
+          >
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder={placeholder} />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {groups.map((group) => (
+                <SelectGroup key={group.group_name ?? "ungrouped"}>
+                  {group.group_name && (
+                    <SelectLabel>{group.group_name}</SelectLabel>
+                  )}
+                  {group.options.map((option) => (
+                    <SelectItemWithDescription
+                      key={option.value}
+                      value={option.value}
+                      description={option.description}
+                    >
+                      {option.label}
+                    </SelectItemWithDescription>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 export {
   useFormField,
   Form,
@@ -507,5 +592,8 @@ export {
   FormTextareaField,
   FormToggleGroupField,
   FormSelectField,
+  FormGroupedSelectField,
   type SelectOption,
+  type GroupedSelectOption,
+  type GroupedSelectGroup,
 };

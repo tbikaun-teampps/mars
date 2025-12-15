@@ -21,7 +21,7 @@ function formatFileSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function formatDate(dateString: string | null): string {
+function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "—";
   return new Date(dateString).toLocaleString();
 }

@@ -49,13 +49,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
-type MaterialReviewBase = components["schemas"]["MaterialReview"];
+type MaterialReview = components["schemas"]["MaterialReview"];
 type Insight = components["schemas"]["Insight"];
-
-// Extended type to include fields returned by the API but missing from generated types
-type MaterialReview = MaterialReviewBase & {
-  review_id?: number | null;
-};
 
 // Insights Panel Component
 interface InsightsPanelProps {
@@ -435,7 +430,8 @@ function ReviewHistoryTimeline({
 
                     {/* Row 3: Decision details */}
                     {(review.final_decision ||
-                      review.final_qty_adjustment != null ||
+                      review.final_safety_stock_qty != null ||
+                      review.final_unrestricted_qty != null ||
                       review.final_notes ||
                       (review.comments_count != null &&
                         review.comments_count > 0)) && (
@@ -446,18 +442,29 @@ function ReviewHistoryTimeline({
                               Decision:
                             </span>{" "}
                             <span className="capitalize">
-                              {review.final_decision}
+                              {review.final_decision.replace(/_/g, " ")}
                             </span>
                           </span>
                         )}
-                        {review.final_qty_adjustment != null && (
+                        {review.final_safety_stock_qty != null && (
                           <>
                             <span className="text-muted-foreground">•</span>
                             <span>
                               <span className="text-muted-foreground">
-                                Qty Adj:
+                                Safety Stock:
                               </span>{" "}
-                              {review.final_qty_adjustment.toLocaleString()}
+                              {review.final_safety_stock_qty.toLocaleString()}
+                            </span>
+                          </>
+                        )}
+                        {review.final_unrestricted_qty != null && (
+                          <>
+                            <span className="text-muted-foreground">•</span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Unrestricted:
+                              </span>{" "}
+                              {review.final_unrestricted_qty.toLocaleString()}
                             </span>
                           </>
                         )}

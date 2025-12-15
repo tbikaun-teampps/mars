@@ -1,10 +1,76 @@
 import { useFormContext } from "react-hook-form";
-import { FormInputField, FormToggleGroupField } from "@/components/ui/form";
+import { useMemo } from "react";
+import {
+  FormGroupedSelectField,
+  FormInputField,
+  FormToggleGroupField,
+  type GroupedSelectGroup,
+} from "@/components/ui/form";
 import { Stepheader } from "./step-header";
+import { useLookupOptions } from "@/api/queries";
 
 export function Step4FollowUp() {
   const { watch } = useFormContext();
   const scheduleFollowUp = watch("scheduleFollowUp");
+  const scheduleFollowUpReason = watch("scheduleFollowUpReason");
+
+  // Fetch follow-up trigger options
+  const { data: followUpTriggerOptions, isLoading: triggerLoading } =
+    useLookupOptions("follow_up_trigger");
+
+  const followUpTriggerGroups = useMemo((): GroupedSelectGroup[] => {
+    if (!followUpTriggerOptions?.groups) {
+      return [
+        {
+          group_name: null,
+          group_order: 0,
+          options: [
+            { label: "Usage Review", value: "usage_review", description: "Review based on usage patterns" },
+            { label: "Stock Level Check", value: "stock_level_check", description: "Verify stock levels" },
+            { label: "Supplier Follow-up", value: "supplier_follow_up", description: "Follow up with supplier" },
+            { label: "Price Review", value: "price_review", description: "Review pricing" },
+            { label: "Other", value: "other", description: "Specify another reason" },
+          ],
+        },
+      ];
+    }
+
+    const groups: GroupedSelectGroup[] = followUpTriggerOptions.groups.map((group) => ({
+      group_name: group.group_name ?? null,
+      group_order: group.group_order,
+      options: group.options.map((opt) => ({
+        value: opt.value,
+        label: opt.label,
+        description: opt.description ?? null,
+      })),
+    }));
+
+    // Ensure "Other" option exists
+    const hasOther = groups.some((g) =>
+      g.options.some((opt) => opt.value === "other")
+    );
+
+    if (!hasOther) {
+      const ungrouped = groups.find((g) => g.group_name === null);
+      if (ungrouped) {
+        ungrouped.options.push({
+          label: "Other",
+          value: "other",
+          description: "Specify another reason",
+        });
+      } else {
+        groups.push({
+          group_name: null,
+          group_order: 999,
+          options: [
+            { label: "Other", value: "other", description: "Specify another reason" },
+          ],
+        });
+      }
+    }
+
+    return groups;
+  }, [followUpTriggerOptions]);
 
   return (
     <div className="space-y-4">
@@ -17,12 +83,22 @@ export function Step4FollowUp() {
         label="Will this material require a follow-up review?"
       />
 
-      <FormInputField
+      <FormGroupedSelectField
         name="scheduleFollowUpReason"
         label="What is the reason for the follow-up review? *"
-        placeholder="Enter reason for follow-up review"
-        disabled={!scheduleFollowUp}
+        placeholder="Select reason for follow-up"
+        groups={followUpTriggerGroups}
+        disabled={!scheduleFollowUp || triggerLoading}
       />
+
+      {scheduleFollowUpReason === "other" && (
+        <FormInputField
+          name="scheduleFollowUpReasonOther"
+          label="Please specify the follow-up reason *"
+          placeholder="Enter custom follow-up reason"
+          disabled={!scheduleFollowUp}
+        />
+      )}
 
       <FormInputField
         name="scheduleFollowUpDate"

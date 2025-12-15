@@ -77,7 +77,8 @@ class MaterialReview(BaseModel):
     current_stock_value: Optional[float] = None
     months_no_movement: Optional[int] = None
     proposed_action: Optional[str] = None
-    proposed_qty_adjustment: Optional[float] = None
+    proposed_safety_stock_qty: Optional[float] = None
+    proposed_unrestricted_qty: Optional[float] = None
     business_justification: Optional[str] = None
 
     # SME investigation results
@@ -88,14 +89,16 @@ class MaterialReview(BaseModel):
     sme_contacted_date: Optional[datetime] = None
     sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
-    sme_recommended_qty: Optional[float] = None
+    sme_recommended_safety_stock_qty: Optional[float] = None
+    sme_recommended_unrestricted_qty: Optional[float] = None
     sme_analysis: Optional[str] = None
     alternative_applications: Optional[str] = None
     risk_assessment: Optional[str] = None
 
     # Final decision
     final_decision: Optional[str] = None
-    final_qty_adjustment: Optional[float] = None
+    final_safety_stock_qty: Optional[float] = None
+    final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
     decided_by: Optional[UUID] = None
     decided_by_user: Optional[UserProfile] = None
@@ -134,7 +137,8 @@ class MaterialReviewCreate(BaseModel):
     current_stock_value: Optional[float] = None
     months_no_movement: Optional[int] = None
     proposed_action: Optional[str] = None
-    proposed_qty_adjustment: Optional[float] = None
+    proposed_safety_stock_qty: Optional[float] = None
+    proposed_unrestricted_qty: Optional[float] = None
     business_justification: Optional[str] = None
 
     # SME investigation results (can be added at creation or later)
@@ -145,14 +149,16 @@ class MaterialReviewCreate(BaseModel):
     sme_contacted_date: Optional[datetime] = None
     sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
-    sme_recommended_qty: Optional[float] = None
+    sme_recommended_safety_stock_qty: Optional[float] = None
+    sme_recommended_unrestricted_qty: Optional[float] = None
     sme_analysis: Optional[str] = None
     alternative_applications: Optional[str] = None
     risk_assessment: Optional[str] = None
 
     # Final decision (typically added later in workflow)
     final_decision: Optional[str] = None
-    final_qty_adjustment: Optional[float] = None
+    final_safety_stock_qty: Optional[float] = None
+    final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
 
     # Follow-up scheduling
@@ -178,7 +184,8 @@ class MaterialReviewUpdate(BaseModel):
     current_stock_value: Optional[float] = None
     months_no_movement: Optional[int] = None
     proposed_action: Optional[str] = None
-    proposed_qty_adjustment: Optional[float] = None
+    proposed_safety_stock_qty: Optional[float] = None
+    proposed_unrestricted_qty: Optional[float] = None
     business_justification: Optional[str] = None
 
     # Checklist data
@@ -189,6 +196,11 @@ class MaterialReviewUpdate(BaseModel):
     reviewed_bom_usage: Optional[bool] = None
     checked_supersession: Optional[bool] = None
     checked_historical_usage: Optional[bool] = None
+    # Checklist optional context fields
+    open_order_numbers: Optional[str] = None
+    forecast_next_12m: Optional[float] = None
+    alternate_plant_qty: Optional[float] = None
+    procurement_feedback: Optional[str] = None
 
     # SME investigation results
     sme_name: Optional[str] = None
@@ -198,14 +210,16 @@ class MaterialReviewUpdate(BaseModel):
     sme_contacted_date: Optional[datetime] = None
     sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
-    sme_recommended_qty: Optional[float] = None
+    sme_recommended_safety_stock_qty: Optional[float] = None
+    sme_recommended_unrestricted_qty: Optional[float] = None
     sme_analysis: Optional[str] = None
     alternative_applications: Optional[str] = None
     risk_assessment: Optional[str] = None
 
     # Final decision
     final_decision: Optional[str] = None
-    final_qty_adjustment: Optional[float] = None
+    final_safety_stock_qty: Optional[float] = None
+    final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
     decided_at: Optional[datetime] = None
 
@@ -251,7 +265,8 @@ class Step1GeneralInfoPayload(BaseModel):
     current_stock_value: float = Field(..., ge=0)
     months_no_movement: int = Field(..., ge=0)
     proposed_action: str = Field(..., min_length=1)
-    proposed_qty_adjustment: Optional[float] = None
+    proposed_safety_stock_qty: Optional[float] = None
+    proposed_unrestricted_qty: Optional[float] = None
     business_justification: str = Field(..., min_length=10)
 
 
@@ -284,7 +299,8 @@ class Step3SMEPayload(BaseModel):
     sme_contacted_date: Optional[datetime] = None
     sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
-    sme_recommended_qty: Optional[float] = None
+    sme_recommended_safety_stock_qty: Optional[float] = None
+    sme_recommended_unrestricted_qty: Optional[float] = None
     sme_analysis: Optional[str] = None
     alternative_applications: Optional[str] = None
     risk_assessment: Optional[str] = None
@@ -303,7 +319,8 @@ class Step5FinalDecisionPayload(BaseModel):
     """Step 5: Final decision payload."""
 
     final_decision: str = Field(..., min_length=1)
-    final_qty_adjustment: Optional[float] = None
+    final_safety_stock_qty: Optional[float] = None
+    final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
     estimated_savings: Optional[float] = Field(None, ge=0)
     implementation_date: Optional[date] = None

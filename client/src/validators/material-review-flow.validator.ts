@@ -5,21 +5,17 @@ export const step1Schema = z
   .object({
     reviewReason: z.string().min(1, "Review reason is required"),
     reviewReasonOther: z.string().optional(),
-    currentStockQty: z.number({
-      message: "Current stock quantity is required",
-    }),
-    currentStockValue: z.number({
-      message: "Current stock value is required",
-    }),
+    currentStockQty: z.number().optional().nullable(),
+    currentStockValue: z.number().optional().nullable(),
     monthsNoMovement: z
       .number({
         message: "Months with no movement is required",
       })
       .min(0, "Months with no movement cannot be negative"),
     proposedAction: z.string().min(1, "Proposed action is required"),
-    proposedQtyAdjustment: z.number({
-      message: "Proposed quantity adjustment is required",
-    }),
+    proposedActionOther: z.string().optional(),
+    proposedSafetyStockQty: z.number().optional().nullable(),
+    proposedUnrestrictedQty: z.number().optional().nullable(),
     businessJustification: z
       .string()
       .min(1, "Business justification is required"),
@@ -37,6 +33,21 @@ export const step1Schema = z
     {
       message: "Please specify the custom review reason",
       path: ["reviewReasonOther"],
+    }
+  )
+  .refine(
+    (data) => {
+      // If "other" is selected, proposedActionOther must be provided
+      if (data.proposedAction === "other") {
+        return (
+          !!data.proposedActionOther && data.proposedActionOther.trim().length > 0
+        );
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom proposed action",
+      path: ["proposedActionOther"],
     }
   );
 
@@ -72,13 +83,84 @@ export const step2Schema = z.object({
   procurementFeedback: z.string().optional(),
 });
 
-// SME Review step (now mandatory)
+// SME Review step (optional when no qty adjustment, required otherwise)
 export const step3Schema = z
+  .object({
+    smeName: z.string().optional(),
+    smeEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+    smeDepartment: z.string().optional(),
+    smeDepartmentOther: z.string().optional(),
+    smeFeedbackMethod: z.string().optional(),
+    smeFeedbackMethodOther: z.string().optional(),
+    smeContactedDate: z.date().optional(),
+    smeRespondedDate: z.date().optional(),
+    smeRecommendation: z.string().optional(),
+    smeRecommendationOther: z.string().optional(),
+    smeRecommendedSafetyStockQty: z.number().optional().nullable(),
+    smeRecommendedUnrestrictedQty: z.number().optional().nullable(),
+    smeAnalysis: z.string().optional(),
+    smeAlternativeApplications: z.string().optional(),
+    smeRiskAssessment: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // If both dates are provided, ensure contacted date is before or on the responded date
+      if (data.smeContactedDate && data.smeRespondedDate) {
+        return data.smeContactedDate <= data.smeRespondedDate;
+      }
+      return true;
+    },
+    {
+      message: "Contacted date must be before or on the responded date",
+      path: ["smeRespondedDate"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.smeDepartment === "other") {
+        return !!data.smeDepartmentOther && data.smeDepartmentOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom department",
+      path: ["smeDepartmentOther"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.smeFeedbackMethod === "other") {
+        return !!data.smeFeedbackMethodOther && data.smeFeedbackMethodOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom feedback method",
+      path: ["smeFeedbackMethodOther"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.smeRecommendation === "other") {
+        return !!data.smeRecommendationOther && data.smeRecommendationOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom SME recommendation",
+      path: ["smeRecommendationOther"],
+    }
+  );
+
+// SME Review step schema for when it's required (qty adjustment is non-zero)
+export const step3RequiredSchema = z
   .object({
     smeName: z.string().min(1, "SME name is required"),
     smeEmail: z.email("Invalid email address"),
     smeDepartment: z.string().min(1, "SME department is required"),
+    smeDepartmentOther: z.string().optional(),
     smeFeedbackMethod: z.string().min(1, "Feedback method is required"),
+    smeFeedbackMethodOther: z.string().optional(),
     smeContactedDate: z
       .date()
       .min(new Date(2000, 0, 1), "Contacted date is required"),
@@ -86,9 +168,9 @@ export const step3Schema = z
       .date()
       .min(new Date(2000, 0, 1), "Responded date is required"),
     smeRecommendation: z.string().min(1, "SME recommendation is required"),
-    smeRecommendedQty: z.number({
-      message: "A recommended quantity is required",
-    }),
+    smeRecommendationOther: z.string().optional(),
+    smeRecommendedSafetyStockQty: z.number().optional().nullable(),
+    smeRecommendedUnrestrictedQty: z.number().optional().nullable(),
     smeAnalysis: z.string().min(1, "SME analysis is required"),
     smeAlternativeApplications: z
       .string()
@@ -104,6 +186,42 @@ export const step3Schema = z
       message: "Contacted date must be before or on the responded date",
       path: ["smeRespondedDate"],
     }
+  )
+  .refine(
+    (data) => {
+      if (data.smeDepartment === "other") {
+        return !!data.smeDepartmentOther && data.smeDepartmentOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom department",
+      path: ["smeDepartmentOther"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.smeFeedbackMethod === "other") {
+        return !!data.smeFeedbackMethodOther && data.smeFeedbackMethodOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom feedback method",
+      path: ["smeFeedbackMethodOther"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.smeRecommendation === "other") {
+        return !!data.smeRecommendationOther && data.smeRecommendationOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom SME recommendation",
+      path: ["smeRecommendationOther"],
+    }
   );
 
 // Follow-up Review Scheduling
@@ -111,6 +229,7 @@ export const step4Schema = z
   .object({
     scheduleFollowUp: z.boolean(),
     scheduleFollowUpReason: z.string().optional(),
+    scheduleFollowUpReasonOther: z.string().optional(),
     scheduleFollowUpDate: z.date().optional(),
     scheduleReviewFrequencyWeeks: z.number().optional(),
   })
@@ -132,16 +251,41 @@ export const step4Schema = z
         "All follow-up fields are required when scheduling a follow-up review",
       path: ["scheduleFollowUp"],
     }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduleFollowUpReason === "other") {
+        return !!data.scheduleFollowUpReasonOther && data.scheduleFollowUpReasonOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom follow-up reason",
+      path: ["scheduleFollowUpReasonOther"],
+    }
   );
 
 // Final decision step
-export const step5Schema = z.object({
-  finalDecision: z.string().min(1, "Final decision is required"),
-  finalQtyAdjustment: z.number({
-    message: "Final quantity adjustment is required",
-  }),
-  finalNotes: z.string().optional(),
-});
+export const step5Schema = z
+  .object({
+    finalDecision: z.string().min(1, "Final decision is required"),
+    finalDecisionOther: z.string().optional(),
+    finalSafetyStockQty: z.number().optional().nullable(),
+    finalUnrestrictedQty: z.number().optional().nullable(),
+    finalNotes: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.finalDecision === "other") {
+        return !!data.finalDecisionOther && data.finalDecisionOther.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Please specify the custom final decision",
+      path: ["finalDecisionOther"],
+    }
+  );
 
 // Combined schema with all fields optional (for form state)
 // Individual step schemas remain strict for validation

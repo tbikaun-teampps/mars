@@ -34,4 +34,5 @@ async def get_current_user_profile(
         id=profile.id,
         email=current_user.email,
         full_name=profile.full_name,
+        is_admin=profile.is_admin,
     )
