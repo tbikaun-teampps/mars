@@ -62,6 +62,9 @@ ENV/
 .coverage
 htmlcov/
 
+# Client
+!client/src/lib
+
 
 # Claude
 CLAUDE.local.md
