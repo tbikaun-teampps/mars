@@ -196,6 +196,11 @@ class MaterialReviewUpdate(BaseModel):
     reviewed_bom_usage: Optional[bool] = None
     checked_supersession: Optional[bool] = None
     checked_historical_usage: Optional[bool] = None
+    # Checklist optional context fields
+    open_order_numbers: Optional[str] = None
+    forecast_next_12m: Optional[float] = None
+    alternate_plant_qty: Optional[float] = None
+    procurement_feedback: Optional[str] = None
 
     # SME investigation results
     sme_name: Optional[str] = None

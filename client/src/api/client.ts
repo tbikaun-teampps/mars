@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
+// API response types - using OpenAPI generated types
 type PaginatedMaterialsResponse =
   components["schemas"]["PaginatedMaterialsResponse"];
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
@@ -29,120 +30,22 @@ type PaginatedMaterialAuditLogsResponse =
 export type UserResponse = components["schemas"]["UserResponse"];
 type MaterialDataHistory = components["schemas"]["MaterialDataHistory"];
 
-// Comment types
-export interface ReviewComment {
-  comment_id: number;
-  review_id: number;
-  user_id: string;
-  comment: string;
-  created_at: string;
-  updated_at: string;
-  user?: {
-    id: string;
-    full_name: string | null;
-  } | null;
-}
+// Comment types (from OpenAPI)
+export type ReviewComment = components["schemas"]["ReviewCommentResponse"];
+export type ReviewCommentCreate = components["schemas"]["ReviewCommentCreate"];
+export type PaginatedReviewCommentsResponse =
+  components["schemas"]["PaginatedReviewCommentsResponse"];
 
-export interface ReviewCommentCreate {
-  comment: string;
-}
+// Upload job types (from OpenAPI)
+export type UploadSAPDataResponse =
+  components["schemas"]["UploadSAPDataResponse"];
+export type UploadJobStatus = components["schemas"]["UploadJobStatus"];
+export type UploadJobListResponse =
+  components["schemas"]["UploadJobListResponse"];
 
-export interface PaginatedReviewCommentsResponse {
-  items: ReviewComment[];
-  total: number;
-  skip: number;
-  limit: number;
-}
-
-// Type for SAP data upload response (async job)
-export interface UploadSAPDataResponse {
-  job_id: string;
-  status: "pending";
-  message: string;
-}
-
-// Type for upload job status polling
-export interface UploadJobStatus {
-  job_id: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  current_phase: "validating" | "materials" | "insights" | "reviews" | null;
-  progress: {
-    total: number;
-    processed: number;
-    percentage: number;
-  };
-  file_name?: string | null;
-  file_size_bytes?: number | null;
-  file_mime_type?: string | null;
-  created_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  result?: {
-    inserted: number;
-    updated: number;
-    insights: number;
-    reviews: number;
-  };
-  error?: string;
-}
-
-// Type for upload job history list response
-export interface UploadJobListResponse {
-  jobs: UploadJobStatus[];
-  total: number;
-}
-
-// Type for updating a review (all fields optional for partial updates)
-export interface MaterialReviewUpdate {
-  review_reason?: string | null;
-  current_stock_qty?: number | null;
-  current_stock_value?: number | null;
-  months_no_movement?: number | null;
-  proposed_action?: string | null;
-  proposed_safety_stock_qty?: number | null;
-  proposed_unrestricted_qty?: number | null;
-  business_justification?: string | null;
-  // Checklist fields (Step 2)
-  has_open_orders?: boolean;
-  has_forecast_demand?: boolean;
-  checked_alternate_plants?: boolean;
-  contacted_procurement?: boolean;
-  reviewed_bom_usage?: boolean;
-  checked_supersession?: boolean;
-  checked_historical_usage?: boolean;
-  open_order_numbers?: string | null;
-  forecast_next_12m?: number | null;
-  alternate_plant_qty?: number | null;
-  procurement_feedback?: string | null;
-  // SME fields (Step 3)
-  sme_name?: string | null;
-  sme_email?: string | null;
-  sme_department?: string | null;
-  sme_feedback_method?: string | null;
-  sme_contacted_date?: string | null;
-  sme_responded_date?: string | null;
-  sme_recommendation?: string | null;
-  sme_recommended_safety_stock_qty?: number | null;
-  sme_recommended_unrestricted_qty?: number | null;
-  sme_analysis?: string | null;
-  alternative_applications?: string | null;
-  risk_assessment?: string | null;
-  // Final decision fields (Step 5)
-  final_decision?: string | null;
-  final_safety_stock_qty?: number | null;
-  final_unrestricted_qty?: number | null;
-  final_notes?: string | null;
-  decided_at?: string | null;
-  // Follow-up fields (Step 4)
-  requires_follow_up?: boolean | null;
-  next_review_date?: string | null;
-  follow_up_reason?: string | null;
-  review_frequency_weeks?: number | null;
-  previous_review_id?: number | null;
-  estimated_savings?: number | null;
-  implementation_date?: string | null;
-  status?: string | null;
-}
+// Review update type (from OpenAPI)
+export type MaterialReviewUpdate =
+  components["schemas"]["MaterialReviewUpdate"];
 
 // Query param types are imported from @/types/materials
 export type {

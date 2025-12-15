@@ -35,40 +35,8 @@ import {
 import { toast } from "sonner";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
-type MaterialReviewBase = components["schemas"]["MaterialReview"];
+type MaterialReview = components["schemas"]["MaterialReview"];
 type MaterialReviewCreate = components["schemas"]["MaterialReviewCreate"];
-
-// Extended type to include all fields returned by the API but missing from generated types
-type MaterialReview = MaterialReviewBase & {
-  review_id?: number | null;
-  review_reason?: string | null;
-  current_stock_qty?: number | null;
-  current_stock_value?: number | null;
-  months_no_movement?: number | null;
-  proposed_action?: string | null;
-  proposed_safety_stock_qty?: number | null;
-  proposed_unrestricted_qty?: number | null;
-  business_justification?: string | null;
-  sme_name?: string | null;
-  sme_email?: string | null;
-  sme_department?: string | null;
-  sme_feedback_method?: string | null;
-  sme_contacted_date?: string | null;
-  sme_responded_date?: string | null;
-  sme_recommendation?: string | null;
-  sme_recommended_safety_stock_qty?: number | null;
-  sme_recommended_unrestricted_qty?: number | null;
-  sme_analysis?: string | null;
-  alternative_applications?: string | null;
-  risk_assessment?: string | null;
-  final_decision?: string | null;
-  final_safety_stock_qty?: number | null;
-  final_unrestricted_qty?: number | null;
-  final_notes?: string | null;
-  requires_follow_up?: boolean | null;
-  follow_up_reason?: string | null;
-  review_frequency_weeks?: number | null;
-};
 
 interface MaterialReviewFormProps {
   materialData: MaterialWithReviews | null | undefined;

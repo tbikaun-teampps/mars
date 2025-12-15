@@ -49,13 +49,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
-type MaterialReviewBase = components["schemas"]["MaterialReview"];
+type MaterialReview = components["schemas"]["MaterialReview"];
 type Insight = components["schemas"]["Insight"];
-
-// Extended type to include fields returned by the API but missing from generated types
-type MaterialReview = MaterialReviewBase & {
-  review_id?: number | null;
-};
 
 // Insights Panel Component
 interface InsightsPanelProps {
