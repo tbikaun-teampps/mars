@@ -14,6 +14,8 @@ from uuid import UUID
 class RoleListItem(BaseModel):
     """Simplified role for lists."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     role_id: int
     role_code: str
     role_name: str

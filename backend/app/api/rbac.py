@@ -237,17 +237,7 @@ async def list_roles(
     result = await db.exec(query)
     roles = result.all()
 
-    return [
-        RoleListItem(
-            role_id=r.role_id,
-            role_code=r.role_code,
-            role_name=r.role_name,
-            role_type=r.role_type,
-            description=r.description,
-            is_active=r.is_active,
-        )
-        for r in roles
-    ]
+    return [RoleListItem.model_validate(r) for r in roles]
 
 
 @router.get("/roles/{role_id}")
