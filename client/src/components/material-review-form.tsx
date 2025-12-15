@@ -530,6 +530,11 @@ function MaterialReviewFormInner({
           queryKey: queryKeys.materials.all,
         });
       }
+
+      // Invalidate dashboard to refresh widgets (metrics may change)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.all,
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to save review. Please try again.");

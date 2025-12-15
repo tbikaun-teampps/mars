@@ -569,13 +569,10 @@ export function useCreateLookupOption(): UseMutationResult<
 
   return useMutation({
     mutationFn: (data: LookupOptionCreate) => apiClient.createLookupOption(data),
-    onSuccess: (data) => {
-      // Invalidate lookup queries for this category
+    onSuccess: () => {
+      // Invalidate all lookup queries (handles includeInactive parameter variations)
       queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.byCategory(data.category),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.allCategories(),
+        queryKey: queryKeys.lookups.all,
       });
     },
     onError: (error) => {
@@ -597,19 +594,10 @@ export function useUpdateLookupOption(): UseMutationResult<
   return useMutation({
     mutationFn: ({ optionId, data }) =>
       apiClient.updateLookupOption(optionId, data),
-    onSuccess: (_data, { optionId, category }) => {
-      // Invalidate lookup queries
+    onSuccess: () => {
+      // Invalidate all lookup queries (handles includeInactive parameter variations)
       queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.byCategory(category),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.allCategories(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.detail(optionId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.history(optionId),
+        queryKey: queryKeys.lookups.all,
       });
     },
     onError: (error) => {
@@ -630,16 +618,10 @@ export function useDeleteLookupOption(): UseMutationResult<
 
   return useMutation({
     mutationFn: ({ optionId }) => apiClient.deleteLookupOption(optionId),
-    onSuccess: (_data, { optionId, category }) => {
-      // Invalidate lookup queries
+    onSuccess: () => {
+      // Invalidate all lookup queries (handles includeInactive parameter variations)
       queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.byCategory(category),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.allCategories(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lookups.detail(optionId),
+        queryKey: queryKeys.lookups.all,
       });
     },
     onError: (error) => {
