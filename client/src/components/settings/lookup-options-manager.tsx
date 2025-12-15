@@ -69,8 +69,13 @@ const DEFAULT_FORM_DATA: LookupOptionFormData = {
   sort_order: 0,
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  review_reason: "Review Reasons",
+const DEFAULT_VISIBLE_ROWS = 3;
+
+const formatCategoryLabel = (category: string): string => {
+  return category
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 };
 
 export function LookupOptionsManager() {
@@ -85,6 +90,21 @@ export function LookupOptionsManager() {
   );
   const [formData, setFormData] =
     React.useState<LookupOptionFormData>(DEFAULT_FORM_DATA);
+  const [expandedCategories, setExpandedCategories] = React.useState<Set<string>>(
+    new Set()
+  );
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
 
   const { data: lookupOptions, isLoading } = useAllLookupOptions(showInactive);
   const createMutation = useCreateLookupOption();
@@ -295,33 +315,49 @@ export function LookupOptionsManager() {
           </div>
         </CardHeader>
         <CardContent>
-          {Object.entries(lookupOptions || {}).map(([category, grouped]) => (
-            <div key={category} className="mb-8">
-              <h3 className="text-lg font-medium mb-4">
-                {CATEGORY_LABELS[category] || category}
-              </h3>
+          {Object.entries(lookupOptions || {}).map(([category, grouped]) => {
+            const totalOptions = grouped.groups.reduce(
+              (sum, g) => sum + g.options.length,
+              0
+            );
+            const isExpanded = expandedCategories.has(category);
 
-              {grouped.groups.map((group) => (
-                <div key={group.group_name || "ungrouped"} className="mb-4">
-                  {group.group_name && (
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">
-                      {group.group_name}
-                    </h4>
-                  )}
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[100px]">Color</TableHead>
-                        <TableHead>Value</TableHead>
-                        <TableHead>Label</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="w-[80px]">Order</TableHead>
-                        <TableHead className="w-[100px]">Status</TableHead>
-                        <TableHead className="w-[80px]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.options.map((option) => (
+            return (
+              <div key={category} className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-lg font-medium">
+                    {formatCategoryLabel(category)}
+                  </h3>
+                  <Badge variant="secondary">{totalOptions}</Badge>
+                </div>
+
+                {grouped.groups.map((group) => {
+                  const visibleOptions = isExpanded
+                    ? group.options
+                    : group.options.slice(0, DEFAULT_VISIBLE_ROWS);
+                  const hiddenCount = group.options.length - visibleOptions.length;
+
+                  return (
+                    <div key={group.group_name || "ungrouped"} className="mb-4">
+                      {group.group_name && (
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                          {group.group_name}
+                        </h4>
+                      )}
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[100px]">Color</TableHead>
+                            <TableHead>Value</TableHead>
+                            <TableHead>Label</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead className="w-[80px]">Order</TableHead>
+                            <TableHead className="w-[100px]">Status</TableHead>
+                            <TableHead className="w-[80px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visibleOptions.map((option) => (
                         <TableRow key={option.value}>
                           <TableCell>
                             <div
@@ -409,12 +445,34 @@ export function LookupOptionsManager() {
                           </TableCell>
                         </TableRow>
                       ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
-            </div>
-          ))}
+                        </TableBody>
+                      </Table>
+                      {hiddenCount > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => toggleCategory(category)}
+                        >
+                          Show all ({hiddenCount} more)
+                        </Button>
+                      )}
+                      {isExpanded && group.options.length > DEFAULT_VISIBLE_ROWS && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => toggleCategory(category)}
+                        >
+                          Show less
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
 
           {(!lookupOptions || Object.keys(lookupOptions).length === 0) && (
             <div className="text-center py-8 text-muted-foreground">
