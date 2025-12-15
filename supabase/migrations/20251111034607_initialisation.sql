@@ -64,6 +64,9 @@ CREATE TABLE material_insights (
     insight_id SERIAL PRIMARY KEY,
     material_number INTEGER NOT NULL,
     message TEXT NOT NULL,
+
+    opportunity_value DOUBLE PRECISION,
+
     insight_type VARCHAR(50) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -162,6 +165,9 @@ CREATE TABLE material_reviews (
     -- Additional tracking
     estimated_savings DOUBLE PRECISION, -- Financial impact
     implementation_date DATE,   -- When will this actually happen
+
+    -- Metadata
+    is_superseded BOOLEAN DEFAULT false, -- Has a later review superseded this one?
 
     -- Workflow status  
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'pending_sme', 'pending_decision', 'completed', 'cancelled')),

@@ -344,24 +344,25 @@ export function MaterialsFilterPanel({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80" align="start">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium text-sm">Filter Materials</h4>
-            {activeFilterCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearFilters}
-                className="h-auto py-1 px-2 text-xs text-muted-foreground"
-              >
-                <X className="h-3 w-3 mr-1" />
-                Clear all
-              </Button>
-            )}
-          </div>
+      <PopoverContent className="w-80 max-h-[var(--radix-popover-content-available-height)] flex flex-col" side="left" align="center">
+        <div className="flex items-center justify-between pb-4">
+          <h4 className="font-medium text-sm">Filter Materials</h4>
+          {activeFilterCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearFilters}
+              className="h-auto py-1 px-2 text-xs text-muted-foreground"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear all
+            </Button>
+          )}
+        </div>
 
-          <Separator />
+        <Separator />
+
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-4 pr-1">
 
           {/* Material Type */}
           <div className="space-y-2">
@@ -575,10 +576,11 @@ export function MaterialsFilterPanel({
               </div>
             </div>
           </div>
+        </div>
 
-          <Separator />
+        <Separator />
 
-          {/* Apply Button */}
+        <div className="pt-4">
           <Button onClick={handleApplyFilters} className="w-full" size="sm">
             Apply Filters
           </Button>

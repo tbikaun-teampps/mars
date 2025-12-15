@@ -22,7 +22,7 @@ export interface MaterialFilters {
 /**
  * Complete table URL state including pagination, sorting, and filters
  */
-export interface TableUrlState {
+interface TableUrlState {
   pageIndex: number;
   pageSize: number;
   sorting: SortingState;

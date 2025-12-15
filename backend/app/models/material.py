@@ -17,6 +17,7 @@ class Insight(BaseModel):
     acknowledged_at: Optional[datetime] = None
     acknowledged_by: Optional[UUID] = None
     acknowledged_by_user: Optional[UserProfile] = None
+    opportunity_value: Optional[float] = None
 
 
 class ConsumptionHistory(BaseModel):
@@ -55,6 +56,7 @@ class Material(BaseModel):
     unrestricted_quantity: Optional[float] = 0
     unrestricted_value: Optional[float] = 0
     safety_stock: Optional[float] = 0
+    stock_safety_ratio: Optional[float] = None  # total_quantity / safety_stock
     coverage_ratio: Optional[float | str] = None
     max_cons_demand: Optional[float] = None
     demand_fc_12m: Optional[float] = None
@@ -73,6 +75,7 @@ class Material(BaseModel):
     # review_notes: str | None = None
     reviews_count: int | None = 0  # Number of reviews
     insights: list[Insight] = []  # List of insights
+    opportunity_value_sum: Optional[float] = None  # Sum of opportunity_value from insights
     # True if there's an active (non-completed/cancelled) review
     has_active_review: bool = False
 

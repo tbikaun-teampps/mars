@@ -91,6 +91,9 @@ class MaterialInsightDB(SQLModel, table=True):
                          server_default=text("NOW()"))
     )
 
+    # Opportunity details - if applicable
+    opportunity_value: Optional[float] = None
+
     # Acknowledgement fields
     acknowledged_at: Optional[datetime] = Field(
         default=None, sa_column=Column(TIMESTAMP(timezone=True))
@@ -209,6 +212,10 @@ class MaterialReviewDB(SQLModel, table=True):
         sa_column=Column(TIMESTAMP(timezone=True),
                          server_default=text("NOW()"))
     )
+
+    # Metadata
+    is_superseded: bool = Field(default=False)
+
 
     data_snapshot_job_id: Optional[UUID] = Field(
         default=None, foreign_key="upload_jobs.job_id")
@@ -355,7 +362,8 @@ class MaterialDataHistory(SQLModel, table=True):
     upload_job_id: UUID = Field(foreign_key="upload_jobs.job_id")
     material_number: int = Field(
         foreign_key="sap_material_data.material_number")
-    change_type: Literal['INSERT', 'UPDATE'] = Field(sa_column=Column(String(10)))
+    change_type: Literal['INSERT', 'UPDATE'] = Field(
+        sa_column=Column(String(10)))
     old_values: Optional[dict[str, Any]] = Field(
         default=None, sa_column=Column(JSON))
     new_values: Optional[dict[str, Any]] = Field(
@@ -367,3 +375,23 @@ class MaterialDataHistory(SQLModel, table=True):
         sa_column=Column(TIMESTAMP(timezone=True),
                          server_default=text("NOW()"))
     )
+
+
+class UploadSnapshot(SQLModel, table=True):
+    """Upload Snapshot table model for storing periodic dashboard metrics."""
+
+    __tablename__ = "upload_snapshots"
+
+    snapshot_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    upload_job_id: UUID = Field(foreign_key="upload_jobs.job_id")
+    created_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+    prev_snapshot_id: Optional[UUID] = Field(
+        default=None, foreign_key="upload_snapshots.snapshot_id")
+    
+    total_inventory_value: Optional[float] = None
+    total_opportunity_value: Optional[float] = None
+    total_overdue_reviews: Optional[int] = None
+    acceptance_rate: Optional[float] = None

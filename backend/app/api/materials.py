@@ -34,7 +34,8 @@ from app.models.db_models import (
     ReviewCommentDB,
     ProfileDB,
     UploadJobDB,
-    MaterialDataHistory
+    MaterialDataHistory,
+    UploadSnapshot
 )
 from app.models.user import UserProfile
 from app.core.database import get_db, async_session_maker
@@ -66,7 +67,7 @@ async def list_materials(
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(
-        20, ge=1, le=100, description="Maximum number of items to return"
+        20, ge=1, description="Maximum number of items to return"
     ),
     sort_by: Optional[str] = Query(None, description="Field to sort by"),
     sort_order: Optional[str] = Query(
@@ -74,6 +75,10 @@ async def list_materials(
     search: Optional[str] = Query(
         None,
         description="Search across material_number, material_desc, and material_type",
+    ),
+    exclude: Optional[list[str]] = Query(
+        None,
+        description="Exclude materials where description contains any of these terms (case-insensitive)",
     ),
     # Filter parameters
     material_type: Optional[list[str]] = Query(
@@ -174,6 +179,14 @@ async def list_materials(
             | (SAPMaterialData.material_desc.ilike(search_pattern))
             | (SAPMaterialData.material_type.ilike(search_pattern))
         )
+
+    # Apply exclusion filter if provided
+    if exclude:
+        for term in exclude:
+            exclude_pattern = f"%{term}%"
+            query = query.where(
+                ~SAPMaterialData.material_desc.ilike(exclude_pattern)
+            )
 
     # Apply material type filter
     if material_type:
@@ -311,6 +324,7 @@ async def list_materials(
 
     # Fetch insights for these materials in a separate query
     insights_by_material: dict[int, list[Insight]] = {}
+    opportunity_value_by_material: dict[int, float] = {}
     if material_numbers:
         insights_query = (
             select(MaterialInsightDB)
@@ -323,12 +337,16 @@ async def list_materials(
         for insight_db in insights_result.all():
             if insight_db.material_number not in insights_by_material:
                 insights_by_material[insight_db.material_number] = []
+                opportunity_value_by_material[insight_db.material_number] = 0.0
             insights_by_material[insight_db.material_number].append(
                 Insight(
                     insight_type=insight_db.insight_type,
                     message=insight_db.message,
                 )
             )
+            # Sum up opportunity values
+            if insight_db.opportunity_value is not None:
+                opportunity_value_by_material[insight_db.material_number] += insight_db.opportunity_value
 
     # Transform database records to Material models with reviews_count, review data, and insights
     materials = []
@@ -347,9 +365,19 @@ async def list_materials(
         material_dict["last_reviewed"] = last_reviewed
         material_dict["next_review"] = next_review
         material_dict["has_active_review"] = bool(has_active_review)
+        # Calculate stock/safety ratio
+        total_qty = material_dict.get("total_quantity") or 0
+        safety_stock = material_dict.get("safety_stock") or 0
+        if safety_stock > 0:
+            material_dict["stock_safety_ratio"] = round(total_qty / safety_stock, 2)
+        else:
+            material_dict["stock_safety_ratio"] = None
         # Attach insights from separate query
         material_dict["insights"] = insights_by_material.get(
             material_data.material_number, [])
+        # Attach opportunity value sum
+        opp_value = opportunity_value_by_material.get(material_data.material_number, 0.0)
+        material_dict["opportunity_value_sum"] = opp_value if opp_value > 0 else None
         materials.append(Material(**material_dict))
 
     print(
@@ -371,23 +399,90 @@ async def list_materials(
 async def list_upload_jobs(
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
+    sort_by: Optional[str] = Query(
+        default="created_at",
+        description="Field to sort by: created_at, completed_at, file_name, status"
+    ),
+    sort_order: Optional[str] = Query(
+        default="desc",
+        description="Sort order: asc or desc"
+    ),
+    status: Optional[str] = Query(
+        default=None,
+        description="Filter by status: pending, processing, completed, failed"
+    ),
+    date_from: Optional[str] = Query(
+        default=None,
+        description="Filter jobs created on or after this date (ISO format)"
+    ),
+    date_to: Optional[str] = Query(
+        default=None,
+        description="Filter jobs created on or before this date (ISO format)"
+    ),
+    search: Optional[str] = Query(
+        default=None,
+        description="Search by file name"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get paginated list of all upload jobs for history display."""
 
-    # Get total count
-    count_result = await db.execute(
-        select(func.count()).select_from(UploadJobDB)
-    )
+    # Build base query with filters
+    base_query = select(UploadJobDB)
+    count_query = select(func.count()).select_from(UploadJobDB)
+
+    # Apply status filter
+    if status:
+        base_query = base_query.where(UploadJobDB.status == status)
+        count_query = count_query.where(UploadJobDB.status == status)
+
+    # Apply date range filters
+    if date_from:
+        try:
+            from_date = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+            base_query = base_query.where(UploadJobDB.created_at >= from_date)
+            count_query = count_query.where(UploadJobDB.created_at >= from_date)
+        except ValueError:
+            pass  # Invalid date format, skip filter
+
+    if date_to:
+        try:
+            to_date = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+            # Add one day to include the entire end date
+            to_date = to_date + timedelta(days=1)
+            base_query = base_query.where(UploadJobDB.created_at < to_date)
+            count_query = count_query.where(UploadJobDB.created_at < to_date)
+        except ValueError:
+            pass  # Invalid date format, skip filter
+
+    # Apply search filter on file_name
+    if search:
+        search_pattern = f"%{search}%"
+        base_query = base_query.where(UploadJobDB.file_name.ilike(search_pattern))
+        count_query = count_query.where(UploadJobDB.file_name.ilike(search_pattern))
+
+    # Get total count with filters applied
+    count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
-    # Get jobs ordered by created_at DESC
-    result = await db.execute(
-        select(UploadJobDB)
-        .order_by(UploadJobDB.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    # Apply sorting
+    sort_column_map = {
+        "created_at": UploadJobDB.created_at,
+        "completed_at": UploadJobDB.completed_at,
+        "file_name": UploadJobDB.file_name,
+        "status": UploadJobDB.status,
+    }
+    sort_column = sort_column_map.get(sort_by, UploadJobDB.created_at)
+
+    if sort_order == "asc":
+        base_query = base_query.order_by(sort_column.asc())
+    else:
+        base_query = base_query.order_by(sort_column.desc())
+
+    # Apply pagination
+    base_query = base_query.offset(offset).limit(limit)
+
+    result = await db.execute(base_query)
     jobs = result.scalars().all()
 
     job_list = []
@@ -693,7 +788,7 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
     total_qty = material.total_quantity or 0
     total_value = material.total_value or 0
 
-    print(f"Processing insights for material\n{material}")
+    # print(f"Processing insights for material\n{material}")
 
     # Calculate unit cost if we have both quantity and value
     unit_cost = 0.0
@@ -760,6 +855,7 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
                         Insight(
                             insight_type="info",
                             message=f"Potential savings (optimistic): ${saving_potential:,.2f} (Unit cost: ${unit_cost:.2f})",
+                            opportunity_value=saving_potential,
                         )
                     )
 
@@ -985,6 +1081,78 @@ def compute_diff(old: dict, new: dict, ignored_fields: set[str]) -> tuple[dict, 
     return old_values, new_values, fields_changed
 
 
+async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
+
+    # Get total inventory value at time of snapshot
+    total_value_query = select(
+        func.sum(SAPMaterialData.total_value)
+    )
+    total_value_result = await db.exec(total_value_query)
+    total_inventory_value = total_value_result.one_or_none() or 0.0
+
+    # Get total opportunity value
+    total_opportunity_query = select(
+        func.sum(MaterialInsightDB.opportunity_value)
+    )
+    total_opportunity_result = await db.exec(total_opportunity_query)
+    total_opportunity_value = total_opportunity_result.one_or_none() or 0.0
+
+    # Get total overdue reviews
+    overdue_reviews_query = select(func.count()).where(
+        MaterialReviewDB.next_review_date.isnot(None),
+        MaterialReviewDB.next_review_date < datetime.utcnow().date(),
+        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.is_superseded == False,
+    )
+    overdue_reviews_result = await db.exec(overdue_reviews_query)
+    total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
+
+    # Get total acceptance rate of completed reviews
+    # TODO: Implement this logic
+    acceptance_rate = 0.0
+
+    return {
+        "total_inventory_value": total_inventory_value,
+        "total_opportunity_value": total_opportunity_value,
+        "total_overdue_reviews": total_overdue_reviews,
+        "acceptance_rate": acceptance_rate,
+    }
+
+
+async def create_upload_snapshot(upload_job_id: UUID) -> None:
+    """Create a snapshot of the current app state for auditing/comparisons."""
+
+    if not upload_job_id:
+        raise ValueError("upload_job_id is required to create snapshot")
+
+    # Check if there is a previous snapshot that exists
+
+    async with async_session_maker() as db:
+
+        query = select(UploadSnapshot).order_by(
+            UploadSnapshot.created_at.desc()
+        ).limit(1)
+
+        result = await db.exec(query)
+        previous_snapshot = result.first()
+
+        snapshot_metrics = await get_metrics_for_snapshot(db)
+
+        snapshot = UploadSnapshot(
+            upload_job_id=upload_job_id,
+            prev_snapshot_id=previous_snapshot.snapshot_id if previous_snapshot else None,
+            # Metrics
+            total_inventory_value=snapshot_metrics["total_inventory_value"],
+            total_opportunity_value=snapshot_metrics['total_opportunity_value'],
+            total_overdue_reviews=snapshot_metrics['total_overdue_reviews'],
+            acceptance_rate=snapshot_metrics['acceptance_rate'],
+        )
+
+        db.add(snapshot)
+        await db.commit()
+        await db.refresh(snapshot)
+
+
 async def process_sap_upload_background(job_id: UUID, file_content: bytes):
     """Process CSV upload in background with batch operations and progress tracking.
 
@@ -1012,6 +1180,9 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
         job.started_at = datetime.utcnow()
         job.current_phase = "validating"
         await db.commit()
+
+        # Create snapshot
+        await create_upload_snapshot(upload_job_id=job_id)
 
         try:
             # Prepare and validate CSV data
@@ -1218,11 +1389,14 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                     **{k: v for k, v in record.items() if k in valid_fields})
                 insights = generate_material_insight(material)
                 for insight in insights:
-                    all_insights.append({
+                    all_insights.append(
+                        {
                         "material_number": material.material_number,
                         "message": insight.message,
                         "insight_type": insight.insight_type,
-                    })
+                        "opportunity_value": insight.opportunity_value,
+                    }
+                    )
 
                 # Update progress periodically
                 if (i + 1) % 1000 == 0:
@@ -1413,7 +1587,8 @@ async def get_material_history(material_number: int,
 
     # Verify material exists
     material = await db.exec(
-        select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
+        select(SAPMaterialData).where(
+            SAPMaterialData.material_number == material_number)
     )
     if not material.first():
         raise HTTPException(

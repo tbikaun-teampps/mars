@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, materials, audit, reviews, comments, users, insights
+from app.api import health, materials, audit, reviews, comments, users, insights, dashboard
 from app.core.config import settings
 
 # Create FastAPI app
@@ -31,6 +31,7 @@ app.include_router(comments.router, prefix="/api", tags=["Comments"])
 app.include_router(audit.router, prefix="/api", tags=["Audit"])
 app.include_router(users.router, prefix="/api", tags=["Users"])
 app.include_router(insights.router, prefix="/api", tags=["Insights"])
+app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 
 
 @app.get("/")

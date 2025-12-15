@@ -99,7 +99,7 @@ function UploadJobRow({ job }: { job: UploadJobStatus }) {
 }
 
 export function UploadHistoryModal({ open, onOpenChange }: UploadHistoryModalProps) {
-  const { data, isLoading, error } = useUploadJobHistory(50, 0, open);
+  const { data, isLoading, error } = useUploadJobHistory({ limit: 50, skip: 0 }, open);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

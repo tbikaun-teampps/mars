@@ -7,6 +7,7 @@ import type {
   AuditLogsQueryParams,
   MaterialAuditLogsQueryParams,
   ReviewCommentsQueryParams,
+  UploadJobsQueryParams,
 } from "@/types/materials";
 
 export type {
@@ -14,6 +15,7 @@ export type {
   AuditLogsQueryParams,
   MaterialAuditLogsQueryParams,
   ReviewCommentsQueryParams,
+  UploadJobsQueryParams,
 };
 
 export const queryKeys = {
@@ -60,8 +62,18 @@ export const queryKeys = {
   reviewComments: {
     all: ["reviewComments"] as const,
     // Comments for a specific review
-    list: (materialNumber: number, reviewId: number, params?: ReviewCommentsQueryParams) =>
-      [...queryKeys.reviewComments.all, "list", materialNumber, reviewId, params] as const,
+    list: (
+      materialNumber: number,
+      reviewId: number,
+      params?: ReviewCommentsQueryParams
+    ) =>
+      [
+        ...queryKeys.reviewComments.all,
+        "list",
+        materialNumber,
+        reviewId,
+        params,
+      ] as const,
   },
 
   // User queries
@@ -73,7 +85,14 @@ export const queryKeys = {
   // Upload jobs queries
   uploadJobs: {
     all: ["uploadJobs"] as const,
-    list: (limit?: number, offset?: number) =>
-      [...queryKeys.uploadJobs.all, "list", limit, offset] as const,
+    list: (params?: UploadJobsQueryParams) =>
+      [...queryKeys.uploadJobs.all, "list", params] as const,
+  },
+
+  // Dashboard queries
+  dashboard: {
+    all: ["dashboard"] as const,
+    summary: () => [...queryKeys.dashboard.all, "summary"] as const,
+    recentActivity: () => [...queryKeys.dashboard.all, "recentActivity"] as const,
   },
 } as const;

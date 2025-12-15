@@ -3,10 +3,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import { components } from "@/types/api";
 import { DataTable } from "@/components/data-table";
 import { MaterialDetailSheet } from "@/components/material-detail-sheet";
-import { MaterialsFilterPanel } from "@/components/materials-filter-panel";
-import { SortingPanel } from "@/components/sorting-panel";
-import { SearchInput } from "@/components/search-input";
-import { ActiveBadges } from "@/components/active-badges";
 import { format, formatDistanceToNow } from "date-fns";
 import { Lightbulb } from "lucide-react";
 import { Badge } from "./ui/badge";
@@ -14,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useMaterials } from "@/api/queries";
 import { useTableUrlState } from "@/hooks/useTableUrlState";
+import { getMaterialTypeColor } from "@/lib/utils";
 
 type Material = components["schemas"]["Material"];
 
@@ -68,20 +65,8 @@ export function MaterialsTable() {
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
 
   // Use URL-based state for pagination, sorting, and filters
-  const {
-    pageIndex,
-    pageSize,
-    sorting,
-    filters,
-    activeFilterCount,
-    setPagination,
-    setSorting,
-    setFilters,
-    clearFilters,
-    clearAll,
-    removeFilter,
-    setSearch,
-  } = useTableUrlState();
+  const { pageIndex, pageSize, sorting, filters, setPagination, setSorting } =
+    useTableUrlState();
 
   // Build query params from UI state
   const skip = pageIndex * pageSize;
@@ -128,25 +113,11 @@ export function MaterialsTable() {
     }).format(value);
   };
 
-  const getMaterialTypeBadgeColor = (type: string) => {
-    switch (type) {
-      case "CHEM":
-        return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-      case "CORE":
-        return "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400";
-      case "FING":
-        return "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-      case "OPER":
-        return "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
-      case "RAWM":
-        return "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
-      case "ROTG":
-        return "bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400";
-      case "SPRS":
-        return "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-      default:
-        return "bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
-    }
+  const getMaterialTypeBadgeColor = (
+    type: components["schemas"]["Material"]["material_type"]
+  ) => {
+    const color = getMaterialTypeColor(type);
+    return `bg-${color}-50 text-${color}-700 dark:bg-${color}-900/30 dark:text-${color}-400`;
   };
 
   /**
@@ -165,6 +136,21 @@ export function MaterialsTable() {
       return "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
     } else {
       return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+    }
+  };
+
+  const getNextReviewBadgeColor = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffInDays = (date.getTime() - now.getTime()) / (1000 * 3600 * 24);
+
+    // if date in the past, red, if date in next 30 days, yellow, else green
+    if (diffInDays < 0) {
+      return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+    } else if (diffInDays <= 30) {
+      return "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+    } else {
+      return "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400";
     }
   };
 
@@ -315,6 +301,22 @@ export function MaterialsTable() {
       size: 100,
     },
     {
+      accessorKey: "opportunity_value_sum",
+      header: "Opportunity",
+      cell: ({ row }) => {
+        const value = row.original.opportunity_value_sum;
+        if (value === null || value === undefined) {
+          return <NoDataText />;
+        }
+        return (
+          <div className="font-medium text-xs text-green-600 dark:text-green-400">
+            {formatCurrency(value)}
+          </div>
+        );
+      },
+      size: 120,
+    },
+    {
       accessorKey: "safety_stock",
       header: "Safety Stock Qty",
       cell: ({ row }) => {
@@ -328,7 +330,7 @@ export function MaterialsTable() {
           </div>
         );
       },
-      size: 120,
+      size: 140,
     },
     {
       accessorKey: "coverage_ratio",
@@ -445,7 +447,7 @@ export function MaterialsTable() {
           return <Badge variant="outline">Not Scheduled</Badge>;
         }
         return (
-          <Badge className={getLastReviewedBadgeColor(nextReviewDate)}>
+          <Badge className={getNextReviewBadgeColor(nextReviewDate)}>
             {formatDistanceToNow(new Date(nextReviewDate), {
               addSuffix: true,
             })}
@@ -492,56 +494,6 @@ export function MaterialsTable() {
           left: ["insights", "material_number", "material_desc"],
           right: ["reviews_count", "last_reviewed", "next_review"],
         }}
-        searchPanel={
-          <SearchInput
-            value={filters.search || ""}
-            onChange={setSearch}
-            placeholder="Search materials..."
-          />
-        }
-        sortPanel={
-          <SortingPanel
-            sortableColumns={[
-              { value: "material_number", label: "Material Number" },
-              { value: "material_desc", label: "Material Description" },
-              { value: "created_on", label: "Created Date" },
-              { value: "total_quantity", label: "Total Quantity" },
-              { value: "total_value", label: "Total Value" },
-              { value: "unit_value", label: "Unit Value" },
-              { value: "safety_stock", label: "Safety Stock" },
-            ]}
-            sorting={sorting}
-            onSortingChange={setSorting}
-          />
-        }
-        filterPanel={
-          <MaterialsFilterPanel
-            filters={filters}
-            onFiltersChange={setFilters}
-            onClearFilters={clearFilters}
-            activeFilterCount={activeFilterCount}
-          />
-        }
-        activeFilterBadges={
-          <ActiveBadges
-            search={filters.search || ""}
-            onClearSearch={() => setSearch("")}
-            sorting={sorting}
-            sortableColumns={[
-              { value: "material_number", label: "Material Number" },
-              { value: "material_desc", label: "Material Description" },
-              { value: "created_on", label: "Created Date" },
-              { value: "total_quantity", label: "Total Quantity" },
-              { value: "total_value", label: "Total Value" },
-              { value: "unit_value", label: "Unit Value" },
-              { value: "safety_stock", label: "Safety Stock" },
-            ]}
-            onClearSorting={() => setSorting([])}
-            filters={filters}
-            onRemoveFilter={removeFilter}
-            onClearAll={clearAll}
-          />
-        }
       />
 
       <MaterialDetailSheet
