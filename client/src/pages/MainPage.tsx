@@ -235,12 +235,12 @@ export function MainPage({ view }: MainPageProps) {
                 isLoading={isDashboardSummaryLoading}
               />
               <SectionCard
-                title="Acceptance Rate"
+                title="SME Acceptance Rate"
                 value={numeral(
                   dashboardSummary?.acceptance_rate
                 ).format("0.0%")}
                 change={dashboardSummary?.acceptance_rate_change}
-                description="Materials that are overdue for review"
+                description="Rate at which SMEs accept proposed changes"
                 isLoading={isDashboardSummaryLoading}
               />
 

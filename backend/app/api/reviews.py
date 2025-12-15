@@ -400,11 +400,12 @@ async def update_material_review(
     comments_count_result = await db.exec(comments_count_query)
     comments_count = comments_count_result.one() or 0
 
-    # If the review is marked as completed, ensure all other reviews are marked as superseded
+    # If the review is marked as completed, ensure all OTHER reviews are marked as superseded
     if review_db.status == ReviewStatus.COMPLETED.value:
         print("Marking other reviews as superseded")
         completed_reviews_query = select(MaterialReviewDB).where(
             MaterialReviewDB.material_number == material_number,
+            MaterialReviewDB.review_id != review_db.review_id,  # Exclude current review
             MaterialReviewDB.status == "completed",
             MaterialReviewDB.is_superseded == False,
         )

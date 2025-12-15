@@ -1117,9 +1117,33 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
     overdue_reviews_result = await db.exec(overdue_reviews_query)
     total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
 
-    # Get total acceptance rate of completed reviews
-    # TODO: Implement this logic
-    acceptance_rate = 0.0
+    # Get acceptance rate: % of SME reviews that didn't reject planner's proposed changes
+    # Rejection = Planner proposed a change, but SME said 'keep_no_change'
+
+    # Total: reviews where planner proposed change AND SME gave feedback
+    total_with_sme_query = select(func.count()).where(
+        MaterialReviewDB.proposed_action.isnot(None),
+        MaterialReviewDB.proposed_action != 'keep_no_change',
+        MaterialReviewDB.sme_recommendation.isnot(None),
+        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.is_superseded == False,
+    )
+    total_with_sme_result = await db.exec(total_with_sme_query)
+    total_with_sme = total_with_sme_result.one_or_none() or 0
+
+    # Accepted: of those, SME didn't say "keep_no_change"
+    accepted_query = select(func.count()).where(
+        MaterialReviewDB.proposed_action.isnot(None),
+        MaterialReviewDB.proposed_action != 'keep_no_change',
+        MaterialReviewDB.sme_recommendation.isnot(None),
+        MaterialReviewDB.sme_recommendation != 'keep_no_change',
+        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.is_superseded == False,
+    )
+    accepted_result = await db.exec(accepted_query)
+    accepted_count = accepted_result.one_or_none() or 0
+
+    acceptance_rate = accepted_count / total_with_sme if total_with_sme > 0 else 0.0
 
     return {
         "total_inventory_value": total_inventory_value,
