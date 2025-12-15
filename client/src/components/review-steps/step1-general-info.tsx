@@ -34,21 +34,6 @@ export function Step1GeneralInfo() {
         />
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <FormInputField
-          name="currentStockQty"
-          label="What is the current stock quantity? *"
-          placeholder="Enter current stock quantity"
-          type="number"
-        />
-        <FormInputField
-          name="currentStockValue"
-          label="What is the current stock value? *"
-          placeholder="Enter current stock value"
-          type="number"
-        />
-      </div>
-
       <FormInputField
         name="monthsNoMovement"
         label="How many months have there been no movements? *"
@@ -57,16 +42,23 @@ export function Step1GeneralInfo() {
         min="0"
       />
 
-      <div className="grid grid-cols-1 gap-4">
+      <FormInputField
+        name="proposedAction"
+        label="What is the proposed action? *"
+        placeholder="Enter proposed action (e.g., Scrap, Reduce, Keep, Alternative Use)"
+      />
+
+      <div className="grid grid-cols-2 gap-4">
         <FormInputField
-          name="proposedAction"
-          label="What is the proposed action? *"
-          placeholder="Enter proposed action (e.g., Scrap, Reduce, Keep, Alternative Use)"
+          name="proposedSafetyStockQty"
+          label="Target Safety Stock Quantity"
+          placeholder="Enter target safety stock"
+          type="number"
         />
         <FormInputField
-          name="proposedQtyAdjustment"
-          label="What is the proposed quantity adjustment? *"
-          placeholder="Enter proposed quantity adjustment"
+          name="proposedUnrestrictedQty"
+          label="Target Unrestricted Quantity"
+          placeholder="Enter target unrestricted"
           type="number"
         />
       </div>

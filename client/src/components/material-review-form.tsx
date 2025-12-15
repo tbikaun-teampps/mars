@@ -26,6 +26,7 @@ import {
   step1Schema,
   step2Schema,
   step3Schema,
+  step3RequiredSchema,
   step4Schema,
   step5Schema,
   CombinedMaterialReviewSchema,
@@ -45,7 +46,8 @@ type MaterialReview = MaterialReviewBase & {
   current_stock_value?: number | null;
   months_no_movement?: number | null;
   proposed_action?: string | null;
-  proposed_qty_adjustment?: number | null;
+  proposed_safety_stock_qty?: number | null;
+  proposed_unrestricted_qty?: number | null;
   business_justification?: string | null;
   sme_name?: string | null;
   sme_email?: string | null;
@@ -54,12 +56,14 @@ type MaterialReview = MaterialReviewBase & {
   sme_contacted_date?: string | null;
   sme_responded_date?: string | null;
   sme_recommendation?: string | null;
-  sme_recommended_qty?: number | null;
+  sme_recommended_safety_stock_qty?: number | null;
+  sme_recommended_unrestricted_qty?: number | null;
   sme_analysis?: string | null;
   alternative_applications?: string | null;
   risk_assessment?: string | null;
   final_decision?: string | null;
-  final_qty_adjustment?: number | null;
+  final_safety_stock_qty?: number | null;
+  final_unrestricted_qty?: number | null;
   final_notes?: string | null;
   requires_follow_up?: boolean | null;
   follow_up_reason?: string | null;
@@ -74,13 +78,17 @@ interface MaterialReviewFormProps {
 }
 
 // Define the steps for the multi-step form
-const REVIEW_STEPS: Step[] = [
+// SME Review is optional when no proposed qty is set for either stock type
+const getReviewSteps = (hasProposedQty: boolean): Step[] => [
   { id: "general-info", title: "General Info" },
   { id: "checklist", title: "Checklist" },
-  { id: "sme-investigation", title: "SME Review" },
+  { id: "sme-investigation", title: "SME Review", isOptional: !hasProposedQty },
   { id: "follow-up", title: "Follow-up", isOptional: true },
   { id: "final-decision", title: "Final Decision" },
 ];
+
+// Default steps for initial render (before form values are available)
+const DEFAULT_REVIEW_STEPS: Step[] = getReviewSteps(false);
 
 // Step-specific payload extraction functions
 function extractStep1Payload(
@@ -94,11 +102,11 @@ function extractStep1Payload(
 
   return {
     review_reason: reviewReason,
-    current_stock_qty: formData.currentStockQty ?? null,
-    current_stock_value: formData.currentStockValue ?? null,
+    // current_stock_qty and current_stock_value are captured by the backend from material data
     months_no_movement: formData.monthsNoMovement ?? null,
     proposed_action: formData.proposedAction || null,
-    proposed_qty_adjustment: formData.proposedQtyAdjustment ?? null,
+    proposed_safety_stock_qty: formData.proposedSafetyStockQty ?? null,
+    proposed_unrestricted_qty: formData.proposedUnrestrictedQty ?? null,
     business_justification: formData.businessJustification || null,
   };
 }
@@ -136,7 +144,8 @@ function extractStep3Payload(
       ? new Date(formData.smeRespondedDate).toISOString()
       : null,
     sme_recommendation: formData.smeRecommendation || null,
-    sme_recommended_qty: formData.smeRecommendedQty ?? null,
+    sme_recommended_safety_stock_qty: formData.smeRecommendedSafetyStockQty ?? null,
+    sme_recommended_unrestricted_qty: formData.smeRecommendedUnrestrictedQty ?? null,
     sme_analysis: formData.smeAnalysis || null,
     alternative_applications: formData.smeAlternativeApplications || null,
     risk_assessment: formData.smeRiskAssessment || null,
@@ -161,7 +170,8 @@ function extractStep5Payload(
 ): Partial<MaterialReviewUpdate> {
   return {
     final_decision: formData.finalDecision || null,
-    final_qty_adjustment: formData.finalQtyAdjustment ?? null,
+    final_safety_stock_qty: formData.finalSafetyStockQty ?? null,
+    final_unrestricted_qty: formData.finalUnrestrictedQty ?? null,
     final_notes: formData.finalNotes || null,
   };
 }
@@ -198,7 +208,8 @@ function mapReviewToFormData(review: MaterialReview): MaterialReviewFormData {
     currentStockValue: review.current_stock_value ?? undefined,
     monthsNoMovement: review.months_no_movement ?? undefined,
     proposedAction: review.proposed_action || "",
-    proposedQtyAdjustment: review.proposed_qty_adjustment ?? undefined,
+    proposedSafetyStockQty: review.proposed_safety_stock_qty ?? undefined,
+    proposedUnrestrictedQty: review.proposed_unrestricted_qty ?? undefined,
     businessJustification: review.business_justification || "",
     // Checklist step
     hasOpenOrders: review.checklist?.has_open_orders ?? undefined,
@@ -226,7 +237,8 @@ function mapReviewToFormData(review: MaterialReview): MaterialReviewFormData {
       ? new Date(review.sme_responded_date)
       : undefined,
     smeRecommendation: review.sme_recommendation || "",
-    smeRecommendedQty: review.sme_recommended_qty ?? undefined,
+    smeRecommendedSafetyStockQty: review.sme_recommended_safety_stock_qty ?? undefined,
+    smeRecommendedUnrestrictedQty: review.sme_recommended_unrestricted_qty ?? undefined,
     smeAnalysis: review.sme_analysis || "",
     smeAlternativeApplications: review.alternative_applications || "",
     smeRiskAssessment: review.risk_assessment || "",
@@ -239,7 +251,8 @@ function mapReviewToFormData(review: MaterialReview): MaterialReviewFormData {
     scheduleReviewFrequencyWeeks: review.review_frequency_weeks ?? undefined,
     // Final decision step
     finalDecision: review.final_decision || "",
-    finalQtyAdjustment: review.final_qty_adjustment ?? undefined,
+    finalSafetyStockQty: review.final_safety_stock_qty ?? undefined,
+    finalUnrestrictedQty: review.final_unrestricted_qty ?? undefined,
     finalNotes: review.final_notes || "",
   };
 }
@@ -255,6 +268,7 @@ function MaterialReviewFormInner({
   const {
     currentStep,
     markStepComplete,
+    markStepIncomplete,
     prevStep,
     nextStep,
     totalSteps,
@@ -306,11 +320,13 @@ function MaterialReviewFormInner({
       // General step
       reviewReason: "",
       reviewReasonOther: "",
-      currentStockQty: materialData?.total_quantity ?? undefined,
-      currentStockValue: materialData?.total_value ?? undefined,
+      // currentStockQty and currentStockValue are captured by backend from material data
+      currentStockQty: undefined,
+      currentStockValue: undefined,
       monthsNoMovement: undefined,
       proposedAction: "",
-      proposedQtyAdjustment: undefined,
+      proposedSafetyStockQty: 0,
+      proposedUnrestrictedQty: 0,
       businessJustification: "",
       // Checklist step
       hasOpenOrders: undefined,
@@ -332,7 +348,8 @@ function MaterialReviewFormInner({
       smeContactedDate: undefined,
       smeRespondedDate: undefined,
       smeRecommendation: "",
-      smeRecommendedQty: undefined,
+      smeRecommendedSafetyStockQty: undefined,
+      smeRecommendedUnrestrictedQty: undefined,
       smeAnalysis: "",
       smeAlternativeApplications: "",
       smeRiskAssessment: "",
@@ -343,7 +360,8 @@ function MaterialReviewFormInner({
       scheduleReviewFrequencyWeeks: undefined,
       // Final decision step
       finalDecision: "",
-      finalQtyAdjustment: undefined,
+      finalSafetyStockQty: undefined,
+      finalUnrestrictedQty: undefined,
       finalNotes: "",
     },
   });
@@ -353,6 +371,38 @@ function MaterialReviewFormInner({
   const {
     formState: { isDirty },
   } = form;
+
+  // Watch proposed qty fields to determine if SME review is required
+  const proposedSafetyStockQty = form.watch("proposedSafetyStockQty");
+  const proposedUnrestrictedQty = form.watch("proposedUnrestrictedQty");
+
+  // Check if any qty change is proposed for either stock type
+  // 0 means "no change" (keep current), non-zero means a change is proposed
+  const hasProposedQty = (proposedSafetyStockQty !== undefined && proposedSafetyStockQty !== null && proposedSafetyStockQty !== 0) ||
+                         (proposedUnrestrictedQty !== undefined && proposedUnrestrictedQty !== null && proposedUnrestrictedQty !== 0);
+
+  // Compute dynamic review steps based on qty adjustment
+  // SME Review is optional when no proposed qty is set for either stock type
+  const reviewSteps = React.useMemo(
+    () => getReviewSteps(hasProposedQty),
+    [hasProposedQty]
+  );
+
+  // Determine if SME review is required (any qty change is proposed)
+  const isSmeRequired = hasProposedQty;
+
+  // Revalidate SME step when requirements change (optional -> required)
+  React.useEffect(() => {
+    // When SME becomes required, check if the current data passes the required schema
+    if (isSmeRequired && isStepComplete(2)) {
+      const formValues = form.getValues();
+      const result = step3RequiredSchema.safeParse(formValues);
+      if (!result.success) {
+        // SME step no longer valid with required schema - unmark it
+        markStepIncomplete(2);
+      }
+    }
+  }, [isSmeRequired, isStepComplete, form, markStepIncomplete]);
 
   // Mutation for saving/updating review
   const saveReviewMutation = useMutation({
@@ -431,15 +481,16 @@ function MaterialReviewFormInner({
     }
 
     // Get the appropriate schema for current step
+    // Use step3RequiredSchema when SME is required (qty adjustment is non-zero)
     const stepSchemas = [
       step1Schema,
       step2Schema,
-      step3Schema,
+      isSmeRequired ? step3RequiredSchema : step3Schema,
       step4Schema,
       step5Schema,
     ];
     const currentSchema = stepSchemas[currentStep];
-    const currentStepInfo = REVIEW_STEPS[currentStep];
+    const currentStepInfo = reviewSteps[currentStep];
 
     if (!currentSchema) {
       return false;
@@ -508,6 +559,55 @@ function MaterialReviewFormInner({
       console.error("Error saving step:", error);
       return false;
     }
+  };
+
+  // Handle "Next" navigation with validation for optional steps
+  const handleNextNavigation = () => {
+    const currentStepInfo = reviewSteps[currentStep];
+
+    // For optional steps, validate and mark complete if valid
+    if (currentStepInfo?.isOptional) {
+      const stepSchemas = [
+        step1Schema,
+        step2Schema,
+        isSmeRequired ? step3RequiredSchema : step3Schema,
+        step4Schema,
+        step5Schema,
+      ];
+      const currentSchema = stepSchemas[currentStep];
+      const formValues = form.getValues();
+      const result = currentSchema.safeParse(formValues);
+
+      if (result.success) {
+        // Valid (either empty or complete) - mark complete and navigate
+        markStepComplete(currentStep);
+      } else {
+        // Check if there's partial data that needs validation
+        const hasNonEmptyData = result.error.issues.some((issue) => {
+          const fieldValue = issue.path.reduce<unknown>((obj, key) => {
+            if (typeof key === "string" || typeof key === "number") {
+              return (obj as Record<string, unknown>)?.[key];
+            }
+            return obj;
+          }, formValues);
+          return (
+            fieldValue !== "" &&
+            fieldValue !== null &&
+            fieldValue !== undefined &&
+            fieldValue !== false
+          );
+        });
+
+        if (!hasNonEmptyData) {
+          // No data entered in optional step - mark complete and navigate
+          markStepComplete(currentStep);
+        }
+        // If partial data exists, don't mark complete (user needs to fix or clear)
+      }
+    }
+
+    // Navigate to next step
+    nextStep();
   };
 
   // Pre-fill form with existing review data if editing
@@ -647,7 +747,7 @@ function MaterialReviewFormInner({
               <Button
                 type="button"
                 variant="outline"
-                onClick={nextStep}
+                onClick={handleNextNavigation}
                 className="flex-1"
                 disabled={saveReviewMutation.isPending}
               >
@@ -708,7 +808,7 @@ function MaterialReviewFormInner({
 // Main export wrapper with MultiStepFormProvider
 export function MaterialReviewForm(props: MaterialReviewFormProps) {
   return (
-    <MultiStepFormProvider steps={REVIEW_STEPS}>
+    <MultiStepFormProvider steps={DEFAULT_REVIEW_STEPS}>
       <MaterialReviewFormInner {...props} />
     </MultiStepFormProvider>
   );

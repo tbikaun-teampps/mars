@@ -99,7 +99,8 @@ export interface MaterialReviewUpdate {
   current_stock_value?: number | null;
   months_no_movement?: number | null;
   proposed_action?: string | null;
-  proposed_qty_adjustment?: number | null;
+  proposed_safety_stock_qty?: number | null;
+  proposed_unrestricted_qty?: number | null;
   business_justification?: string | null;
   // Checklist fields (Step 2)
   has_open_orders?: boolean;
@@ -121,13 +122,15 @@ export interface MaterialReviewUpdate {
   sme_contacted_date?: string | null;
   sme_responded_date?: string | null;
   sme_recommendation?: string | null;
-  sme_recommended_qty?: number | null;
+  sme_recommended_safety_stock_qty?: number | null;
+  sme_recommended_unrestricted_qty?: number | null;
   sme_analysis?: string | null;
   alternative_applications?: string | null;
   risk_assessment?: string | null;
   // Final decision fields (Step 5)
   final_decision?: string | null;
-  final_qty_adjustment?: number | null;
+  final_safety_stock_qty?: number | null;
+  final_unrestricted_qty?: number | null;
   final_notes?: string | null;
   decided_at?: string | null;
   // Follow-up fields (Step 4)

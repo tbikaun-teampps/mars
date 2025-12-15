@@ -5,21 +5,16 @@ export const step1Schema = z
   .object({
     reviewReason: z.string().min(1, "Review reason is required"),
     reviewReasonOther: z.string().optional(),
-    currentStockQty: z.number({
-      message: "Current stock quantity is required",
-    }),
-    currentStockValue: z.number({
-      message: "Current stock value is required",
-    }),
+    currentStockQty: z.number().optional().nullable(),
+    currentStockValue: z.number().optional().nullable(),
     monthsNoMovement: z
       .number({
         message: "Months with no movement is required",
       })
       .min(0, "Months with no movement cannot be negative"),
     proposedAction: z.string().min(1, "Proposed action is required"),
-    proposedQtyAdjustment: z.number({
-      message: "Proposed quantity adjustment is required",
-    }),
+    proposedSafetyStockQty: z.number().optional().nullable(),
+    proposedUnrestrictedQty: z.number().optional().nullable(),
     businessJustification: z
       .string()
       .min(1, "Business justification is required"),
@@ -72,8 +67,38 @@ export const step2Schema = z.object({
   procurementFeedback: z.string().optional(),
 });
 
-// SME Review step (now mandatory)
+// SME Review step (optional when no qty adjustment, required otherwise)
 export const step3Schema = z
+  .object({
+    smeName: z.string().optional(),
+    smeEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+    smeDepartment: z.string().optional(),
+    smeFeedbackMethod: z.string().optional(),
+    smeContactedDate: z.date().optional(),
+    smeRespondedDate: z.date().optional(),
+    smeRecommendation: z.string().optional(),
+    smeRecommendedSafetyStockQty: z.number().optional().nullable(),
+    smeRecommendedUnrestrictedQty: z.number().optional().nullable(),
+    smeAnalysis: z.string().optional(),
+    smeAlternativeApplications: z.string().optional(),
+    smeRiskAssessment: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // If both dates are provided, ensure contacted date is before or on the responded date
+      if (data.smeContactedDate && data.smeRespondedDate) {
+        return data.smeContactedDate <= data.smeRespondedDate;
+      }
+      return true;
+    },
+    {
+      message: "Contacted date must be before or on the responded date",
+      path: ["smeRespondedDate"],
+    }
+  );
+
+// SME Review step schema for when it's required (qty adjustment is non-zero)
+export const step3RequiredSchema = z
   .object({
     smeName: z.string().min(1, "SME name is required"),
     smeEmail: z.email("Invalid email address"),
@@ -86,9 +111,8 @@ export const step3Schema = z
       .date()
       .min(new Date(2000, 0, 1), "Responded date is required"),
     smeRecommendation: z.string().min(1, "SME recommendation is required"),
-    smeRecommendedQty: z.number({
-      message: "A recommended quantity is required",
-    }),
+    smeRecommendedSafetyStockQty: z.number().optional().nullable(),
+    smeRecommendedUnrestrictedQty: z.number().optional().nullable(),
     smeAnalysis: z.string().min(1, "SME analysis is required"),
     smeAlternativeApplications: z
       .string()
@@ -137,9 +161,8 @@ export const step4Schema = z
 // Final decision step
 export const step5Schema = z.object({
   finalDecision: z.string().min(1, "Final decision is required"),
-  finalQtyAdjustment: z.number({
-    message: "Final quantity adjustment is required",
-  }),
+  finalSafetyStockQty: z.number().optional().nullable(),
+  finalUnrestrictedQty: z.number().optional().nullable(),
   finalNotes: z.string().optional(),
 });
 

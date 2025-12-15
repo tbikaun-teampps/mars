@@ -149,7 +149,8 @@ class MaterialReviewDB(SQLModel, table=True):
     current_stock_value: Optional[float] = None
     months_no_movement: Optional[int] = None
     proposed_action: Optional[str] = Field(default=None, max_length=100)
-    proposed_qty_adjustment: Optional[float] = None
+    proposed_safety_stock_qty: Optional[float] = None
+    proposed_unrestricted_qty: Optional[float] = None
     business_justification: Optional[str] = None
 
     # Checklist
@@ -167,14 +168,16 @@ class MaterialReviewDB(SQLModel, table=True):
         default=None, sa_column=Column(TIMESTAMP(timezone=True))
     )
     sme_recommendation: Optional[str] = Field(default=None, max_length=50)
-    sme_recommended_qty: Optional[float] = None
+    sme_recommended_safety_stock_qty: Optional[float] = None
+    sme_recommended_unrestricted_qty: Optional[float] = None
     sme_analysis: Optional[str] = None
     alternative_applications: Optional[str] = None
     risk_assessment: Optional[str] = None
 
     # Final decision (Planner fills this out after SME feedback)
     final_decision: Optional[str] = Field(default=None, max_length=50)
-    final_qty_adjustment: Optional[float] = None
+    final_safety_stock_qty: Optional[float] = None
+    final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
     decided_by: UUID = Field(
         sa_column_kwargs={

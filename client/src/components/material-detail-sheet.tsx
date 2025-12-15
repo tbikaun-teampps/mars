@@ -435,7 +435,8 @@ function ReviewHistoryTimeline({
 
                     {/* Row 3: Decision details */}
                     {(review.final_decision ||
-                      review.final_qty_adjustment != null ||
+                      review.final_safety_stock_qty != null ||
+                      review.final_unrestricted_qty != null ||
                       review.final_notes ||
                       (review.comments_count != null &&
                         review.comments_count > 0)) && (
@@ -450,14 +451,25 @@ function ReviewHistoryTimeline({
                             </span>
                           </span>
                         )}
-                        {review.final_qty_adjustment != null && (
+                        {review.final_safety_stock_qty != null && (
                           <>
                             <span className="text-muted-foreground">•</span>
                             <span>
                               <span className="text-muted-foreground">
-                                Qty Adj:
+                                Safety Stock:
                               </span>{" "}
-                              {review.final_qty_adjustment.toLocaleString()}
+                              {review.final_safety_stock_qty.toLocaleString()}
+                            </span>
+                          </>
+                        )}
+                        {review.final_unrestricted_qty != null && (
+                          <>
+                            <span className="text-muted-foreground">•</span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Unrestricted:
+                              </span>{" "}
+                              {review.final_unrestricted_qty.toLocaleString()}
                             </span>
                           </>
                         )}

@@ -1,21 +1,38 @@
 import { useFormContext } from "react-hook-form";
+import { Info } from "lucide-react";
 import {
   FormInputField,
   FormSelectField,
   FormTextareaField,
 } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Stepheader } from "./step-header";
 
 export function Step3SMEInvestigation() {
   const { watch } = useFormContext();
   const smeContactedDate = watch("smeContactedDate");
+  const proposedSafetyStockQty = watch("proposedSafetyStockQty");
+  const proposedUnrestrictedQty = watch("proposedUnrestrictedQty");
+
+  // SME review is optional when no quantity adjustment is proposed for either stock type
+  // 0 means "no change" (keep current), non-zero means a change is proposed
+  const hasProposedQty = (proposedSafetyStockQty !== undefined && proposedSafetyStockQty !== null && proposedSafetyStockQty !== 0) ||
+                         (proposedUnrestrictedQty !== undefined && proposedUnrestrictedQty !== null && proposedUnrestrictedQty !== 0);
+  const isOptional = !hasProposedQty;
 
   return (
     <div className="space-y-4">
       <Stepheader title="Subject Matter Expert (SME) Review" />
-      {/* <p className="text-sm text-gray-600">
-        Document consultation with technical experts regarding this material.
-      </p> */}
+
+      {isOptional && (
+        <Alert className="border-blue-200 bg-blue-50 text-blue-800 [&>svg]:text-blue-600">
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-blue-700">
+            Since no quantity change is proposed, SME review is not required.
+            You can skip this step by clicking "Next".
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <FormInputField
@@ -63,17 +80,24 @@ export function Step3SMEInvestigation() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <FormInputField
+        name="smeRecommendation"
+        label="What is the recommendation from the SME? *"
+        placeholder="Enter recommendation (e.g., Scrap, Reduce, Keep, Alternative Use)"
+      />
+
+      <div className="grid grid-cols-2 gap-4">
         <FormInputField
-          name="smeRecommendation"
-          label="What is the recommendation from the SME? *"
-          placeholder="Enter recommendation (e.g., Scrap, Reduce, Keep, Alternative Use)"
+          name="smeRecommendedSafetyStockQty"
+          label="SME Recommended Safety Stock"
+          type="number"
+          placeholder="Enter recommended safety stock"
         />
         <FormInputField
-          name="smeRecommendedQty"
-          label="What is the recommended quantity from the SME? *"
+          name="smeRecommendedUnrestrictedQty"
+          label="SME Recommended Unrestricted"
           type="number"
-          placeholder="Enter recommended quantity"
+          placeholder="Enter recommended unrestricted"
         />
       </div>
 
