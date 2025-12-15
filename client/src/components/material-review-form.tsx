@@ -38,6 +38,15 @@ type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReview = components["schemas"]["MaterialReview"];
 type MaterialReviewCreate = components["schemas"]["MaterialReviewCreate"];
 
+// Interface for all predefined lookup options
+interface PredefinedOptions {
+  reviewReasons: string[];
+  proposedActions: string[];
+  smeTypes: string[];
+  feedbackMethods: string[];
+  followUpTriggers: string[];
+}
+
 interface MaterialReviewFormProps {
   materialData: MaterialWithReviews | null | undefined;
   existingReview?: MaterialReview | null;
@@ -62,17 +71,22 @@ const DEFAULT_REVIEW_STEPS: Step[] = getReviewSteps(false);
 function extractStep1Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
-  // If "other" is selected, use the custom reason; otherwise use the selected reason
+  // If "other" is selected, use the custom value; otherwise use the selected value
   const reviewReason =
     formData.reviewReason === "other"
       ? formData.reviewReasonOther || null
       : formData.reviewReason || null;
 
+  const proposedAction =
+    formData.proposedAction === "other"
+      ? formData.proposedActionOther || null
+      : formData.proposedAction || null;
+
   return {
     review_reason: reviewReason,
     // current_stock_qty and current_stock_value are captured by the backend from material data
     months_no_movement: formData.monthsNoMovement ?? null,
-    proposed_action: formData.proposedAction || null,
+    proposed_action: proposedAction,
     proposed_safety_stock_qty: formData.proposedSafetyStockQty ?? null,
     proposed_unrestricted_qty: formData.proposedUnrestrictedQty ?? null,
     business_justification: formData.businessJustification || null,
@@ -100,18 +114,34 @@ function extractStep2Payload(
 function extractStep3Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
+  // If "other" is selected, use the custom value; otherwise use the selected value
+  const smeDepartment =
+    formData.smeDepartment === "other"
+      ? formData.smeDepartmentOther || null
+      : formData.smeDepartment || null;
+
+  const smeFeedbackMethod =
+    formData.smeFeedbackMethod === "other"
+      ? formData.smeFeedbackMethodOther || null
+      : formData.smeFeedbackMethod || null;
+
+  const smeRecommendation =
+    formData.smeRecommendation === "other"
+      ? formData.smeRecommendationOther || null
+      : formData.smeRecommendation || null;
+
   return {
     sme_name: formData.smeName || null,
     sme_email: formData.smeEmail || null,
-    sme_department: formData.smeDepartment || null,
-    sme_feedback_method: formData.smeFeedbackMethod || null,
+    sme_department: smeDepartment,
+    sme_feedback_method: smeFeedbackMethod,
     sme_contacted_date: formData.smeContactedDate
       ? new Date(formData.smeContactedDate).toISOString()
       : null,
     sme_responded_date: formData.smeRespondedDate
       ? new Date(formData.smeRespondedDate).toISOString()
       : null,
-    sme_recommendation: formData.smeRecommendation || null,
+    sme_recommendation: smeRecommendation,
     sme_recommended_safety_stock_qty: formData.smeRecommendedSafetyStockQty ?? null,
     sme_recommended_unrestricted_qty: formData.smeRecommendedUnrestrictedQty ?? null,
     sme_analysis: formData.smeAnalysis || null,
@@ -123,12 +153,18 @@ function extractStep3Payload(
 function extractStep4Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
+  // If "other" is selected, use the custom value; otherwise use the selected value
+  const followUpReason =
+    formData.scheduleFollowUpReason === "other"
+      ? formData.scheduleFollowUpReasonOther || null
+      : formData.scheduleFollowUpReason || null;
+
   return {
     requires_follow_up: formData.scheduleFollowUp || false,
     next_review_date: formData.scheduleFollowUpDate
       ? new Date(formData.scheduleFollowUpDate).toISOString()
       : null,
-    follow_up_reason: formData.scheduleFollowUpReason || null,
+    follow_up_reason: followUpReason,
     review_frequency_weeks: formData.scheduleReviewFrequencyWeeks ?? null,
   };
 }
@@ -136,8 +172,14 @@ function extractStep4Payload(
 function extractStep5Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
+  // If "other" is selected, use the custom value; otherwise use the selected value
+  const finalDecision =
+    formData.finalDecision === "other"
+      ? formData.finalDecisionOther || null
+      : formData.finalDecision || null;
+
   return {
-    final_decision: formData.finalDecision || null,
+    final_decision: finalDecision,
     final_safety_stock_qty: formData.finalSafetyStockQty ?? null,
     final_unrestricted_qty: formData.finalUnrestrictedQty ?? null,
     final_notes: formData.finalNotes || null,
@@ -160,24 +202,40 @@ function extractPayloadForStep(
   return extractors[step](formData);
 }
 
+// Helper to detect if a value is custom (not in predefined list)
+function mapLookupField(value: string | null | undefined, predefined: string[]): { selected: string; other: string } {
+  const val = value || "";
+  // Value is custom if it exists and is not in predefined list
+  const isCustom = val !== "" && !predefined.includes(val);
+  return {
+    selected: isCustom ? "other" : val,
+    other: isCustom ? val : "",
+  };
+}
+
 // Helper function to map MaterialReview API data to MaterialReviewFormData format
 function mapReviewToFormData(
   review: MaterialReview,
-  predefinedReasons: string[] = ["annual_review", "usage_spike", "supplier_change"]
+  predefinedOptions: PredefinedOptions
 ): MaterialReviewFormData {
-  // Check if review_reason is a predefined option or custom
-  const existingReason = review.review_reason || "";
-  const isCustomReason =
-    existingReason && !predefinedReasons.includes(existingReason);
+  // Map all lookup fields using the helper
+  const reviewReason = mapLookupField(review.review_reason, predefinedOptions.reviewReasons);
+  const proposedAction = mapLookupField(review.proposed_action, predefinedOptions.proposedActions);
+  const smeDepartment = mapLookupField(review.sme_department, predefinedOptions.smeTypes);
+  const smeFeedbackMethod = mapLookupField(review.sme_feedback_method, predefinedOptions.feedbackMethods);
+  const smeRecommendation = mapLookupField(review.sme_recommendation, predefinedOptions.proposedActions);
+  const scheduleFollowUpReason = mapLookupField(review.follow_up_reason, predefinedOptions.followUpTriggers);
+  const finalDecision = mapLookupField(review.final_decision, predefinedOptions.proposedActions);
 
   return {
     // General step
-    reviewReason: isCustomReason ? "other" : existingReason,
-    reviewReasonOther: isCustomReason ? existingReason : "",
+    reviewReason: reviewReason.selected,
+    reviewReasonOther: reviewReason.other,
     currentStockQty: review.current_stock_qty ?? undefined,
     currentStockValue: review.current_stock_value ?? undefined,
     monthsNoMovement: review.months_no_movement ?? undefined,
-    proposedAction: review.proposed_action || "",
+    proposedAction: proposedAction.selected,
+    proposedActionOther: proposedAction.other,
     proposedSafetyStockQty: review.proposed_safety_stock_qty ?? undefined,
     proposedUnrestrictedQty: review.proposed_unrestricted_qty ?? undefined,
     businessJustification: review.business_justification || "",
@@ -198,15 +256,18 @@ function mapReviewToFormData(
     // SME step
     smeName: review.sme_name || "",
     smeEmail: review.sme_email || "",
-    smeDepartment: review.sme_department || "",
-    smeFeedbackMethod: review.sme_feedback_method || "",
+    smeDepartment: smeDepartment.selected,
+    smeDepartmentOther: smeDepartment.other,
+    smeFeedbackMethod: smeFeedbackMethod.selected,
+    smeFeedbackMethodOther: smeFeedbackMethod.other,
     smeContactedDate: review.sme_contacted_date
       ? new Date(review.sme_contacted_date)
       : undefined,
     smeRespondedDate: review.sme_responded_date
       ? new Date(review.sme_responded_date)
       : undefined,
-    smeRecommendation: review.sme_recommendation || "",
+    smeRecommendation: smeRecommendation.selected,
+    smeRecommendationOther: smeRecommendation.other,
     smeRecommendedSafetyStockQty: review.sme_recommended_safety_stock_qty ?? undefined,
     smeRecommendedUnrestrictedQty: review.sme_recommended_unrestricted_qty ?? undefined,
     smeAnalysis: review.sme_analysis || "",
@@ -214,13 +275,15 @@ function mapReviewToFormData(
     smeRiskAssessment: review.risk_assessment || "",
     // Follow-up step
     scheduleFollowUp: review.requires_follow_up ?? false,
-    scheduleFollowUpReason: review.follow_up_reason || "",
+    scheduleFollowUpReason: scheduleFollowUpReason.selected,
+    scheduleFollowUpReasonOther: scheduleFollowUpReason.other,
     scheduleFollowUpDate: review.next_review_date
       ? new Date(review.next_review_date)
       : undefined,
     scheduleReviewFrequencyWeeks: review.review_frequency_weeks ?? undefined,
     // Final decision step
-    finalDecision: review.final_decision || "",
+    finalDecision: finalDecision.selected,
+    finalDecisionOther: finalDecision.other,
     finalSafetyStockQty: review.final_safety_stock_qty ?? undefined,
     finalUnrestrictedQty: review.final_unrestricted_qty ?? undefined,
     finalNotes: review.final_notes || "",
@@ -282,15 +345,30 @@ function MaterialReviewFormInner({
 
   const commentCount = commentsData?.total ?? 0;
 
-  // Fetch review reason options for predefined reasons check
+  // Fetch all lookup options for predefined values check
   const { data: reviewReasonOptions } = useLookupOptions("review_reason");
-  const predefinedReasons = React.useMemo(() => {
-    if (!reviewReasonOptions?.options) {
-      // Fallback to hardcoded options if not loaded yet
-      return ["annual_review", "usage_spike", "supplier_change"];
-    }
-    return reviewReasonOptions.options.map((opt) => opt.value);
-  }, [reviewReasonOptions]);
+  const { data: proposedActionOptions } = useLookupOptions("proposed_action");
+  const { data: smeTypeOptions } = useLookupOptions("sme_type");
+  const { data: feedbackMethodOptions } = useLookupOptions("feedback_method");
+  const { data: followUpTriggerOptions } = useLookupOptions("follow_up_trigger");
+
+  // Build predefined options object from fetched lookup options
+  const predefinedOptions = React.useMemo((): PredefinedOptions => ({
+    reviewReasons: reviewReasonOptions?.options?.map((opt) => opt.value) ?? ["annual_review", "usage_spike", "supplier_change"],
+    proposedActions: proposedActionOptions?.options?.map((opt) => opt.value) ?? [],
+    smeTypes: smeTypeOptions?.options?.map((opt) => opt.value) ?? [],
+    feedbackMethods: feedbackMethodOptions?.options?.map((opt) => opt.value) ?? [],
+    followUpTriggers: followUpTriggerOptions?.options?.map((opt) => opt.value) ?? [],
+  }), [reviewReasonOptions, proposedActionOptions, smeTypeOptions, feedbackMethodOptions, followUpTriggerOptions]);
+
+  // Check if all lookup options are loaded
+  const lookupOptionsLoaded = !!(
+    reviewReasonOptions &&
+    proposedActionOptions &&
+    smeTypeOptions &&
+    feedbackMethodOptions &&
+    followUpTriggerOptions
+  );
 
   // Initialize form with combined schema (we'll validate per-step)
   const form = useForm<MaterialReviewFormData>({
@@ -305,6 +383,7 @@ function MaterialReviewFormInner({
       currentStockValue: undefined,
       monthsNoMovement: undefined,
       proposedAction: "",
+      proposedActionOther: "",
       proposedSafetyStockQty: 0,
       proposedUnrestrictedQty: 0,
       businessJustification: "",
@@ -324,10 +403,13 @@ function MaterialReviewFormInner({
       smeName: "",
       smeEmail: "",
       smeDepartment: "",
+      smeDepartmentOther: "",
       smeFeedbackMethod: "",
+      smeFeedbackMethodOther: "",
       smeContactedDate: undefined,
       smeRespondedDate: undefined,
       smeRecommendation: "",
+      smeRecommendationOther: "",
       smeRecommendedSafetyStockQty: undefined,
       smeRecommendedUnrestrictedQty: undefined,
       smeAnalysis: "",
@@ -336,10 +418,12 @@ function MaterialReviewFormInner({
       // Follow-up step
       scheduleFollowUp: false,
       scheduleFollowUpReason: "",
+      scheduleFollowUpReasonOther: "",
       scheduleFollowUpDate: undefined,
       scheduleReviewFrequencyWeeks: undefined,
       // Final decision step
       finalDecision: "",
+      finalDecisionOther: "",
       finalSafetyStockQty: undefined,
       finalUnrestrictedQty: undefined,
       finalNotes: "",
@@ -428,7 +512,7 @@ function MaterialReviewFormInner({
       // Reset the form immediately with the saved data from the server
       // This eliminates race conditions and provides instant UI feedback
       if (savedReview) {
-        const formData = mapReviewToFormData(savedReview, predefinedReasons);
+        const formData = mapReviewToFormData(savedReview, predefinedOptions);
         form.reset(formData, { keepErrors: false, keepDirty: false });
 
         // Set the ref to prevent the useEffect from resetting again
@@ -591,8 +675,9 @@ function MaterialReviewFormInner({
   };
 
   // Pre-fill form with existing review data if editing
+  // Wait for lookup options to load before mapping to correctly detect custom values
   React.useEffect(() => {
-    if (existingReview && isEditMode) {
+    if (existingReview && isEditMode && lookupOptionsLoaded) {
       // Only reset the form if this is a NEW review or we haven't reset for this review yet
       // This prevents the form from resetting on every refetch (which would overwrite user changes)
       const currentReviewId = existingReview.review_id ?? null;
@@ -606,7 +691,7 @@ function MaterialReviewFormInner({
       lastResetReviewIdRef.current = currentReviewId;
 
       // Use the helper function to map API data to form format
-      const formData = mapReviewToFormData(existingReview, predefinedReasons);
+      const formData = mapReviewToFormData(existingReview, predefinedOptions);
 
       form.reset(formData);
 
@@ -631,7 +716,7 @@ function MaterialReviewFormInner({
         markStepComplete(4);
       }
     }
-  }, [materialData, existingReview, isEditMode, form, markStepComplete, predefinedReasons]);
+  }, [materialData, existingReview, isEditMode, form, markStepComplete, predefinedOptions, lookupOptionsLoaded]);
 
   return (
     <div className="space-y-6">

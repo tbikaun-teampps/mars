@@ -44,13 +44,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import {
-  Plus,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
-  History,
-} from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, History } from "lucide-react";
 import { format } from "date-fns";
 
 interface LookupOptionFormData {
@@ -207,7 +201,10 @@ export function LookupOptionsManager() {
     group_order: number;
     sort_order: number;
   }) => {
-    setEditingOption({ option_id: option.option_id, category: option.category });
+    setEditingOption({
+      option_id: option.option_id,
+      category: option.category,
+    });
     setFormData({
       category: option.category,
       value: option.value,
@@ -219,7 +216,6 @@ export function LookupOptionsManager() {
       sort_order: option.sort_order,
     });
   };
-
 
   if (isLoading) {
     return (
@@ -330,7 +326,9 @@ export function LookupOptionsManager() {
                           <TableCell>
                             <div
                               className="w-6 h-6 rounded border"
-                              style={{ backgroundColor: option.color || "#gray" }}
+                              style={{
+                                backgroundColor: option.color || "#gray",
+                              }}
                             />
                           </TableCell>
                           <TableCell className="font-mono text-sm">
@@ -342,7 +340,11 @@ export function LookupOptionsManager() {
                           </TableCell>
                           <TableCell>{option.sort_order}</TableCell>
                           <TableCell>
-                            <Badge variant={option.is_active ? "outline" : "secondary"}>
+                            <Badge
+                              variant={
+                                option.is_active ? "outline" : "secondary"
+                              }
+                            >
                               {option.is_active ? "Active" : "Inactive"}
                             </Badge>
                           </TableCell>
@@ -373,7 +375,9 @@ export function LookupOptionsManager() {
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => setHistoryOptionId(option.option_id)}
+                                  onClick={() =>
+                                    setHistoryOptionId(option.option_id)
+                                  }
                                 >
                                   <History className="h-4 w-4 mr-2" />
                                   View History
@@ -381,14 +385,21 @@ export function LookupOptionsManager() {
                                 {option.is_active ? (
                                   <DropdownMenuItem
                                     className="text-destructive"
-                                    onClick={() => handleDelete(option.option_id, category)}
+                                    onClick={() =>
+                                      handleDelete(option.option_id, category)
+                                    }
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Deactivate
                                   </DropdownMenuItem>
                                 ) : (
                                   <DropdownMenuItem
-                                    onClick={() => handleReactivate(option.option_id, category)}
+                                    onClick={() =>
+                                      handleReactivate(
+                                        option.option_id,
+                                        category
+                                      )
+                                    }
                                   >
                                     Reactivate
                                   </DropdownMenuItem>
@@ -472,14 +483,24 @@ export function LookupOptionsManager() {
                 <TableBody>
                   {historyData.map((record) => {
                     // Compute changed fields by comparing old and new values
-                    const changedFields: { field: string; from: unknown; to: unknown }[] = [];
+                    const changedFields: {
+                      field: string;
+                      from: unknown;
+                      to: unknown;
+                    }[] = [];
 
                     if (record.change_type === "created") {
                       // For created, show all new values
                       if (record.new_values) {
-                        Object.entries(record.new_values).forEach(([key, value]) => {
-                          changedFields.push({ field: key, from: null, to: value });
-                        });
+                        Object.entries(record.new_values).forEach(
+                          ([key, value]) => {
+                            changedFields.push({
+                              field: key,
+                              from: null,
+                              to: value,
+                            });
+                          }
+                        );
                       }
                     } else if (record.old_values && record.new_values) {
                       // For updates, show only changed fields
@@ -487,7 +508,11 @@ export function LookupOptionsManager() {
                         const oldVal = record.old_values?.[key];
                         const newVal = record.new_values?.[key];
                         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-                          changedFields.push({ field: key, from: oldVal, to: newVal });
+                          changedFields.push({
+                            field: key,
+                            from: oldVal,
+                            to: newVal,
+                          });
                         }
                       });
                     }
@@ -513,11 +538,15 @@ export function LookupOptionsManager() {
                                     {" → "}
                                   </>
                                 )}
-                                <span className="text-foreground">{String(to)}</span>
+                                <span className="text-foreground">
+                                  {String(to)}
+                                </span>
                               </div>
                             ))}
                             {changedFields.length === 0 && (
-                              <span className="text-muted-foreground">No changes</span>
+                              <span className="text-muted-foreground">
+                                No changes
+                              </span>
                             )}
                           </div>
                         </TableCell>
@@ -540,7 +569,9 @@ export function LookupOptionsManager() {
 
 interface LookupOptionFormProps {
   formData: LookupOptionFormData;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onChange: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => void;
   onColorChange: (color: string) => void;
   isNew: boolean;
 }
