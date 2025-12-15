@@ -267,25 +267,7 @@ async def get_role(
             detail="Role not found",
         )
 
-    return RoleResponse(
-        role_id=role.role_id,
-        role_code=role.role_code,
-        role_name=role.role_name,
-        role_type=role.role_type,
-        description=role.description,
-        can_create_reviews=role.can_create_reviews,
-        can_edit_reviews=role.can_edit_reviews,
-        can_delete_reviews=role.can_delete_reviews,
-        can_approve_reviews=role.can_approve_reviews,
-        can_provide_sme_review=role.can_provide_sme_review,
-        can_assign_reviews=role.can_assign_reviews,
-        can_manage_users=role.can_manage_users,
-        can_manage_settings=role.can_manage_settings,
-        can_view_all_reviews=role.can_view_all_reviews,
-        can_export_data=role.can_export_data,
-        approval_limit=role.approval_limit,
-        is_active=role.is_active,
-    )
+    return RoleResponse.model_validate(role)
 
 
 # ============================================================================

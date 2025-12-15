@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 
 
@@ -24,6 +24,8 @@ class RoleListItem(BaseModel):
 
 class RoleResponse(BaseModel):
     """Role response with all details."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     role_id: int
     role_code: str
