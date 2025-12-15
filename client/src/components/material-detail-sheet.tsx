@@ -442,7 +442,7 @@ function ReviewHistoryTimeline({
                               Decision:
                             </span>{" "}
                             <span className="capitalize">
-                              {review.final_decision}
+                              {review.final_decision.replace(/_/g, " ")}
                             </span>
                           </span>
                         )}
