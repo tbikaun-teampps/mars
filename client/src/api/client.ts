@@ -429,6 +429,74 @@ export class ApiClient {
       `/dashboard/recent-activity`
     );
   }
+
+  // Lookup options API methods
+  async getLookupOptions(
+    category?: string,
+    includeInactive: boolean = false
+  ): Promise<components["schemas"]["LookupOptionsGrouped"]> {
+    const queryParams = new URLSearchParams();
+    if (includeInactive) queryParams.append("include_inactive", "true");
+    const queryString = queryParams.toString();
+
+    if (category) {
+      const endpoint = `/lookup-options/${category}${queryString ? `?${queryString}` : ""}`;
+      return this.get<components["schemas"]["LookupOptionsGrouped"]>(endpoint);
+    } else {
+      // Returns all categories - for this we need a different return type
+      // but for now, just return the first category or throw
+      throw new Error("Category is required for getLookupOptions");
+    }
+  }
+
+  async getAllLookupOptions(
+    includeInactive: boolean = false
+  ): Promise<Record<string, components["schemas"]["LookupOptionsGrouped"]>> {
+    const queryParams = new URLSearchParams();
+    if (includeInactive) queryParams.append("include_inactive", "true");
+    const queryString = queryParams.toString();
+    const endpoint = `/lookup-options${queryString ? `?${queryString}` : ""}`;
+    return this.get<Record<string, components["schemas"]["LookupOptionsGrouped"]>>(endpoint);
+  }
+
+  async getLookupOptionDetail(
+    optionId: number
+  ): Promise<components["schemas"]["LookupOption"]> {
+    return this.get<components["schemas"]["LookupOption"]>(
+      `/lookup-options/detail/${optionId}`
+    );
+  }
+
+  async getLookupOptionHistory(
+    optionId: number
+  ): Promise<components["schemas"]["LookupOptionHistory"][]> {
+    return this.get<components["schemas"]["LookupOptionHistory"][]>(
+      `/lookup-options/detail/${optionId}/history`
+    );
+  }
+
+  async createLookupOption(
+    data: components["schemas"]["LookupOptionCreate"]
+  ): Promise<components["schemas"]["LookupOption"]> {
+    return this.post<components["schemas"]["LookupOption"]>(
+      `/lookup-options`,
+      data
+    );
+  }
+
+  async updateLookupOption(
+    optionId: number,
+    data: components["schemas"]["LookupOptionUpdate"]
+  ): Promise<components["schemas"]["LookupOption"]> {
+    return this.put<components["schemas"]["LookupOption"]>(
+      `/lookup-options/${optionId}`,
+      data
+    );
+  }
+
+  async deleteLookupOption(optionId: number): Promise<void> {
+    await this.delete<void>(`/lookup-options/${optionId}`);
+  }
 }
 
 // Export a default instance

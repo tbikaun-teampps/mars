@@ -1,7 +1,8 @@
 import * as React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Command, Home, ScrollText, Upload, History } from "lucide-react";
+import { Command, Home, ScrollText, Upload, History, Settings } from "lucide-react";
 import { NavUser } from "@/components/nav-user";
+import { useCurrentUser } from "@/api/queries";
 import {
   Sidebar,
   SidebarContent,
@@ -38,6 +39,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({ onUploadClick, ...props }: AppSidebarProps) {
   const location = useLocation();
+  const { data: currentUser } = useCurrentUser();
+  const isAdmin = currentUser?.is_admin ?? false;
 
   return (
     <Sidebar
@@ -103,6 +106,24 @@ export function AppSidebar({ onUploadClick, ...props }: AppSidebarProps) {
               <span>Data Upload</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {isAdmin && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                tooltip={{
+                  children: "Settings",
+                  hidden: false,
+                }}
+                isActive={location.pathname === "/app/settings"}
+                className="px-2"
+              >
+                <Link to="/app/settings">
+                  <Settings />
+                  <span>Settings</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
         <NavUser />
       </SidebarFooter>

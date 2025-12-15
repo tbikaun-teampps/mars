@@ -95,4 +95,17 @@ export const queryKeys = {
     summary: () => [...queryKeys.dashboard.all, "summary"] as const,
     recentActivity: () => [...queryKeys.dashboard.all, "recentActivity"] as const,
   },
+
+  // Lookup options queries
+  lookups: {
+    all: ["lookups"] as const,
+    byCategory: (category: string, includeInactive?: boolean) =>
+      [...queryKeys.lookups.all, "category", category, { includeInactive }] as const,
+    allCategories: (includeInactive?: boolean) =>
+      [...queryKeys.lookups.all, "allCategories", { includeInactive }] as const,
+    detail: (optionId: number) =>
+      [...queryKeys.lookups.all, "detail", optionId] as const,
+    history: (optionId: number) =>
+      [...queryKeys.lookups.all, "history", optionId] as const,
+  },
 } as const;

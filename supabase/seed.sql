@@ -160,7 +160,7 @@ INSERT INTO "auth"."identities" ("provider_id", "user_id", "identity_data", "pro
 
 INSERT INTO "public"."profiles" ("id", "full_name", "created_at", "updated_at", "is_admin") VALUES
 	('e1e806b1-c51b-46dd-97e5-d2f7913d1145', 'test', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00', false),
-	('00000000-0000-0000-0000-000000000000', 'system', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00', false);
+	('00000000-0000-0000-0000-000000000000', 'system', '2025-11-14 07:37:26.127566+00', '2025-11-14 07:37:26.127566+00', true);
 
 
 --

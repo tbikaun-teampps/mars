@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { apiClient, MaterialReviewUpdate } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
-import { useReviewComments } from "@/api/queries";
+import { useReviewComments, useLookupOptions } from "@/api/queries";
 import {
   MultiStepFormProvider,
   Step,
@@ -161,9 +161,11 @@ function extractPayloadForStep(
 }
 
 // Helper function to map MaterialReview API data to MaterialReviewFormData format
-function mapReviewToFormData(review: MaterialReview): MaterialReviewFormData {
+function mapReviewToFormData(
+  review: MaterialReview,
+  predefinedReasons: string[] = ["annual_review", "usage_spike", "supplier_change"]
+): MaterialReviewFormData {
   // Check if review_reason is a predefined option or custom
-  const predefinedReasons = ["annual_review", "usage_spike", "supplier_change"];
   const existingReason = review.review_reason || "";
   const isCustomReason =
     existingReason && !predefinedReasons.includes(existingReason);
@@ -279,6 +281,16 @@ function MaterialReviewFormInner({
   );
 
   const commentCount = commentsData?.total ?? 0;
+
+  // Fetch review reason options for predefined reasons check
+  const { data: reviewReasonOptions } = useLookupOptions("review_reason");
+  const predefinedReasons = React.useMemo(() => {
+    if (!reviewReasonOptions?.options) {
+      // Fallback to hardcoded options if not loaded yet
+      return ["annual_review", "usage_spike", "supplier_change"];
+    }
+    return reviewReasonOptions.options.map((opt) => opt.value);
+  }, [reviewReasonOptions]);
 
   // Initialize form with combined schema (we'll validate per-step)
   const form = useForm<MaterialReviewFormData>({
@@ -416,7 +428,7 @@ function MaterialReviewFormInner({
       // Reset the form immediately with the saved data from the server
       // This eliminates race conditions and provides instant UI feedback
       if (savedReview) {
-        const formData = mapReviewToFormData(savedReview);
+        const formData = mapReviewToFormData(savedReview, predefinedReasons);
         form.reset(formData, { keepErrors: false, keepDirty: false });
 
         // Set the ref to prevent the useEffect from resetting again
@@ -594,7 +606,7 @@ function MaterialReviewFormInner({
       lastResetReviewIdRef.current = currentReviewId;
 
       // Use the helper function to map API data to form format
-      const formData = mapReviewToFormData(existingReview);
+      const formData = mapReviewToFormData(existingReview, predefinedReasons);
 
       form.reset(formData);
 
@@ -619,7 +631,7 @@ function MaterialReviewFormInner({
         markStepComplete(4);
       }
     }
-  }, [materialData, existingReview, isEditMode, form, markStepComplete]);
+  }, [materialData, existingReview, isEditMode, form, markStepComplete, predefinedReasons]);
 
   return (
     <div className="space-y-6">

@@ -398,3 +398,63 @@ class UploadSnapshot(SQLModel, table=True):
     total_opportunity_value: Optional[float] = None
     total_overdue_reviews: Optional[int] = None
     acceptance_rate: Optional[float] = None
+
+
+class LookupOptionDB(SQLModel, table=True):
+    """Lookup Option table model for configurable dropdown options."""
+
+    __tablename__ = "lookup_options"
+
+    option_id: Optional[int] = Field(default=None, primary_key=True)
+    category: str = Field(max_length=50, index=True)  # e.g. 'review_reason'
+    value: str = Field(max_length=100)                # e.g. 'annual_review'
+    label: str = Field(max_length=200)                # e.g. 'Annual Review'
+    description: Optional[str] = None                 # Help text for users
+    color: Optional[str] = Field(default=None, max_length=7)  # Hex color
+
+    # Grouping & ordering
+    group_name: Optional[str] = Field(default=None, max_length=100)
+    group_order: int = Field(default=0)
+    sort_order: int = Field(default=0)
+
+    is_active: bool = Field(default=True)
+
+    # Audit fields
+    created_by: Optional[UUID] = Field(
+        default=None,
+        sa_column_kwargs={"server_default": text("auth.uid()")}
+    )
+    created_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+    updated_by: Optional[UUID] = Field(
+        default=None,
+        sa_column_kwargs={"server_default": text("auth.uid()")}
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )
+
+
+class LookupOptionHistoryDB(SQLModel, table=True):
+    """Lookup Option History table model for audit trail."""
+
+    __tablename__ = "lookup_options_history"
+
+    history_id: Optional[int] = Field(default=None, primary_key=True)
+    option_id: int = Field(foreign_key="lookup_options.option_id")
+    change_type: str = Field(max_length=20)  # created, updated, deactivated, reactivated
+    old_values: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON))
+    new_values: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON))
+    changed_by: Optional[UUID] = Field(
+        default=None,
+        sa_column_kwargs={"server_default": text("auth.uid()")}
+    )
+    changed_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True),
+                         server_default=text("NOW()"))
+    )

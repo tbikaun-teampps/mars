@@ -5,10 +5,43 @@ import {
   FormTextareaField,
 } from "@/components/ui/form";
 import { Stepheader } from "./step-header";
+import { useLookupOptions } from "@/api/queries";
+import { useMemo } from "react";
 
 export function Step1GeneralInfo() {
   const { watch } = useFormContext();
   const reviewReason = watch("reviewReason");
+
+  // Fetch review reason options from the backend
+  const { data: reviewReasonOptions, isLoading: optionsLoading } =
+    useLookupOptions("review_reason");
+
+  // Convert the grouped options to a flat list for the select component
+  // Always include "Other" at the end
+  const reviewReasonSelectOptions = useMemo(() => {
+    if (!reviewReasonOptions?.options) {
+      // Fallback to hardcoded options if not loaded yet
+      return [
+        { label: "Annual Review", value: "annual_review" },
+        { label: "Usage Spike", value: "usage_spike" },
+        { label: "Supplier Change", value: "supplier_change" },
+        { label: "Other", value: "other" },
+      ];
+    }
+
+    // Map the API response to select options format
+    const options = reviewReasonOptions.options.map((opt) => ({
+      label: opt.label,
+      value: opt.value,
+    }));
+
+    // Always add "Other" option at the end if not present
+    if (!options.some((opt) => opt.value === "other")) {
+      options.push({ label: "Other", value: "other" });
+    }
+
+    return options;
+  }, [reviewReasonOptions]);
 
   return (
     <div className="space-y-4">
@@ -18,12 +51,8 @@ export function Step1GeneralInfo() {
         name="reviewReason"
         label="What is the reason for this review? *"
         placeholder="Select a reason for this review"
-        options={[
-          { label: "Annual Review", value: "annual_review" },
-          { label: "Usage Spike", value: "usage_spike" },
-          { label: "Supplier Change", value: "supplier_change" },
-          { label: "Other", value: "other" },
-        ]}
+        options={reviewReasonSelectOptions}
+        disabled={optionsLoading}
       />
 
       {reviewReason === "other" && (
