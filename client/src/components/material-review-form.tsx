@@ -384,8 +384,8 @@ function MaterialReviewFormInner({
       monthsNoMovement: undefined,
       proposedAction: "",
       proposedActionOther: "",
-      proposedSafetyStockQty: 0,
-      proposedUnrestrictedQty: 0,
+      proposedSafetyStockQty: undefined,
+      proposedUnrestrictedQty: undefined,
       businessJustification: "",
       // Checklist step
       hasOpenOrders: undefined,

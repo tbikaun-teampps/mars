@@ -240,7 +240,9 @@ function FormInputField<
                 {...field}
                 onChange={(e) => {
                   if (type === "number") {
-                    field.onChange(e.target.valueAsNumber);
+                    // Convert NaN (from cleared input) to null for proper validation
+                    const value = e.target.valueAsNumber;
+                    field.onChange(Number.isNaN(value) ? null : value);
                   } else if (type === "date") {
                     field.onChange(stringToDate(e.target.value));
                   } else {
