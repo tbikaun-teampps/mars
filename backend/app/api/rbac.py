@@ -934,13 +934,15 @@ async def list_users(
 
     if search:
         search_pattern = f"%{search}%"
-        query = query.where(
-            or_(
-                ProfileDB.full_name.ilike(search_pattern),
-                # Check if email column exists
-                ProfileDB.full_name.ilike(search_pattern),  # Fallback
+        if hasattr(ProfileDB, 'email'):
+            query = query.where(
+                or_(
+                    ProfileDB.full_name.ilike(search_pattern),
+                    ProfileDB.email.ilike(search_pattern),
+                )
             )
-        )
+        else:
+            query = query.where(ProfileDB.full_name.ilike(search_pattern))
 
     query = query.order_by(ProfileDB.full_name)
 
