@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, AlertCircle, ShieldX } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { MaterialDetailsPanel } from "@/components/material-details-panel";
 import { useMaterialDetails } from "@/api/queries";
@@ -147,47 +148,52 @@ export function MaterialReviewPage() {
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       {/* Header */}
-      <div className="border-b bg-background sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Material
-            </Button>
-            <div className="h-6 w-px bg-border" />
-            <div>
-              <h1 className="text-lg font-semibold">
-                {reviewId ? "Edit Review" : "New Review"}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {materialDetails?.material_desc} (#{materialNumber})
-              </p>
-            </div>
-          </div>
+      <div className="mb-6">
+        <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {reviewId ? "Edit Review" : "New Review"}
+          </h1>
+          <p className="text-muted-foreground">
+            {materialDetails?.material_desc} (#{materialNumber})
+          </p>
         </div>
       </div>
 
       {/* Dual-panel layout */}
-      <div className="flex h-[calc(100vh-180px)]">
+      <div className="flex gap-6 h-[calc(100vh-180px)]">
         {/* Left panel - Review Form */}
-        <div className="w-1/2 overflow-y-auto p-6 border-r">
-          <MaterialReviewForm
-            materialData={materialDetails}
-            existingReview={existingReview}
-            onSubmit={handleReviewComplete}
-            onClose={handleClose}
-          />
-        </div>
+        <Card className="w-1/2 flex flex-col">
+          <CardHeader className="pb-3">
+            <CardTitle>Review Form</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto">
+            <MaterialReviewForm
+              materialData={materialDetails}
+              existingReview={existingReview}
+              onSubmit={handleReviewComplete}
+              onClose={handleClose}
+            />
+          </CardContent>
+        </Card>
 
         {/* Right panel - Material Details Reference */}
-        <div className="w-1/2 overflow-y-auto p-6 bg-muted/30">
-          <MaterialDetailsPanel
-            materialDetails={materialDetails}
-            loading={isLoading}
-            isError={isError}
-            error={error}
-          />
-        </div>
+        <Card className="w-1/2 flex flex-col">
+          <CardHeader className="pb-3">
+            <CardTitle>Material Reference</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto">
+            <MaterialDetailsPanel
+              materialDetails={materialDetails}
+              loading={isLoading}
+              isError={isError}
+              error={error}
+            />
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );

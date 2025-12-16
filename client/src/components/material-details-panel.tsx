@@ -416,8 +416,6 @@ export function MaterialDetailsPanel({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Material Reference</h2>
-
       {/* Insights Panel */}
       {materialDetails.insights && materialDetails.insights.length > 0 && (
         <InsightsPanel
