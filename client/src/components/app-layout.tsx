@@ -16,6 +16,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { usePermissions } from "@/hooks/use-permissions";
 
 // Height of the impersonation banner (py-2 + h-7 button = ~40px)
 const BANNER_HEIGHT = "2.5rem";
@@ -35,6 +36,7 @@ export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps
   const { user, loading } = useAuth();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { isImpersonating } = useImpersonation();
+  const { isAdmin } = usePermissions();
 
   // Calculate banner height for sidebar offset
   const bannerHeight = import.meta.env.DEV && isImpersonating ? BANNER_HEIGHT : "0px";
@@ -110,7 +112,7 @@ export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
       />
-      {import.meta.env.DEV && <DebugFAB />}
+      {import.meta.env.DEV && isAdmin && <DebugFAB />}
     </>
   );
 }
