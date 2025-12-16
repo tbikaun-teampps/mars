@@ -38,7 +38,7 @@ class LookupOptionCreate(BaseModel):
     value: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    color: Optional[str] = Field(default=None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(default=None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
 
     # Grouping & ordering
     group_name: Optional[str] = Field(default=None, max_length=100)
@@ -51,7 +51,7 @@ class LookupOptionUpdate(BaseModel):
 
     label: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
-    color: Optional[str] = Field(default=None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(default=None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
 
     # Grouping & ordering
     group_name: Optional[str] = Field(default=None, max_length=100)

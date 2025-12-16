@@ -67,9 +67,7 @@ class Material(BaseModel):
     cons_4y: Optional[float] = None
     cons_5y: Optional[float] = None
     purchased_qty_2y: Optional[float] = None
-    consumption_history_5yr: list[ConsumptionHistory] | None = (
-        None  # Computed from cons_1y-5y
-    )
+    consumption_history_5yr: list[ConsumptionHistory] | None = None  # Computed from cons_1y-5y
     last_reviewed: date | None = None
     next_review: date | None = None
     # review_notes: str | None = None
@@ -84,6 +82,7 @@ class MaterialWithReviews(Material):
     """Material model with reviews."""
 
     reviews: list[MaterialReview]  # List of material reviews
+
 
 class PaginatedMaterialsResponse(BaseModel):
     """Paginated materials response."""

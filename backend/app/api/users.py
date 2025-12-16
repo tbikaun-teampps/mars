@@ -15,12 +15,7 @@ from app.models.user import ProfileUpdate, UserResponse
 router = APIRouter()
 
 
-def _profile_to_response(
-    profile: ProfileDB,
-    email: str,
-    is_admin: bool,
-    permissions: list[str]
-) -> UserResponse:
+def _profile_to_response(profile: ProfileDB, email: str, is_admin: bool, permissions: list[str]) -> UserResponse:
     """Convert ProfileDB to UserResponse."""
     return UserResponse(
         id=profile.id,
@@ -45,8 +40,7 @@ async def get_current_user_profile(
     """Get current user's profile information."""
 
     # Query the profiles table to get full user information
-    profile_query = select(ProfileDB).where(
-        ProfileDB.id == current_user.id)
+    profile_query = select(ProfileDB).where(ProfileDB.id == current_user.id)
     profile_result = await db.exec(profile_query)
     profile = profile_result.first()
 
@@ -81,8 +75,7 @@ async def update_current_user_profile(
             )
 
     # Query the profiles table to get the user's profile
-    profile_query = select(ProfileDB).where(
-        ProfileDB.id == current_user.id)
+    profile_query = select(ProfileDB).where(ProfileDB.id == current_user.id)
     profile_result = await db.exec(profile_query)
     profile = profile_result.first()
 

@@ -10,11 +10,7 @@ def transform_db_record_to_material(record: dict) -> Material:
     """Transform a database record into a Material model with computed fields."""
     # Calculate unit_value
     unit_value = None
-    if (
-        record.get("total_value")
-        and record.get("total_quantity")
-        and record["total_quantity"] != 0
-    ):
+    if record.get("total_value") and record.get("total_quantity") and record["total_quantity"] != 0:
         unit_value = record["total_value"] / record["total_quantity"]
 
     # Transform consumption history from individual columns to array
@@ -28,12 +24,7 @@ def transform_db_record_to_material(record: dict) -> Material:
     ]
     # Only create array if at least one value is not None
     if any(val is not None for _, val in cons_values):
-        consumption_history_5yr = [
-            ConsumptionHistory(
-                years_ago=years_ago, quantity=qty if qty is not None else 0
-            )
-            for years_ago, qty in cons_values
-        ]
+        consumption_history_5yr = [ConsumptionHistory(years_ago=years_ago, quantity=qty if qty is not None else 0) for years_ago, qty in cons_values]
 
     return Material(
         **record,
@@ -68,9 +59,7 @@ def determine_status_after_step(
     elif step == ReviewStepEnum.SME_INVESTIGATION:
         # Step 3: SME investigation - check progression
         # If SME responded with recommendation, move to pending_decision
-        if update_data.get("sme_responded_date") and update_data.get(
-            "sme_recommendation"
-        ):
+        if update_data.get("sme_responded_date") and update_data.get("sme_recommendation"):
             return ReviewStatus.PENDING_DECISION.value
         # If SME contacted (but not yet responded), move to pending_sme
         elif update_data.get("sme_contacted_date"):

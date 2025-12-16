@@ -48,9 +48,7 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthStatus:
         "database": {
             "status": db_status,
             "url": (
-                settings.database_url.replace(
-                    settings.database_url.split("@")[0].split("//")[1], "***"
-                )
+                settings.database_url.replace(settings.database_url.split("@")[0].split("//")[1], "***")
                 if "@" in settings.database_url
                 else settings.database_url
             ),
@@ -62,8 +60,6 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthStatus:
     if db_status == "connected":
         response["database"]["note"] = "Database is connected and ready"
     elif db_status == "error":
-        response["database"][
-            "note"
-        ] = "Database connection failed. Check configuration and ensure database is running."
+        response["database"]["note"] = "Database connection failed. Check configuration and ensure database is running."
 
     return response

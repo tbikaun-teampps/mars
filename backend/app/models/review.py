@@ -66,7 +66,6 @@ class MaterialReview(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-
     # Initiator info
     initiated_by: UUID
     initiated_by_user: Optional[UserProfile] = None
@@ -125,8 +124,8 @@ class MaterialReview(BaseModel):
     # Checklist data (joined from review_checklist table)
     checklist: Optional[ReviewChecklist] = None
 
-    is_read_only: Optional[bool] = False # Computed property for UI logic
-    comments_count: Optional[int] = 0 # Number of comments on this review
+    is_read_only: Optional[bool] = False  # Computed property for UI logic
+    comments_count: Optional[int] = 0  # Number of comments on this review
 
 
 class MaterialReviewCreate(BaseModel):

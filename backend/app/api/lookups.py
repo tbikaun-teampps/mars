@@ -73,15 +73,17 @@ def options_to_grouped(category: str, options: list[LookupOptionDB]) -> LookupOp
         group_key = opt.group_name
         if group_key not in groups_dict:
             groups_dict[group_key] = []
-        groups_dict[group_key].append(LookupOptionInGroup(
-            option_id=opt.option_id,
-            value=opt.value,
-            label=opt.label,
-            description=opt.description,
-            color=opt.color,
-            sort_order=opt.sort_order,
-            is_active=opt.is_active,
-        ))
+        groups_dict[group_key].append(
+            LookupOptionInGroup(
+                option_id=opt.option_id,
+                value=opt.value,
+                label=opt.label,
+                description=opt.description,
+                color=opt.color,
+                sort_order=opt.sort_order,
+                is_active=opt.is_active,
+            )
+        )
 
     # Sort options within each group
     for opts in groups_dict.values():
@@ -135,6 +137,7 @@ async def record_history(
 ) -> None:
     """Record a change to the lookup options history table."""
     from uuid import UUID
+
     history = LookupOptionHistoryDB(
         option_id=option_id,
         change_type=change_type,
@@ -168,10 +171,7 @@ async def list_all_lookup_options(
             by_category[opt.category] = []
         by_category[opt.category].append(opt)
 
-    return {
-        cat: options_to_grouped(cat, opts)
-        for cat, opts in by_category.items()
-    }
+    return {cat: options_to_grouped(cat, opts) for cat, opts in by_category.items()}
 
 
 @router.get("/lookup-options/{category}")
@@ -232,9 +232,9 @@ async def get_lookup_option_history(
         )
 
     # Get history
-    history_query = select(LookupOptionHistoryDB).where(
-        LookupOptionHistoryDB.option_id == option_id
-    ).order_by(LookupOptionHistoryDB.changed_at.desc())
+    history_query = (
+        select(LookupOptionHistoryDB).where(LookupOptionHistoryDB.option_id == option_id).order_by(LookupOptionHistoryDB.changed_at.desc())
+    )
 
     result = await db.exec(history_query)
     history_records = result.all()
@@ -276,6 +276,7 @@ async def create_lookup_option(
 
     # Create the option
     from uuid import UUID
+
     option_db = LookupOptionDB(
         category=option_data.category,
         value=option_data.value,
@@ -364,6 +365,7 @@ async def update_lookup_option(
 
     # Update audit field
     from uuid import UUID
+
     option.updated_by = UUID(current_user.id)
     option.updated_at = datetime.utcnow()
 
@@ -438,6 +440,7 @@ async def delete_lookup_option(
 
     # Soft delete
     from uuid import UUID
+
     option.is_active = False
     option.updated_by = UUID(current_user.id)
     option.updated_at = datetime.utcnow()

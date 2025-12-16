@@ -29,9 +29,7 @@ class Settings(BaseSettings):
     # Material data processing config
     coverage_ratio_threshold: float = 1.3
 
-    model_config = SettingsConfigDict(
-        env_file=(".env.local", ".env"), env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=(".env.local", ".env"), env_file_encoding="utf-8", extra="ignore")
 
 
 # Global settings instance
