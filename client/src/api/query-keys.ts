@@ -135,4 +135,13 @@ export const queryKeys = {
     list: (params?: { search?: string; isActive?: boolean }) =>
       [...queryKeys.usersList.all, "list", params] as const,
   },
+
+  // Notification queries
+  notifications: {
+    all: ["notifications"] as const,
+    list: (params?: { skip?: number; limit?: number; unread_only?: boolean }) =>
+      [...queryKeys.notifications.all, "list", params] as const,
+    unreadCount: () => [...queryKeys.notifications.all, "unreadCount"] as const,
+    preferences: () => [...queryKeys.notifications.all, "preferences"] as const,
+  },
 } as const;

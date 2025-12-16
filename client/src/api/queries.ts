@@ -881,3 +881,130 @@ export function useUsersList(
     staleTime: 1000 * 60, // 1 minute
   });
 }
+
+// ============================================================================
+// Notification Hooks
+// ============================================================================
+
+// Type aliases for Notifications
+type PaginatedNotificationsResponse =
+  components["schemas"]["PaginatedNotificationsResponse"];
+type NotificationPreferences =
+  components["schemas"]["NotificationPreferences"];
+
+/**
+ * Hook to fetch paginated notifications
+ * @param params Query parameters for pagination
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useNotifications(
+  params?: { skip?: number; limit?: number; unread_only?: boolean },
+  enabled: boolean = true
+): UseQueryResult<PaginatedNotificationsResponse, Error> {
+  return useQuery({
+    queryKey: queryKeys.notifications.list(params),
+    queryFn: () => apiClient.getNotifications(params),
+    enabled,
+    staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+/**
+ * Hook to fetch unread notification count for badge
+ * Polls every 30 seconds to keep count updated
+ */
+export function useUnreadNotificationCount(): UseQueryResult<
+  { unread_count: number },
+  Error
+> {
+  return useQuery({
+    queryKey: queryKeys.notifications.unreadCount(),
+    queryFn: () => apiClient.getUnreadNotificationCount(),
+    refetchInterval: 30000, // Poll every 30 seconds
+    staleTime: 1000 * 15, // 15 seconds
+  });
+}
+
+/**
+ * Hook to mark a notification as read
+ */
+export function useMarkNotificationRead(): UseMutationResult<
+  { message: string },
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (notificationId: number) =>
+      apiClient.markNotificationAsRead(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to mark notification as read:", error);
+    },
+  });
+}
+
+/**
+ * Hook to mark all notifications as read
+ */
+export function useMarkAllNotificationsRead(): UseMutationResult<
+  { message: string },
+  Error,
+  void
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiClient.markAllNotificationsAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to mark all notifications as read:", error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch notification preferences
+ */
+export function useNotificationPreferences(): UseQueryResult<
+  NotificationPreferences,
+  Error
+> {
+  return useQuery({
+    queryKey: queryKeys.notifications.preferences(),
+    queryFn: () => apiClient.getNotificationPreferences(),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/**
+ * Hook to update notification preferences
+ */
+export function useUpdateNotificationPreferences(): UseMutationResult<
+  NotificationPreferences,
+  Error,
+  {
+    review_assigned?: boolean;
+    review_status_changed?: boolean;
+    comment_added?: boolean;
+  }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => apiClient.updateNotificationPreferences(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.notifications.preferences(),
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to update notification preferences:", error);
+    },
+  });
+}

@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Command, Home, ScrollText, Upload, History, Settings } from "lucide-react";
 import { NavUser } from "@/components/nav-user";
+import { NotificationBell } from "@/components/notification-bell";
 import { useCurrentUser } from "@/api/queries";
 import {
   Sidebar,
@@ -98,6 +99,9 @@ export function AppSidebar({ onUploadClick, ...props }: AppSidebarProps) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <NotificationBell />
+          </SidebarMenuItem>
           <RequirePermission permission="can_upload_data" fallback="hide">
             <SidebarMenuItem>
               <SidebarMenuButton

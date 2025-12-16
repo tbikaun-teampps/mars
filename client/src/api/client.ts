@@ -639,6 +639,61 @@ export class ApiClient {
       `/users${queryString ? `?${queryString}` : ""}`
     );
   }
+
+  // Notifications API methods
+  async getNotifications(params?: {
+    skip?: number;
+    limit?: number;
+    unread_only?: boolean;
+  }): Promise<components["schemas"]["PaginatedNotificationsResponse"]> {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined)
+      queryParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+    if (params?.unread_only !== undefined)
+      queryParams.append("unread_only", params.unread_only.toString());
+
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["PaginatedNotificationsResponse"]>(
+      `/notifications${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async getUnreadNotificationCount(): Promise<{ unread_count: number }> {
+    return this.get<{ unread_count: number }>("/notifications/unread-count");
+  }
+
+  async markNotificationAsRead(
+    notificationId: number
+  ): Promise<{ message: string }> {
+    return this.put<{ message: string }>(
+      `/notifications/${notificationId}/read`
+    );
+  }
+
+  async markAllNotificationsAsRead(): Promise<{ message: string }> {
+    return this.put<{ message: string }>("/notifications/mark-all-read");
+  }
+
+  async getNotificationPreferences(): Promise<
+    components["schemas"]["NotificationPreferences"]
+  > {
+    return this.get<components["schemas"]["NotificationPreferences"]>(
+      "/notifications/preferences"
+    );
+  }
+
+  async updateNotificationPreferences(data: {
+    review_assigned?: boolean;
+    review_status_changed?: boolean;
+    comment_added?: boolean;
+  }): Promise<components["schemas"]["NotificationPreferences"]> {
+    return this.put<components["schemas"]["NotificationPreferences"]>(
+      "/notifications/preferences",
+      data
+    );
+  }
 }
 
 // Export a default instance

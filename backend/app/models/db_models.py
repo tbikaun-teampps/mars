@@ -22,20 +22,10 @@ class ProfileDB(SQLModel, table=True):
     site: Optional[str] = Field(default=None, max_length=50)
     phone: Optional[str] = Field(default=None, max_length=50)
     is_active: bool = Field(default=True)
-    last_login_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
-    notification_preferences: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON)
-    )
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    last_login_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    notification_preferences: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class SAPMaterialData(SQLModel, table=True):
@@ -69,23 +59,14 @@ class SAPMaterialData(SQLModel, table=True):
     last_reviewed: Optional[date] = None
     next_review: Optional[date] = None
     review_notes: Optional[str] = None
-    uploaded_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    last_upload_job_id: Optional[UUID] = Field(
-        default=None, foreign_key="upload_jobs.job_id")
-    first_uploaded_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
-    last_modified_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
+    uploaded_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    last_upload_job_id: Optional[UUID] = Field(default=None, foreign_key="upload_jobs.job_id")
+    first_uploaded_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    last_modified_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
 
     # Relationships
     reviews: list["MaterialReviewDB"] = Relationship(back_populates="material")
-    insights: list["MaterialInsightDB"] = Relationship(
-        back_populates="material")
+    insights: list["MaterialInsightDB"] = Relationship(back_populates="material")
 
 
 class MaterialInsightDB(SQLModel, table=True):
@@ -94,30 +75,21 @@ class MaterialInsightDB(SQLModel, table=True):
     __tablename__ = "material_insights"
 
     insight_id: Optional[int] = Field(default=None, primary_key=True)
-    material_number: int = Field(
-        foreign_key="sap_material_data.material_number")
+    material_number: int = Field(foreign_key="sap_material_data.material_number")
     insight_type: str = Field(max_length=50)
     message: str
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
     # Opportunity details - if applicable
     opportunity_value: Optional[float] = None
 
     # Acknowledgement fields
-    acknowledged_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
-    acknowledged_by: Optional[UUID] = Field(
-        default=None, foreign_key="profiles.id")
-    last_modified_by: Optional[UUID] = Field(
-        default=None, foreign_key="profiles.id")
+    acknowledged_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    acknowledged_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    last_modified_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
 
     # Relationship to material
-    material: Optional[SAPMaterialData] = Relationship(
-        back_populates="insights")
+    material: Optional[SAPMaterialData] = Relationship(back_populates="insights")
 
 
 class MaterialReviewDB(SQLModel, table=True):
@@ -126,34 +98,14 @@ class MaterialReviewDB(SQLModel, table=True):
     __tablename__ = "material_reviews"
 
     review_id: Optional[int] = Field(default=None, primary_key=True)
-    material_number: int = Field(
-        foreign_key="sap_material_data.material_number")
+    material_number: int = Field(foreign_key="sap_material_data.material_number")
 
     # Initiator (MRP Planner) info
-    initiated_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
-    review_date: date = Field(
-        sa_column_kwargs={"server_default": text("CURRENT_DATE")})
+    initiated_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    review_date: date = Field(sa_column_kwargs={"server_default": text("CURRENT_DATE")})
 
-    created_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
-    last_updated_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
+    created_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    last_updated_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
 
     # Structured form fields (Planner fills these out)
     review_reason: Optional[str] = Field(default=None, max_length=100)
@@ -173,12 +125,8 @@ class MaterialReviewDB(SQLModel, table=True):
     sme_email: Optional[str] = Field(default=None, max_length=100)
     sme_department: Optional[str] = Field(default=None, max_length=100)
     sme_feedback_method: Optional[str] = Field(default=None, max_length=100)
-    sme_contacted_date: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
-    sme_responded_date: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
+    sme_contacted_date: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    sme_responded_date: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
     sme_recommendation: Optional[str] = Field(default=None, max_length=50)
     sme_recommended_safety_stock_qty: Optional[float] = None
     sme_recommended_unrestricted_qty: Optional[float] = None
@@ -191,16 +139,8 @@ class MaterialReviewDB(SQLModel, table=True):
     final_safety_stock_qty: Optional[float] = None
     final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
-    decided_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
-    decided_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
+    decided_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    decided_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
 
     # Follow-up scheduling
     requires_follow_up: Optional[bool] = None
@@ -209,8 +149,7 @@ class MaterialReviewDB(SQLModel, table=True):
     review_frequency_weeks: Optional[int] = None
 
     # Link to previous review
-    previous_review_id: Optional[int] = Field(
-        default=None, foreign_key="material_reviews.review_id")
+    previous_review_id: Optional[int] = Field(default=None, foreign_key="material_reviews.review_id")
 
     # Additional tracking
     estimated_savings: Optional[float] = None
@@ -219,27 +158,18 @@ class MaterialReviewDB(SQLModel, table=True):
     # Workflow status
     status: str = Field(default="draft", max_length=20)
 
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
     # Metadata
     is_superseded: bool = Field(default=False)
 
-
-    data_snapshot_job_id: Optional[UUID] = Field(
-        default=None, foreign_key="upload_jobs.job_id")
+    data_snapshot_job_id: Optional[UUID] = Field(default=None, foreign_key="upload_jobs.job_id")
     is_data_stale: bool = Field(default=False)
     data_stale_since: Optional[datetime] = Field(default=None)
 
     # Relationship to material
-    material: Optional[SAPMaterialData] = Relationship(
-        back_populates="reviews")
+    material: Optional[SAPMaterialData] = Relationship(back_populates="reviews")
 
 
 class ReviewChecklistDB(SQLModel, table=True):
@@ -250,28 +180,10 @@ class ReviewChecklistDB(SQLModel, table=True):
     checklist_id: Optional[int] = Field(default=None, primary_key=True)
     review_id: int = Field(foreign_key="material_reviews.review_id")
 
-    created_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
-    last_updated_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    last_updated_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
     # Required boolean checks
     has_open_orders: bool
@@ -298,14 +210,33 @@ class ReviewCommentDB(SQLModel, table=True):
     review_id: int = Field(foreign_key="material_reviews.review_id")
     user_id: UUID
     comment: str
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+
+
+class NotificationDB(SQLModel, table=True):
+    """Notification table model."""
+
+    __tablename__ = "notifications"
+
+    notification_id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: UUID = Field(foreign_key="profiles.id")
+    notification_type: str = Field(max_length=50)
+    title: str = Field(max_length=200)
+    message: str
+
+    # Related entities
+    review_id: Optional[int] = Field(default=None, foreign_key="material_reviews.review_id")
+    material_number: Optional[int] = Field(default=None, foreign_key="sap_material_data.material_number")
+    comment_id: Optional[int] = Field(default=None, foreign_key="review_comments.comment_id")
+    triggered_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+
+    # Status
+    is_read: bool = Field(default=False)
+    read_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+
+    # Audit
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class AuditLogDB(SQLModel, table=True):
@@ -317,24 +248,11 @@ class AuditLogDB(SQLModel, table=True):
     table_name: str = Field(max_length=100)
     record_id: int
     operation: str = Field(max_length=10)
-    old_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    new_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    fields_changed: Optional[list[str]] = Field(
-        default=None, sa_column=Column(ARRAY(String))
-    )
-    changed_by: UUID = Field(
-        sa_column_kwargs={
-            "server_default": text(
-                "auth.uid()"
-            )
-        }
-    )
-    changed_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    old_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    new_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    fields_changed: Optional[list[str]] = Field(default=None, sa_column=Column(ARRAY(String)))
+    changed_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    changed_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class UploadJobDB(SQLModel, table=True):
@@ -356,16 +274,9 @@ class UploadJobDB(SQLModel, table=True):
     file_size_bytes: Optional[int] = Field(default=None)
     file_mime_type: Optional[str] = Field(default=None, max_length=100)
     created_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    started_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
-    completed_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    started_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
 
 
 class MaterialDataHistory(SQLModel, table=True):
@@ -375,21 +286,12 @@ class MaterialDataHistory(SQLModel, table=True):
 
     history_id: Optional[int] = Field(default=None, primary_key=True)
     upload_job_id: UUID = Field(foreign_key="upload_jobs.job_id")
-    material_number: int = Field(
-        foreign_key="sap_material_data.material_number")
-    change_type: Literal['INSERT', 'UPDATE'] = Field(
-        sa_column=Column(String(10)))
-    old_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    new_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    fields_changed: Optional[list[str]] = Field(
-        default=None, sa_column=Column(ARRAY(String))
-    )
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    material_number: int = Field(foreign_key="sap_material_data.material_number")
+    change_type: Literal["INSERT", "UPDATE"] = Field(sa_column=Column(String(10)))
+    old_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    new_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    fields_changed: Optional[list[str]] = Field(default=None, sa_column=Column(ARRAY(String)))
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class UploadSnapshot(SQLModel, table=True):
@@ -399,13 +301,9 @@ class UploadSnapshot(SQLModel, table=True):
 
     snapshot_id: UUID = Field(default_factory=uuid4, primary_key=True)
     upload_job_id: UUID = Field(foreign_key="upload_jobs.job_id")
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    prev_snapshot_id: Optional[UUID] = Field(
-        default=None, foreign_key="upload_snapshots.snapshot_id")
-    
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    prev_snapshot_id: Optional[UUID] = Field(default=None, foreign_key="upload_snapshots.snapshot_id")
+
     total_inventory_value: Optional[float] = None
     total_opportunity_value: Optional[float] = None
     total_overdue_reviews: Optional[int] = None
@@ -419,9 +317,9 @@ class LookupOptionDB(SQLModel, table=True):
 
     option_id: Optional[int] = Field(default=None, primary_key=True)
     category: str = Field(max_length=50, index=True)  # e.g. 'review_reason'
-    value: str = Field(max_length=100)                # e.g. 'annual_review'
-    label: str = Field(max_length=200)                # e.g. 'Annual Review'
-    description: Optional[str] = None                 # Help text for users
+    value: str = Field(max_length=100)  # e.g. 'annual_review'
+    label: str = Field(max_length=200)  # e.g. 'Annual Review'
+    description: Optional[str] = None  # Help text for users
     color: Optional[str] = Field(default=None, max_length=7)  # Hex color
 
     # Grouping & ordering
@@ -432,22 +330,10 @@ class LookupOptionDB(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
     # Audit fields
-    created_by: Optional[UUID] = Field(
-        default=None,
-        sa_column_kwargs={"server_default": text("auth.uid()")}
-    )
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_by: Optional[UUID] = Field(
-        default=None,
-        sa_column_kwargs={"server_default": text("auth.uid()")}
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_by: Optional[UUID] = Field(default=None, sa_column_kwargs={"server_default": text("auth.uid()")})
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_by: Optional[UUID] = Field(default=None, sa_column_kwargs={"server_default": text("auth.uid()")})
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class LookupOptionHistoryDB(SQLModel, table=True):
@@ -458,18 +344,10 @@ class LookupOptionHistoryDB(SQLModel, table=True):
     history_id: Optional[int] = Field(default=None, primary_key=True)
     option_id: int = Field(foreign_key="lookup_options.option_id")
     change_type: str = Field(max_length=20)  # created, updated, deactivated, reactivated
-    old_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    new_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    changed_by: Optional[UUID] = Field(
-        default=None,
-        sa_column_kwargs={"server_default": text("auth.uid()")}
-    )
-    changed_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    old_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    new_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    changed_by: Optional[UUID] = Field(default=None, sa_column_kwargs={"server_default": text("auth.uid()")})
+    changed_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 # ============================================================================
@@ -506,14 +384,8 @@ class RoleDB(SQLModel, table=True):
     approval_limit: Optional[float] = None
 
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class UserRoleDB(SQLModel, table=True):
@@ -531,14 +403,9 @@ class UserRoleDB(SQLModel, table=True):
 
     # Audit
     assigned_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
-    assigned_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    assigned_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
     revoked_by: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
-    revoked_at: Optional[datetime] = Field(
-        default=None, sa_column=Column(TIMESTAMP(timezone=True))
-    )
+    revoked_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
 
     is_active: bool = Field(default=True)
 
@@ -551,15 +418,10 @@ class UserRoleHistoryDB(SQLModel, table=True):
     history_id: Optional[int] = Field(default=None, primary_key=True)
     user_role_id: int = Field(foreign_key="user_roles.user_role_id")
     action: str = Field(max_length=30)  # 'assigned', 'revoked', 'updated'
-    old_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
-    new_values: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSON))
+    old_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    new_values: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
     performed_by: UUID = Field(foreign_key="profiles.id")
-    performed_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    performed_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
 
 
 class SMEExpertiseDB(SQLModel, table=True):
@@ -587,11 +449,5 @@ class SMEExpertiseDB(SQLModel, table=True):
     # Backup SME
     backup_user_id: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
 
-    created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True),
-                         server_default=text("NOW()"))
-    )
+    created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))

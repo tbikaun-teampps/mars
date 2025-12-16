@@ -11,6 +11,7 @@ from app.api import (
     insights,
     lookups,
     materials,
+    notifications,
     rbac,
     reviews,
     users,
@@ -45,6 +46,7 @@ app.include_router(insights.router, prefix="/api", tags=["Insights"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 app.include_router(lookups.router, prefix="/api", tags=["Lookup Options"])
 app.include_router(rbac.router, prefix="/api", tags=["RBAC"])
+app.include_router(notifications.router, prefix="/api", tags=["Notifications"])
 
 
 @app.get("/")

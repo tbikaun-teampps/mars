@@ -24,6 +24,7 @@ from app.models.review import (
     ReviewStepEnum,
 )
 from app.models.user import UserProfile
+from app.services.notification_service import NotificationService
 
 router = APIRouter()
 
@@ -38,9 +39,7 @@ async def create_material_review(
     """Create a new review for a material."""
 
     # Verify that the material exists
-    material_query = select(SAPMaterialData).where(
-        SAPMaterialData.material_number == material_number
-    )
+    material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
     material_result = await db.exec(material_query)
     material_exists = material_result.first()
 
@@ -63,8 +62,7 @@ async def create_material_review(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "An active review already exists for this material. "
-                "A new review cannot be created until the existing one is completed or cancelled."
+                "An active review already exists for this material. A new review cannot be created until the existing one is completed or cancelled."
             ),
         )
 
@@ -122,18 +120,14 @@ async def create_material_review(
         )
 
     # Fetch initiator profile
-    initiator_profile_query = select(ProfileDB).where(
-        ProfileDB.id == review_db.initiated_by
-    )
+    initiator_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.initiated_by)
     initiator_profile_result = await db.exec(initiator_profile_query)
     initiator_profile = initiator_profile_result.first()
 
     # Create user profile object if profile exists
     initiated_by_user = None
     if initiator_profile:
-        initiated_by_user = UserProfile(
-            id=initiator_profile.id, full_name=initiator_profile.full_name
-        )
+        initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
 
     return MaterialReview(
         created_by=review_db.created_by,
@@ -181,13 +175,11 @@ async def create_material_review(
         completed_checklist=review_db.completed_checklist,
         created_at=review_db.created_at,
         updated_at=review_db.updated_at,
-        comments_count=0  # New review has no comments yet
+        comments_count=0,  # New review has no comments yet
     )
 
 
-@router.put(
-    "/materials/{material_number}/review/{review_id}", status_code=status.HTTP_200_OK
-)
+@router.put("/materials/{material_number}/review/{review_id}", status_code=status.HTTP_200_OK)
 async def update_material_review(
     material_number: int,
     review_id: int,
@@ -199,9 +191,7 @@ async def update_material_review(
     """Update an existing review for a material."""
 
     # Verify that the material exists
-    material_query = select(SAPMaterialData).where(
-        SAPMaterialData.material_number == material_number
-    )
+    material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
     material_result = await db.exec(material_query)
     material_exists = material_result.first()
 
@@ -256,8 +246,7 @@ async def update_material_review(
             "procurement_feedback",
         ]
 
-        checklist_data = {k: v for k,
-                          v in update_data.items() if k in checklist_fields}
+        checklist_data = {k: v for k, v in update_data.items() if k in checklist_fields}
 
         # Validate that all required boolean fields are present
         required_checks = [
@@ -269,8 +258,7 @@ async def update_material_review(
             "checked_supersession",
             "checked_historical_usage",
         ]
-        missing_fields = [
-            f for f in required_checks if f not in checklist_data]
+        missing_fields = [f for f in required_checks if f not in checklist_data]
         if missing_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -278,14 +266,11 @@ async def update_material_review(
             )
 
         # Upsert checklist data
-        checklist_query = select(ReviewChecklistDB).where(
-            ReviewChecklistDB.review_id == review_id
-        )
+        checklist_query = select(ReviewChecklistDB).where(ReviewChecklistDB.review_id == review_id)
         checklist_result = await db.exec(checklist_query)
         existing_checklist = checklist_result.first()
 
         if existing_checklist:
-
             # Update existing checklist
             for field, value in checklist_data.items():
                 setattr(existing_checklist, field, value)
@@ -294,8 +279,7 @@ async def update_material_review(
             db.add(existing_checklist)
         else:
             # Create new checklist
-            new_checklist = ReviewChecklistDB(
-                review_id=review_id, **checklist_data, created_by=current_user.id, last_updated_by=current_user.id)
+            new_checklist = ReviewChecklistDB(review_id=review_id, **checklist_data, created_by=current_user.id, last_updated_by=current_user.id)
             db.add(new_checklist)
 
         # Mark checklist as completed on the review
@@ -311,10 +295,13 @@ async def update_material_review(
             setattr(review_db, field, value)
 
     # Auto-clear follow-up fields when requires_follow_up is set to false
-    if 'requires_follow_up' in update_data and update_data['requires_follow_up'] is False:
+    if "requires_follow_up" in update_data and update_data["requires_follow_up"] is False:
         review_db.next_review_date = None
         review_db.follow_up_reason = None
         review_db.review_frequency_weeks = None
+
+    # Capture old status before update for notification purposes
+    old_status = review_db.status
 
     # Determine and update status based on step completion
     new_status = determine_status_after_step(step, review_db, update_data)
@@ -342,12 +329,22 @@ async def update_material_review(
             detail=f"Failed to update review: {str(e)}",
         )
 
+    # Send notification if status changed
+    if old_status != new_status:
+        from uuid import UUID
+
+        notification_service = NotificationService(db)
+        await notification_service.notify_status_change(
+            review=review_db,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by=UUID(current_user.id),
+        )
+
     # Query checklist data if it exists
     from app.models.db_models import ReviewChecklistDB
 
-    checklist_query = select(ReviewChecklistDB).where(
-        ReviewChecklistDB.review_id == review_id
-    )
+    checklist_query = select(ReviewChecklistDB).where(ReviewChecklistDB.review_id == review_id)
     checklist_result = await db.exec(checklist_query)
     checklist_db = checklist_result.first()
 
@@ -369,37 +366,27 @@ async def update_material_review(
         )
 
     # Fetch initiator and decider profiles
-    initiator_profile_query = select(ProfileDB).where(
-        ProfileDB.id == review_db.initiated_by
-    )
+    initiator_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.initiated_by)
     initiator_profile_result = await db.exec(initiator_profile_query)
     initiator_profile = initiator_profile_result.first()
 
     # Create initiator user profile object if profile exists
     initiated_by_user = None
     if initiator_profile:
-        initiated_by_user = UserProfile(
-            id=initiator_profile.id, full_name=initiator_profile.full_name
-        )
+        initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
 
     # Fetch decider profile if decided_by is set
     decided_by_user = None
     if review_db.decided_by:
-        decider_profile_query = select(ProfileDB).where(
-            ProfileDB.id == review_db.decided_by
-        )
+        decider_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.decided_by)
         decider_profile_result = await db.exec(decider_profile_query)
         decider_profile = decider_profile_result.first()
 
         if decider_profile:
-            decided_by_user = UserProfile(
-                id=decider_profile.id, full_name=decider_profile.full_name
-            )
+            decided_by_user = UserProfile(id=decider_profile.id, full_name=decider_profile.full_name)
 
     # Get comment count for this review
-    comments_count_query = select(func.count(ReviewCommentDB.comment_id)).where(
-        ReviewCommentDB.review_id == review_db.review_id
-    )
+    comments_count_query = select(func.count(ReviewCommentDB.comment_id)).where(ReviewCommentDB.review_id == review_db.review_id)
     comments_count_result = await db.exec(comments_count_query)
     comments_count = comments_count_result.one() or 0
 
@@ -468,9 +455,8 @@ async def update_material_review(
         checklist=checklist,
         created_at=review_db.created_at,
         updated_at=review_db.updated_at,
-        is_read_only=review_db.status
-        in [ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value],
-        comments_count=comments_count
+        is_read_only=review_db.status in [ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value],
+        comments_count=comments_count,
     )
 
 
@@ -487,9 +473,7 @@ async def cancel_material_review(
     """Cancel a review for a material."""
 
     # Verify that the material exists
-    material_query = select(SAPMaterialData).where(
-        SAPMaterialData.material_number == material_number
-    )
+    material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
     material_result = await db.exec(material_query)
     material_exists = material_result.first()
 

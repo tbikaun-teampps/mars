@@ -40,7 +40,7 @@ All new features or things of importance should be summarised in this document t
 
 Consult the full application architecture diagram (`docs/architecture.md`) before making significant structural decisions. This is an evolving artifact—propose updates when changes warrant.
 
-For frontend permission handling, see `docs/permissions-ui.md`. To add new permissions, see `docs/extending-permissions.md`.
+For frontend permission handling, see `docs/permissions-ui.md`. To add new permissions, see `docs/extending-permissions.md`. For the in-app notification system, see `docs/notifications.md`.
 
 ### Tech Stack
 
@@ -174,6 +174,7 @@ Summarise all changes to this document below. Add new entries at the top.
 
 | Date       | Summary                                                                 |
 | ---------- | ----------------------------------------------------------------------- |
+| 2025-12-16 | Added `docs/notifications.md` for in-app notification system            |
 | 2025-12-16 | Added `docs/extending-permissions.md` guide for adding new permissions  |
 | 2025-12-16 | Added `can_upload_data` permission to RBAC system                       |
 | 2025-12-16 | Added `docs/permissions-ui.md` documenting frontend permission controls |
