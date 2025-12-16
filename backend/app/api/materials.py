@@ -1109,7 +1109,7 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.next_review_date.isnot(None),
         MaterialReviewDB.next_review_date < datetime.utcnow().date(),
         MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
-        MaterialReviewDB.is_superseded == False,
+        MaterialReviewDB.is_superseded.is_(False),
     )
     overdue_reviews_result = await db.exec(overdue_reviews_query)
     total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
@@ -1123,7 +1123,7 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.proposed_action != 'keep_no_change',
         MaterialReviewDB.sme_recommendation.isnot(None),
         MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
-        MaterialReviewDB.is_superseded == False,
+        MaterialReviewDB.is_superseded.is_(False),
     )
     total_with_sme_result = await db.exec(total_with_sme_query)
     total_with_sme = total_with_sme_result.one_or_none() or 0
@@ -1135,7 +1135,7 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.sme_recommendation.isnot(None),
         MaterialReviewDB.sme_recommendation != 'keep_no_change',
         MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
-        MaterialReviewDB.is_superseded == False,
+        MaterialReviewDB.is_superseded.is_(False),
     )
     accepted_result = await db.exec(accepted_query)
     accepted_count = accepted_result.one_or_none() or 0

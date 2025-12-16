@@ -300,8 +300,6 @@ async def list_material_audit_logs(
         # For material_reviews, we need to get review_ids for the material
         # For review_checklist, we need to get checklist_ids for those review_ids
         # For material_insights, we need to get insight_ids for the material
-        from sqlalchemy import or_
-
         material_review_ids_query = select(MaterialReviewDB.review_id).where(
             MaterialReviewDB.material_number == material_number
         )

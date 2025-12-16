@@ -67,10 +67,10 @@ async def get_user_permissions(user_id: str, db: AsyncSession) -> list[str]:
         .join(UserRoleDB, UserRoleDB.role_id == RoleDB.role_id)
         .where(
             UserRoleDB.user_id == UUID(user_id),
-            UserRoleDB.is_active == True,
-            RoleDB.is_active == True,
-            or_(UserRoleDB.valid_to == None, UserRoleDB.valid_to >= today),
-            or_(UserRoleDB.valid_from == None, UserRoleDB.valid_from <= today),
+            UserRoleDB.is_active.is_(True),
+            RoleDB.is_active.is_(True),
+            or_(UserRoleDB.valid_to.is_(None), UserRoleDB.valid_to >= today),
+            or_(UserRoleDB.valid_from.is_(None), UserRoleDB.valid_from <= today),
         )
     )
     result = await db.exec(query)
@@ -151,9 +151,9 @@ async def check_last_system_admin(
         .join(RoleDB, RoleDB.role_id == UserRoleDB.role_id)
         .where(
             RoleDB.role_code == 'system_admin',
-            UserRoleDB.is_active == True,
+            UserRoleDB.is_active.is_(True),
             UserRoleDB.user_id != target_user_id,
-            or_(UserRoleDB.valid_to == None, UserRoleDB.valid_to >= today),
+            or_(UserRoleDB.valid_to.is_(None), UserRoleDB.valid_to >= today),
         )
     )
     result = await db.exec(count_query)
@@ -198,10 +198,10 @@ async def check_user_is_admin(
         .join(UserRoleDB, UserRoleDB.role_id == RoleDB.role_id)
         .where(
             UserRoleDB.user_id == UUID(user_id),
-            UserRoleDB.is_active == True,
-            RoleDB.is_active == True,
-            or_(UserRoleDB.valid_to == None, UserRoleDB.valid_to >= today),
-            or_(UserRoleDB.valid_from == None, UserRoleDB.valid_from <= today),
+            UserRoleDB.is_active.is_(True),
+            RoleDB.is_active.is_(True),
+            or_(UserRoleDB.valid_to.is_(None), UserRoleDB.valid_to >= today),
+            or_(UserRoleDB.valid_from.is_(None), UserRoleDB.valid_from <= today),
         )
     )
     result = await db.exec(query)
@@ -228,7 +228,7 @@ async def list_roles(
     query = select(RoleDB)
 
     if not include_inactive:
-        query = query.where(RoleDB.is_active == True)
+        query = query.where(RoleDB.is_active.is_(True))
     if role_type:
         query = query.where(RoleDB.role_type == role_type)
 
@@ -283,7 +283,7 @@ async def list_user_roles(
     )
 
     if not include_inactive:
-        query = query.where(UserRoleDB.is_active == True)
+        query = query.where(UserRoleDB.is_active.is_(True))
     if user_id:
         query = query.where(UserRoleDB.user_id == user_id)
     if role_id:
@@ -369,7 +369,7 @@ async def create_user_role(
     existing_query = select(UserRoleDB).where(
         UserRoleDB.user_id == data.user_id,
         UserRoleDB.role_id == data.role_id,
-        UserRoleDB.is_active == True,
+        UserRoleDB.is_active.is_(True),
     )
     existing_result = await db.exec(existing_query)
 
@@ -674,7 +674,7 @@ async def create_sme_expertise(
     lookup_query = select(LookupOptionDB).where(
         LookupOptionDB.category == 'sme_type',
         LookupOptionDB.value == data.sme_type,
-        LookupOptionDB.is_active == True,
+        LookupOptionDB.is_active.is_(True),
     )
     lookup_result = await db.exec(lookup_query)
     lookup = lookup_result.first()
@@ -797,7 +797,7 @@ async def update_sme_expertise(
         lookup_query = select(LookupOptionDB).where(
             LookupOptionDB.category == 'sme_type',
             LookupOptionDB.value == data.sme_type,
-            LookupOptionDB.is_active == True,
+            LookupOptionDB.is_active.is_(True),
         )
         lookup_result = await db.exec(lookup_query)
         if not lookup_result.first():

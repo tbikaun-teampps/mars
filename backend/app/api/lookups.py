@@ -155,7 +155,7 @@ async def list_all_lookup_options(
     """List all lookup options grouped by category."""
     query = select(LookupOptionDB)
     if not include_inactive:
-        query = query.where(LookupOptionDB.is_active == True)
+        query = query.where(LookupOptionDB.is_active.is_(True))
     query = query.order_by(LookupOptionDB.category, LookupOptionDB.group_order, LookupOptionDB.sort_order)
 
     result = await db.exec(query)
@@ -184,7 +184,7 @@ async def list_lookup_options_by_category(
     """List lookup options for a specific category, grouped by group_name."""
     query = select(LookupOptionDB).where(LookupOptionDB.category == category)
     if not include_inactive:
-        query = query.where(LookupOptionDB.is_active == True)
+        query = query.where(LookupOptionDB.is_active.is_(True))
     query = query.order_by(LookupOptionDB.group_order, LookupOptionDB.sort_order)
 
     result = await db.exec(query)

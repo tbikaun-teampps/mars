@@ -407,7 +407,7 @@ async def update_material_review(
             MaterialReviewDB.material_number == material_number,
             MaterialReviewDB.review_id != review_db.review_id,  # Exclude current review
             MaterialReviewDB.status == "completed",
-            MaterialReviewDB.is_superseded == False,
+            MaterialReviewDB.is_superseded.is_(False),
         )
         completed_reviews_result = await db.exec(completed_reviews_query)
         completed_reviews = completed_reviews_result.all()

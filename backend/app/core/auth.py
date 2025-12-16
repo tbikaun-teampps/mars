@@ -161,11 +161,11 @@ async def _check_user_is_admin_for_impersonation(user_id: str) -> bool:
             .join(UserRoleDB, UserRoleDB.role_id == RoleDB.role_id)
             .where(
                 UserRoleDB.user_id == UUID(user_id),
-                UserRoleDB.is_active == True,
-                RoleDB.is_active == True,
+                UserRoleDB.is_active.is_(True),
+                RoleDB.is_active.is_(True),
                 RoleDB.role_type == "admin",
-                or_(UserRoleDB.valid_to == None, UserRoleDB.valid_to >= today),
-                or_(UserRoleDB.valid_from == None, UserRoleDB.valid_from <= today),
+                or_(UserRoleDB.valid_to.is_(None), UserRoleDB.valid_to >= today),
+                or_(UserRoleDB.valid_from.is_(None), UserRoleDB.valid_from <= today),
             )
         )
         result = await db.exec(query)

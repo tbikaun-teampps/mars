@@ -130,7 +130,7 @@ async def get_rejection_rates_by_material_type(db: AsyncSession) -> list[dict]:
             MaterialReviewDB.proposed_action != "keep_no_change",
             MaterialReviewDB.sme_recommendation.isnot(None),
             MaterialReviewDB.status == "completed",
-            MaterialReviewDB.is_superseded == False,
+            MaterialReviewDB.is_superseded.is_(False),
         )
         .group_by(SAPMaterialData.material_type)
         .order_by(func.count(MaterialReviewDB.review_id).desc())
