@@ -28,7 +28,7 @@ export function ImpersonationBanner() {
     originalUser?.user_metadata?.full_name || originalUser?.email || "You";
 
   return (
-    <div className="bg-amber-500 text-amber-950 py-2">
+    <div className="bg-amber-500 text-amber-950 py-2 md:pl-[3rem]">
       <div className="container mx-auto px-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
