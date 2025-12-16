@@ -3,6 +3,7 @@ import { MainPage } from "./pages/MainPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AccountPage } from "./pages/AccountPage";
 import { MaterialDetailPage } from "./pages/MaterialDetailPage";
+import { MaterialReviewPage } from "./pages/MaterialReviewPage";
 
 function App() {
   return (
@@ -10,6 +11,8 @@ function App() {
       <Route path="/app/dashboard" element={<MainPage view="dashboard" />} />
       <Route path="/app/audit-logs" element={<MainPage view="audit-log" />} />
       <Route path="/app/uploads" element={<MainPage view="uploads" />} />
+      <Route path="/app/materials/:materialNumber/review/:reviewId" element={<MaterialReviewPage />} />
+      <Route path="/app/materials/:materialNumber/review" element={<MaterialReviewPage />} />
       <Route path="/app/materials/:materialNumber" element={<MaterialDetailPage />} />
       <Route path="/app/settings" element={<SettingsPage />} />
       <Route path="/app/account" element={<AccountPage />} />

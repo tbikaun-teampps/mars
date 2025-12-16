@@ -725,14 +725,6 @@ function MaterialReviewFormInner({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <div className="flex-1 border-t border-gray-300" />
-        <h3 className="text-lg font-semibold whitespace-nowrap">
-          Reviewing Material
-        </h3>
-        <div className="flex-1 border-t border-gray-300" />
-      </div>
-
       <StepProgressIndicator />
 
       {!canSaveCurrentStep && (

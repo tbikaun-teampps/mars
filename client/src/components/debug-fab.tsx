@@ -85,6 +85,7 @@ export function DebugFAB() {
   const [selectedMaterial, setSelectedMaterial] = useState<string>("");
   const [selectedUserToImpersonate, setSelectedUserToImpersonate] = useState<string>("");
   const [selectedNotificationType, setSelectedNotificationType] = useState<string>("review_assigned");
+  const [selectedNotificationMaterial, setSelectedNotificationMaterial] = useState<string>("");
 
   // Get admin status and impersonation context
   const { isAdmin } = usePermissions();
@@ -192,10 +193,14 @@ export function DebugFAB() {
 
   const handleCreateTestNotification = async () => {
     try {
+      const materialNum = selectedNotificationMaterial ? parseInt(selectedNotificationMaterial, 10) : undefined;
       await createDebugNotification.mutateAsync({
         notification_type: selectedNotificationType as "review_assigned" | "review_status_changed" | "comment_added",
+        material_number: materialNum,
       });
-      toast.success(`Created test notification: ${selectedNotificationType.replace(/_/g, " ")}`);
+      const typeLabel = selectedNotificationType.replace(/_/g, " ");
+      const materialLabel = materialNum ? ` for material #${materialNum}` : "";
+      toast.success(`Created test notification: ${typeLabel}${materialLabel}`);
     } catch (error) {
       toast.error(
         `Failed: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -532,6 +537,48 @@ export function DebugFAB() {
               </div>
 
               {/* Create Test Notification */}
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Attach to material (optional)
+                </label>
+                <div className="h-20 rounded-md border overflow-y-auto">
+                  <div className="p-1">
+                    <button
+                      type="button"
+                      className={`w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent transition-colors ${
+                        selectedNotificationMaterial === ""
+                          ? "bg-accent font-medium"
+                          : ""
+                      }`}
+                      onClick={() => setSelectedNotificationMaterial("")}
+                    >
+                      No material
+                    </button>
+                    {materialsLoading ? (
+                      <div className="flex items-center justify-center py-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                        Loading...
+                      </div>
+                    ) : (
+                      materials.map((m) => (
+                        <button
+                          key={m.material_number}
+                          type="button"
+                          className={`w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent transition-colors ${
+                            selectedNotificationMaterial === m.material_number.toString()
+                              ? "bg-accent font-medium"
+                              : ""
+                          }`}
+                          onClick={() => setSelectedNotificationMaterial(m.material_number.toString())}
+                        >
+                          #{m.material_number} - {m.material_desc?.slice(0, 20) || "No description"}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">
                   Select notification type
