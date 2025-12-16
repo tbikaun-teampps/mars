@@ -17,6 +17,9 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useDashboardSummary } from "@/api/queries";
+import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 // Height of the impersonation banner (py-2 + h-7 button = ~40px)
 const BANNER_HEIGHT = "2.5rem";
@@ -29,14 +32,14 @@ interface BreadcrumbItem {
 interface AppLayoutProps {
   children: React.ReactNode;
   breadcrumbs?: BreadcrumbItem[];
-  headerRight?: React.ReactNode;
 }
 
-export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps) {
+export function AppLayout({ children, breadcrumbs }: AppLayoutProps) {
   const { user, loading } = useAuth();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { isImpersonating } = useImpersonation();
   const { isAdmin } = usePermissions();
+  const { data: dashboardSummary } = useDashboardSummary(true);
 
   // Calculate banner height for sidebar offset
   const bannerHeight = import.meta.env.DEV && isImpersonating ? BANNER_HEIGHT : "0px";
@@ -98,7 +101,16 @@ export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps
                   })}
                 </BreadcrumbList>
               </Breadcrumb>
-              {headerRight}
+              <Badge variant="secondary">
+                Last Upload:{" "}
+                {dashboardSummary?.last_upload_date
+                  ? `${new Date(dashboardSummary.last_upload_date).toLocaleDateString("en-AU", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })} (${formatDistanceToNow(new Date(dashboardSummary.last_upload_date), { addSuffix: true })})`
+                  : "No data uploaded"}
+              </Badge>
             </div>
           </header>
           <div className="flex flex-1 flex-col gap-4 p-4 overflow-hidden">

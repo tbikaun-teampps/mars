@@ -173,26 +173,8 @@ export function MainPage({ view }: MainPageProps) {
   const { data: dashboardActivity, isLoading: isDashboardActivityLoading } =
     useDashboardRecentActivity(activeView == "dashboard");
 
-  const headerRight = (
-    <Badge variant="secondary">
-      Last Upload:{" "}
-      {dashboardSummary?.last_upload_date
-        ? `${new Date(
-            dashboardSummary.last_upload_date
-          ).toLocaleDateString("en-AU", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })} (${formatDistanceToNow(
-            new Date(dashboardSummary.last_upload_date),
-            { addSuffix: true }
-          )})`
-        : "No data uploaded"}
-    </Badge>
-  );
-
   return (
-    <AppLayout breadcrumbs={breadcrumbs} headerRight={headerRight}>
+    <AppLayout breadcrumbs={breadcrumbs}>
       {activeView === "dashboard" ? (
         <div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
