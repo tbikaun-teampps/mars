@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import {
   Info,
   Loader2,
@@ -11,6 +12,7 @@ import {
   Eye,
   EyeOff,
   History,
+  ExternalLink,
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { components } from "@/types/api";
@@ -772,25 +774,26 @@ function MaterialDetailsContent({
         <SheetTitle>
           <div className="flex justify-between mr-6 gap-4">
             <div className="flex items-center gap-4">
-              {/* <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <ChevronUp />
-              </Button>
-              <Button variant="outline" size="sm">
-                <ChevronDown />
-              </Button>
-            </div> */}
               {materialDescription}{" "}
               <span className="text-muted-foreground">(#{materialNumber})</span>
             </div>
-            <Button
-              size="sm"
-              variant={showHistory ? "default" : "outline"}
-              onClick={() => setShowHistory(!showHistory)}
-            >
-              <History />
-              Change History
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/app/materials/${materialNumber}`}
+                className="flex items-center gap-1 text-sm text-primary hover:underline font-normal"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Full page
+              </Link>
+              <Button
+                size="sm"
+                variant={showHistory ? "default" : "outline"}
+                onClick={() => setShowHistory(!showHistory)}
+              >
+                <History />
+                Change History
+              </Button>
+            </div>
           </div>
         </SheetTitle>
       </SheetHeader>

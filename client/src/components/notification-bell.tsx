@@ -30,14 +30,8 @@ function NotificationItem({
   notification: NotificationResponse;
   onMarkRead: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50 cursor-pointer",
-        !notification.is_read && "bg-blue-50 dark:bg-blue-950/20"
-      )}
-      onClick={onMarkRead}
-    >
+  const content = (
+    <>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{notification.title}</p>
         <p className="text-xs text-muted-foreground line-clamp-2">
@@ -56,15 +50,34 @@ function NotificationItem({
           )}
         </div>
       </div>
-      {notification.review_id && notification.material_number && (
-        <Link
-          to={`/app/dashboard?material=${notification.material_number}`}
-          className="text-muted-foreground hover:text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink className="h-4 w-4" />
-        </Link>
+      {notification.material_number && (
+        <ExternalLink className="h-4 w-4 text-muted-foreground" />
       )}
+    </>
+  );
+
+  const className = cn(
+    "flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50 cursor-pointer",
+    !notification.is_read && "bg-blue-50 dark:bg-blue-950/20"
+  );
+
+  // If there's a material_number, make the whole item a link to the material detail page
+  if (notification.material_number) {
+    return (
+      <Link
+        to={`/app/materials/${notification.material_number}`}
+        className={className}
+        onClick={onMarkRead}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  // Otherwise just a clickable div that marks as read
+  return (
+    <div className={className} onClick={onMarkRead}>
+      {content}
     </div>
   );
 }
