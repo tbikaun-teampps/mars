@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, BellOff, CheckCheck, ExternalLink, Circle } from "lucide-react";
+import { Bell, BellOff, CheckCheck, ExternalLink, Circle, Filter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -112,10 +112,11 @@ function NotificationItem({
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
 
   const { data: countData } = useUnreadNotificationCount();
   const { data: notificationsData, isLoading } = useNotifications(
-    { limit: 10 },
+    { limit: 10, unread_only: showUnreadOnly },
     open // Only fetch when dropdown is open
   );
   const markRead = useMarkNotificationRead();
@@ -156,17 +157,29 @@ export function NotificationBell() {
       <DropdownMenuContent side="right" align="start" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Notifications</span>
-          {unreadCount > 0 && (
+          <div className="flex items-center gap-1">
             <Button
-              variant="ghost"
+              variant={showUnreadOnly ? "secondary" : "ghost"}
               size="sm"
               className="h-auto p-1 text-xs"
-              onClick={handleMarkAllRead}
+              onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+              title={showUnreadOnly ? "Show all" : "Show unread only"}
             >
-              <CheckCheck className="h-3 w-3 mr-1" />
-              Mark all read
+              <Filter className="h-3 w-3 mr-1" />
+              {showUnreadOnly ? "Unread" : "All"}
             </Button>
-          )}
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto p-1 text-xs"
+                onClick={handleMarkAllRead}
+              >
+                <CheckCheck className="h-3 w-3 mr-1" />
+                Mark all read
+              </Button>
+            )}
+          </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="max-h-[300px] overflow-y-auto">
