@@ -2,9 +2,11 @@
 
 import logging
 from typing import Annotated, Optional
+
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)

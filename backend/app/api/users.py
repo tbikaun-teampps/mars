@@ -1,15 +1,16 @@
 """User endpoints."""
 
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.auth import get_current_user, User
+from app.api.rbac import check_user_is_admin, get_user_permissions
+from app.core.auth import User, get_current_user
 from app.core.database import get_db
 from app.models.db_models import ProfileDB
-from app.models.user import UserResponse, ProfileUpdate
-from app.api.rbac import get_user_permissions, check_user_is_admin
+from app.models.user import ProfileUpdate, UserResponse
 
 router = APIRouter()
 

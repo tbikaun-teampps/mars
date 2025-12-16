@@ -1,6 +1,7 @@
 """Database connection and session management using SQLModel."""
 
 from typing import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession

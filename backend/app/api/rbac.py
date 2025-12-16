@@ -11,30 +11,30 @@ from fastapi import (
     Query,
     status,
 )
-from sqlmodel import select, or_
+from sqlmodel import or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.auth import User, get_current_user
+from app.core.database import get_db
+from app.models.db_models import (
+    LookupOptionDB,
+    ProfileDB,
+    RoleDB,
+    SMEExpertiseDB,
+    UserRoleDB,
+    UserRoleHistoryDB,
+)
 from app.models.rbac import (
     RoleListItem,
     RoleResponse,
-    UserRoleCreate,
-    UserRoleUpdate,
-    UserRoleResponse,
     SMEExpertiseCreate,
-    SMEExpertiseUpdate,
     SMEExpertiseResponse,
+    SMEExpertiseUpdate,
     UserListItem,
+    UserRoleCreate,
+    UserRoleResponse,
+    UserRoleUpdate,
 )
-from app.models.db_models import (
-    RoleDB,
-    UserRoleDB,
-    UserRoleHistoryDB,
-    SMEExpertiseDB,
-    ProfileDB,
-    LookupOptionDB,
-)
-from app.core.database import get_db
-from app.core.auth import get_current_user, User
 
 router = APIRouter()
 

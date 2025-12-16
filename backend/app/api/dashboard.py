@@ -5,26 +5,25 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlmodel import select, func, case
+from sqlmodel import case, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.audit import generate_change_summary
+from app.api.materials import get_metrics_for_snapshot
 from app.core.auth import User, get_current_user
 from app.core.database import get_db
 from app.models.audit import MaterialAuditLogEntry
 from app.models.db_models import (
     AuditLogDB,
-    ProfileDB,
-    MaterialReviewDB,
-    ReviewChecklistDB,
     MaterialInsightDB,
+    MaterialReviewDB,
+    ProfileDB,
+    ReviewChecklistDB,
     SAPMaterialData,
-    UploadSnapshot,
     UploadJobDB,
+    UploadSnapshot,
 )
 from app.models.user import UserProfile
-from app.api.audit import generate_change_summary
-from app.api.materials import get_metrics_for_snapshot
-
 
 router = APIRouter()
 

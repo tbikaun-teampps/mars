@@ -1,11 +1,11 @@
 """SQLModel database models."""
 
 from datetime import date, datetime
-from typing import Any, Optional, Literal
+from typing import Any, Literal, Optional
 from uuid import UUID, uuid4
 
-from sqlmodel import Field, Relationship, SQLModel, Column, JSON
-from sqlalchemy import ARRAY, String, text, TIMESTAMP
+from sqlalchemy import ARRAY, TIMESTAMP, String, text
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 
 class ProfileDB(SQLModel, table=True):

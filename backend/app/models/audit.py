@@ -1,9 +1,10 @@
 """Audit log models."""
 
 from datetime import datetime
-from typing import Optional, Any
-from pydantic import BaseModel
+from typing import Any, Optional
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from app.models.user import UserProfile
 

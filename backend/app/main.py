@@ -3,7 +3,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, materials, audit, reviews, comments, users, insights, dashboard, lookups, rbac
+from app.api import (
+    audit,
+    comments,
+    dashboard,
+    health,
+    insights,
+    lookups,
+    materials,
+    rbac,
+    reviews,
+    users,
+)
 from app.core.config import settings
 
 # Create FastAPI app

@@ -5,9 +5,8 @@ from pydantic import BaseModel
 from sqlmodel import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.database import get_db
 from app.core.config import settings
-
+from app.core.database import get_db
 
 router = APIRouter()
 

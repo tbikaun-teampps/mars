@@ -1,12 +1,13 @@
 """General materials endpoints."""
 
-from decimal import Decimal
 import io
-import numpy as np
-import pandas as pd
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
+
+import numpy as np
+import pandas as pd
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -14,45 +15,41 @@ from fastapi import (
     File,
     HTTPException,
     Query,
-    status,
     UploadFile,
+    status,
 )
-from sqlalchemy import func as sa_func, text, cast, String, delete, update
+from sqlalchemy import String, cast, delete, text, update
+from sqlalchemy import func as sa_func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import aliased
-from sqlmodel import select, func
+from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.utils import transform_db_record_to_material
+from app.core.auth import User, get_current_user
 from app.core.config import settings
-from app.core.auth import get_current_user, User
-from app.models.review import MaterialReview, ReviewChecklist, ReviewStatus
+from app.core.database import async_session_maker, get_db
 from app.models.db_models import (
-    SAPMaterialData,
-    MaterialReviewDB,
+    MaterialDataHistory,
     MaterialInsightDB,
+    MaterialReviewDB,
+    ProfileDB,
     ReviewChecklistDB,
     ReviewCommentDB,
-    ProfileDB,
+    SAPMaterialData,
     UploadJobDB,
-    MaterialDataHistory,
-    UploadSnapshot
+    UploadSnapshot,
 )
-from app.models.user import UserProfile
-from app.core.database import get_db, async_session_maker
-from app.models.material import (
-    Material,
-    PaginatedMaterialsResponse,
-    MaterialWithReviews,
-    Insight
-)
+from app.models.material import Insight, Material, MaterialWithReviews, PaginatedMaterialsResponse
+from app.models.review import MaterialReview, ReviewChecklist, ReviewStatus
 from app.models.upload import (
-    UploadJobStatus,
     UploadJobListResponse,
-    UploadSAPDataResponse,
     UploadJobProgress,
     UploadJobResult,
+    UploadJobStatus,
+    UploadSAPDataResponse,
 )
-from app.api.utils import transform_db_record_to_material
+from app.models.user import UserProfile
 
 router = APIRouter()
 

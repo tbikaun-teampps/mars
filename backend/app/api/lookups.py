@@ -1,6 +1,7 @@
 """Lookup options API endpoints for configurable dropdown options."""
 
 from datetime import datetime
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -12,18 +13,18 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.rbac import check_user_is_admin
+from app.core.auth import User, get_current_user
+from app.core.database import get_db
+from app.models.db_models import LookupOptionDB, LookupOptionHistoryDB, ProfileDB
 from app.models.lookup import (
     LookupOption,
     LookupOptionCreate,
-    LookupOptionUpdate,
+    LookupOptionGroup,
     LookupOptionHistory,
     LookupOptionInGroup,
-    LookupOptionGroup,
     LookupOptionsGrouped,
+    LookupOptionUpdate,
 )
-from app.models.db_models import LookupOptionDB, LookupOptionHistoryDB, ProfileDB
-from app.core.database import get_db
-from app.core.auth import get_current_user, User
 
 router = APIRouter()
 

@@ -3,28 +3,29 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import cast, String, or_
-from sqlmodel import select, func
+from sqlalchemy import String, cast, or_
+from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.auth import User, get_current_user
+from app.core.database import get_db
 from app.models.audit import (
     AuditLogEntry,
-    PaginatedAuditLogsResponse,
     MaterialAuditLogEntry,
+    PaginatedAuditLogsResponse,
     PaginatedMaterialAuditLogsResponse,
 )
 from app.models.db_models import (
     AuditLogDB,
-    SAPMaterialData,
-    MaterialReviewDB,
-    ReviewChecklistDB,
     MaterialInsightDB,
+    MaterialReviewDB,
     ProfileDB,
+    ReviewChecklistDB,
+    SAPMaterialData,
 )
 from app.models.user import UserProfile
-from app.core.database import get_db
-from app.core.auth import get_current_user, User
 
 router = APIRouter()
 

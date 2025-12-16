@@ -2,9 +2,9 @@
 
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================================================
 # ROLE MODELS (Read-only)
