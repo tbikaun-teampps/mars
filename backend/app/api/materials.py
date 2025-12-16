@@ -816,7 +816,10 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
         insights.append(
             Insight(
                 insight_type="warning",
-                message="Material has unrestricted stock but no safety stock level defined. Consider setting a safety stock level to prevent stockouts.",
+                message=(
+                    "Material has unrestricted stock but no safety stock level defined. "
+                    "Consider setting a safety stock level to prevent stockouts."
+                ),
             )
         )
 
@@ -852,7 +855,10 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
                 insights.append(
                     Insight(
                         insight_type="warning",
-                        message=f"Material is overstocked. Current: {unrestricted_qty}, Optimal: {optimized_stock:.0f}, Potential reduction: {reduction_qty:.0f}",
+                        message=(
+                            f"Material is overstocked. Current: {unrestricted_qty}, "
+                            f"Optimal: {optimized_stock:.0f}, Potential reduction: {reduction_qty:.0f}"
+                        ),
                     )
                 )
 
@@ -872,7 +878,10 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
                 insights.append(
                     Insight(
                         insight_type="info",
-                        message=f"Material is understocked based on coverage ratio. Current: {unrestricted_qty}, Ideal: {ideal_stock:.0f}, Gap: {gap_qty:.0f}",
+                        message=(
+                            f"Material is understocked based on coverage ratio. Current: {unrestricted_qty}, "
+                            f"Ideal: {ideal_stock:.0f}, Gap: {gap_qty:.0f}"
+                        ),
                     )
                 )
             else:

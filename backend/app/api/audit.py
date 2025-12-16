@@ -228,7 +228,10 @@ def generate_change_summary(
     elif len(readable_fields) == 2:
         return f"Updated {readable_fields[0]} {readable_value_changes[0]} and {readable_fields[1]} {readable_value_changes[1]}"
     else:
-        return f"Updated {', '.join([f'{readable_fields[i]} {readable_value_changes[i]}' for i in range(len(readable_fields) - 1)])}, and {readable_fields[-1]} {readable_value_changes[-1]}"
+        changes = ', '.join(
+            [f'{readable_fields[i]} {readable_value_changes[i]}' for i in range(len(readable_fields) - 1)]
+        )
+        return f"Updated {changes}, and {readable_fields[-1]} {readable_value_changes[-1]}"
 
 
 @router.get("/audit-logs/materials")

@@ -62,7 +62,10 @@ async def create_material_review(
     if existing_review:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An active review already exists for this material. A new review cannot be created until the existing one is completed or cancelled.",
+            detail=(
+                "An active review already exists for this material. "
+                "A new review cannot be created until the existing one is completed or cancelled."
+            ),
         )
 
     # Create the review database record
