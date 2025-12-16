@@ -1,11 +1,12 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, ShieldX } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { MaterialDetailsPanel } from "@/components/material-details-panel";
 import { useMaterialDetails } from "@/api/queries";
+import { usePermissions } from "@/hooks/use-permissions";
 import { components } from "@/types/api";
 
 type MaterialReview = components["schemas"]["MaterialReview"];
@@ -37,6 +38,11 @@ export function MaterialReviewPage() {
     );
   }, [reviewId, materialDetails]);
 
+  // Permission check
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const requiredPermission = reviewId ? "can_edit_reviews" : "can_create_reviews";
+  const hasRequiredPermission = hasPermission(requiredPermission);
+
   // Handlers
   const handleReviewComplete = () => {
     navigate(`/app/materials/${materialNumber}`);
@@ -61,11 +67,32 @@ export function MaterialReviewPage() {
   ];
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || permissionsLoading) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Access denied state
+  if (!hasRequiredPermission) {
+    return (
+      <AppLayout breadcrumbs={breadcrumbs}>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="rounded-md bg-destructive/10 p-6 max-w-md text-center">
+            <ShieldX className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-lg font-semibold mb-2">Access Denied</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              You don't have permission to {reviewId ? "edit reviews" : "create reviews"}.
+              Contact your administrator if you believe this is an error.
+            </p>
+            <Button variant="outline" onClick={handleBack}>
+              Return to Material
+            </Button>
+          </div>
         </div>
       </AppLayout>
     );

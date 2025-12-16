@@ -622,10 +622,12 @@ export function MaterialDetailPage() {
               Material #{materialDetails.material_number}
             </p>
           </div>
-          <Button onClick={handleStartReview} disabled={hasActiveReview}>
-            <Plus className="mr-2 h-4 w-4" />
-            {hasActiveReview ? "Review In Progress" : "Start Review"}
-          </Button>
+          <RequirePermission permission="can_create_reviews" fallback="disable">
+            <Button onClick={handleStartReview} disabled={hasActiveReview}>
+              <Plus className="mr-2 h-4 w-4" />
+              {hasActiveReview ? "Review In Progress" : "Start Review"}
+            </Button>
+          </RequirePermission>
         </div>
       </div>
 
@@ -909,21 +911,38 @@ export function MaterialDetailPage() {
                           {/* Row 4: Actions */}
                           <div className="flex justify-end items-center pt-1">
                             <div className="flex gap-3">
-                              <button
-                                className="text-xs text-primary hover:underline"
-                                onClick={() => handleViewReview(review)}
-                              >
-                                {review.is_read_only
-                                  ? "Show Details"
-                                  : "Continue Review"}
-                              </button>
-                              {!review.is_read_only && (
+                              {review.is_read_only ? (
                                 <button
-                                  className="text-xs text-destructive hover:underline"
-                                  onClick={() => handleCancelClick(review)}
+                                  className="text-xs text-primary hover:underline"
+                                  onClick={() => handleViewReview(review)}
                                 >
-                                  Cancel Review
+                                  Show Details
                                 </button>
+                              ) : (
+                                <RequirePermission
+                                  permission="can_edit_reviews"
+                                  fallback="hide"
+                                >
+                                  <button
+                                    className="text-xs text-primary hover:underline"
+                                    onClick={() => handleViewReview(review)}
+                                  >
+                                    Continue Review
+                                  </button>
+                                </RequirePermission>
+                              )}
+                              {!review.is_read_only && (
+                                <RequirePermission
+                                  permission="can_delete_reviews"
+                                  fallback="hide"
+                                >
+                                  <button
+                                    className="text-xs text-destructive hover:underline"
+                                    onClick={() => handleCancelClick(review)}
+                                  >
+                                    Cancel Review
+                                  </button>
+                                </RequirePermission>
                               )}
                             </div>
                           </div>

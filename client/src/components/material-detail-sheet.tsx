@@ -353,15 +353,17 @@ function ReviewHistoryTimeline({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex justify-between items-center mb-4">
-        <Button
-          className="w-full items-center"
-          size="sm"
-          onClick={handleStartReview}
-          disabled={disabled}
-        >
-          <Plus />
-          Start Review
-        </Button>
+        <RequirePermission permission="can_create_reviews" fallback="disable">
+          <Button
+            className="w-full items-center"
+            size="sm"
+            onClick={handleStartReview}
+            disabled={disabled}
+          >
+            <Plus />
+            Start Review
+          </Button>
+        </RequirePermission>
       </div>
       {reviews && reviews.length > 0 ? (
         <div className="overflow-y-auto pr-2 flex-1 space-y-3">
@@ -501,21 +503,38 @@ function ReviewHistoryTimeline({
                     {/* Row 4: Actions */}
                     <div className="flex justify-end items-center pt-1">
                       <div className="flex gap-3">
-                        <span
-                          className="text-xs text-primary hover:underline cursor-pointer"
-                          onClick={() => handleEditReview(review)}
-                        >
-                          {review.is_read_only
-                            ? "Show Details"
-                            : "Continue Review"}
-                        </span>
-                        {!review.is_read_only && (
+                        {review.is_read_only ? (
                           <span
-                            className="text-xs text-destructive hover:underline cursor-pointer"
-                            onClick={() => handleCancelClick(review)}
+                            className="text-xs text-primary hover:underline cursor-pointer"
+                            onClick={() => handleEditReview(review)}
                           >
-                            Cancel Review
+                            Show Details
                           </span>
+                        ) : (
+                          <RequirePermission
+                            permission="can_edit_reviews"
+                            fallback="hide"
+                          >
+                            <span
+                              className="text-xs text-primary hover:underline cursor-pointer"
+                              onClick={() => handleEditReview(review)}
+                            >
+                              Continue Review
+                            </span>
+                          </RequirePermission>
+                        )}
+                        {!review.is_read_only && (
+                          <RequirePermission
+                            permission="can_delete_reviews"
+                            fallback="hide"
+                          >
+                            <span
+                              className="text-xs text-destructive hover:underline cursor-pointer"
+                              onClick={() => handleCancelClick(review)}
+                            >
+                              Cancel Review
+                            </span>
+                          </RequirePermission>
                         )}
                       </div>
                     </div>

@@ -215,6 +215,50 @@ async def check_user_is_admin(
     return False
 
 
+async def require_permission(
+    user_id: str,
+    db: AsyncSession,
+    permission: str,
+) -> None:
+    """
+    Check if user has a specific permission. Admins bypass all checks.
+    Raises HTTPException 403 if permission is denied.
+    """
+    # Admins bypass all permission checks
+    is_admin = await check_user_is_admin(user_id, db)
+    if is_admin:
+        return
+
+    permissions = await get_user_permissions(user_id, db)
+    if permission not in permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {permission} required",
+        )
+
+
+async def require_any_permission(
+    user_id: str,
+    db: AsyncSession,
+    permissions_list: list[str],
+) -> None:
+    """
+    Check if user has at least one of the specified permissions. Admins bypass all checks.
+    Raises HTTPException 403 if none of the permissions are granted.
+    """
+    # Admins bypass all permission checks
+    is_admin = await check_user_is_admin(user_id, db)
+    if is_admin:
+        return
+
+    permissions = await get_user_permissions(user_id, db)
+    if not any(p in permissions for p in permissions_list):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: one of {permissions_list} required",
+        )
+
+
 # ============================================================================
 # ROLES ENDPOINTS (Read-only)
 # ============================================================================

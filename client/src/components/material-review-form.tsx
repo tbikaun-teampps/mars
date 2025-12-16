@@ -5,9 +5,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { components } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { apiClient, MaterialReviewUpdate } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
 import { useReviewComments, useLookupOptions } from "@/api/queries";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   MultiStepFormProvider,
   Step,
@@ -309,6 +315,11 @@ function MaterialReviewFormInner({
   } = useMultiStepForm();
   const isEditMode = !!existingReview;
 
+  // Permission checks for step-specific actions
+  const { hasPermission } = usePermissions();
+  const canProvideSmeReview = hasPermission("can_provide_sme_review");
+  const canApproveReviews = hasPermission("can_approve_reviews");
+
   // Check if current step can be saved (all previous steps are completed)
   const canSaveCurrentStep = React.useMemo(() => {
     // Step 0 can always be saved
@@ -322,6 +333,25 @@ function MaterialReviewFormInner({
     }
     return true;
   }, [currentStep, isStepComplete]);
+
+  // Check if current step requires a permission the user doesn't have
+  const stepPermissionInfo = React.useMemo(() => {
+    // Step 2 (SME Investigation) requires can_provide_sme_review
+    if (currentStep === 2 && !canProvideSmeReview) {
+      return {
+        blocked: true,
+        message: "You need 'Provide SME Review' permission to save this step.",
+      };
+    }
+    // Step 4 (Final Decision) requires can_approve_reviews
+    if (currentStep === 4 && !canApproveReviews) {
+      return {
+        blocked: true,
+        message: "You need 'Approve Reviews' permission to complete this review.",
+      };
+    }
+    return { blocked: false, message: "" };
+  }, [currentStep, canProvideSmeReview, canApproveReviews]);
 
   // Track the review_id after creation
   const [reviewId, setReviewId] = React.useState<number | null>(
@@ -816,20 +846,41 @@ function MaterialReviewFormInner({
                 Next
               </Button>
             )}
-            <Button
-              type="button"
-              onClick={handleNext}
-              className="flex-1"
-              disabled={
-                saveReviewMutation.isPending || !canSaveCurrentStep || !isDirty
-              }
-            >
-              {saveReviewMutation.isPending
-                ? "Saving..."
-                : currentStep === totalSteps - 1
-                ? "Complete Review"
-                : "Save Step"}
-            </Button>
+            {stepPermissionInfo.blocked ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex-1">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled
+                    >
+                      {currentStep === totalSteps - 1
+                        ? "Complete Review"
+                        : "Save Step"}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">{stepPermissionInfo.message}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleNext}
+                className="flex-1"
+                disabled={
+                  saveReviewMutation.isPending || !canSaveCurrentStep || !isDirty
+                }
+              >
+                {saveReviewMutation.isPending
+                  ? "Saving..."
+                  : currentStep === totalSteps - 1
+                  ? "Complete Review"
+                  : "Save Step"}
+              </Button>
+            )}
             {/* Comments button - only show when editing */}
             {
             // isEditMode && reviewId && 

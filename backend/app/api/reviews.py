@@ -11,6 +11,7 @@ from fastapi import (
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.rbac import require_permission
 from app.api.utils import determine_status_after_step
 from app.core.auth import User, get_current_user
 from app.core.database import get_db
@@ -37,6 +38,9 @@ async def create_material_review(
     db: AsyncSession = Depends(get_db),
 ) -> MaterialReview:
     """Create a new review for a material."""
+
+    # Permission check: require can_create_reviews
+    await require_permission(current_user.id, db, "can_create_reviews")
 
     # Verify that the material exists
     material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
@@ -189,6 +193,15 @@ async def update_material_review(
     db: AsyncSession = Depends(get_db),
 ) -> MaterialReview:
     """Update an existing review for a material."""
+
+    # Permission check: require can_edit_reviews
+    await require_permission(current_user.id, db, "can_edit_reviews")
+
+    # Step-specific permission checks
+    if step == ReviewStepEnum.SME_INVESTIGATION:
+        await require_permission(current_user.id, db, "can_provide_sme_review")
+    elif step == ReviewStepEnum.FINAL_DECISION:
+        await require_permission(current_user.id, db, "can_approve_reviews")
 
     # Verify that the material exists
     material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
@@ -471,6 +484,9 @@ async def cancel_material_review(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Cancel a review for a material."""
+
+    # Permission check: require can_delete_reviews
+    await require_permission(current_user.id, db, "can_delete_reviews")
 
     # Verify that the material exists
     material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
