@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Database (Supabase local PostgreSQL)
     database_url: str = "postgresql://postgres:postgres@localhost:54322/postgres"
 
+    # Debug mode - enables features like user impersonation (should be False in production)
+    debug_mode: bool = False
+
     # Material data processing config
     coverage_ratio_threshold: float = 1.3
 

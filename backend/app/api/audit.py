@@ -3,28 +3,29 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import cast, String, or_
-from sqlmodel import select, func
+from sqlalchemy import String, cast, or_
+from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.auth import User, get_current_user
+from app.core.database import get_db
 from app.models.audit import (
     AuditLogEntry,
-    PaginatedAuditLogsResponse,
     MaterialAuditLogEntry,
+    PaginatedAuditLogsResponse,
     PaginatedMaterialAuditLogsResponse,
 )
 from app.models.db_models import (
     AuditLogDB,
-    SAPMaterialData,
-    MaterialReviewDB,
-    ReviewChecklistDB,
     MaterialInsightDB,
+    MaterialReviewDB,
     ProfileDB,
+    ReviewChecklistDB,
+    SAPMaterialData,
 )
 from app.models.user import UserProfile
-from app.core.database import get_db
-from app.core.auth import get_current_user, User
 
 router = APIRouter()
 
@@ -227,7 +228,10 @@ def generate_change_summary(
     elif len(readable_fields) == 2:
         return f"Updated {readable_fields[0]} {readable_value_changes[0]} and {readable_fields[1]} {readable_value_changes[1]}"
     else:
-        return f"Updated {', '.join([f'{readable_fields[i]} {readable_value_changes[i]}' for i in range(len(readable_fields) - 1)])}, and {readable_fields[-1]} {readable_value_changes[-1]}"
+        changes = ', '.join(
+            [f'{readable_fields[i]} {readable_value_changes[i]}' for i in range(len(readable_fields) - 1)]
+        )
+        return f"Updated {changes}, and {readable_fields[-1]} {readable_value_changes[-1]}"
 
 
 @router.get("/audit-logs/materials")
@@ -299,8 +303,6 @@ async def list_material_audit_logs(
         # For material_reviews, we need to get review_ids for the material
         # For review_checklist, we need to get checklist_ids for those review_ids
         # For material_insights, we need to get insight_ids for the material
-        from sqlalchemy import or_
-
         material_review_ids_query = select(MaterialReviewDB.review_id).where(
             MaterialReviewDB.material_number == material_number
         )

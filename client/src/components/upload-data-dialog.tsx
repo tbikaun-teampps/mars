@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useQueryClient } from "@tanstack/react-query";
 
-interface UploadSAPDialogProps {
+interface UploadDataDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -31,7 +31,7 @@ const phaseLabels: Record<string, string> = {
   reviews: "Creating reviews...",
 };
 
-export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
+export function UploadDataDialog({ open, onOpenChange }: UploadDataDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<UploadJobStatus | null>(null);
@@ -149,9 +149,9 @@ export function UploadSAPDialog({ open, onOpenChange }: UploadSAPDialogProps) {
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload SAP Data</DialogTitle>
+            <DialogTitle>Upload Data</DialogTitle>
             <DialogDescription>
-              Select a CSV file to upload SAP material data to the system.
+              Select a CSV file to upload material data to the system.
             </DialogDescription>
           </DialogHeader>
 

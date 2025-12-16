@@ -1,11 +1,9 @@
+from app.models.db_models import MaterialReviewDB
 from app.models.material import ConsumptionHistory, Material
 from app.models.review import (
-    ReviewStepEnum,
     ReviewStatus,
+    ReviewStepEnum,
 )
-from app.models.db_models import MaterialReviewDB
-
-from app.models.material import ConsumptionHistory, Material
 
 
 def transform_db_record_to_material(record: dict) -> Material:

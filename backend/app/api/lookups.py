@@ -1,6 +1,7 @@
 """Lookup options API endpoints for configurable dropdown options."""
 
 from datetime import datetime
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -11,18 +12,19 @@ from fastapi import (
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.rbac import check_user_is_admin
+from app.core.auth import User, get_current_user
+from app.core.database import get_db
+from app.models.db_models import LookupOptionDB, LookupOptionHistoryDB, ProfileDB
 from app.models.lookup import (
     LookupOption,
     LookupOptionCreate,
-    LookupOptionUpdate,
+    LookupOptionGroup,
     LookupOptionHistory,
     LookupOptionInGroup,
-    LookupOptionGroup,
     LookupOptionsGrouped,
+    LookupOptionUpdate,
 )
-from app.models.db_models import LookupOptionDB, LookupOptionHistoryDB, ProfileDB
-from app.core.database import get_db
-from app.core.auth import get_current_user, User
 
 router = APIRouter()
 
@@ -33,7 +35,9 @@ async def require_admin(current_user: User, db: AsyncSession) -> None:
     profile_result = await db.exec(profile_query)
     profile = profile_result.first()
 
-    if not profile or not profile.is_admin:
+    is_admin = await check_user_is_admin(current_user.id, db)
+
+    if not profile or not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required to manage lookup options",
@@ -151,7 +155,7 @@ async def list_all_lookup_options(
     """List all lookup options grouped by category."""
     query = select(LookupOptionDB)
     if not include_inactive:
-        query = query.where(LookupOptionDB.is_active == True)
+        query = query.where(LookupOptionDB.is_active.is_(True))
     query = query.order_by(LookupOptionDB.category, LookupOptionDB.group_order, LookupOptionDB.sort_order)
 
     result = await db.exec(query)
@@ -180,7 +184,7 @@ async def list_lookup_options_by_category(
     """List lookup options for a specific category, grouped by group_name."""
     query = select(LookupOptionDB).where(LookupOptionDB.category == category)
     if not include_inactive:
-        query = query.where(LookupOptionDB.is_active == True)
+        query = query.where(LookupOptionDB.is_active.is_(True))
     query = query.order_by(LookupOptionDB.group_order, LookupOptionDB.sort_order)
 
     result = await db.exec(query)

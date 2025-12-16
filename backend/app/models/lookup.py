@@ -2,8 +2,9 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
 from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class LookupOption(BaseModel):

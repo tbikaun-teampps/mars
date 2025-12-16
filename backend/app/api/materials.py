@@ -1,12 +1,13 @@
 """General materials endpoints."""
 
-from decimal import Decimal
 import io
-import numpy as np
-import pandas as pd
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
+
+import numpy as np
+import pandas as pd
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -14,45 +15,41 @@ from fastapi import (
     File,
     HTTPException,
     Query,
-    status,
     UploadFile,
+    status,
 )
-from sqlalchemy import func as sa_func, text, cast, String, delete, update
+from sqlalchemy import String, cast, delete, text, update
+from sqlalchemy import func as sa_func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import aliased
-from sqlmodel import select, func
+from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.utils import transform_db_record_to_material
+from app.core.auth import User, get_current_user
 from app.core.config import settings
-from app.core.auth import get_current_user, User
-from app.models.review import MaterialReview, ReviewChecklist, ReviewStatus
+from app.core.database import async_session_maker, get_db
 from app.models.db_models import (
-    SAPMaterialData,
-    MaterialReviewDB,
+    MaterialDataHistory,
     MaterialInsightDB,
+    MaterialReviewDB,
+    ProfileDB,
     ReviewChecklistDB,
     ReviewCommentDB,
-    ProfileDB,
+    SAPMaterialData,
     UploadJobDB,
-    MaterialDataHistory,
-    UploadSnapshot
+    UploadSnapshot,
 )
-from app.models.user import UserProfile
-from app.core.database import get_db, async_session_maker
-from app.models.material import (
-    Material,
-    PaginatedMaterialsResponse,
-    MaterialWithReviews,
-    Insight
-)
+from app.models.material import Insight, Material, MaterialWithReviews, PaginatedMaterialsResponse
+from app.models.review import MaterialReview, ReviewChecklist, ReviewStatus
 from app.models.upload import (
-    UploadJobStatus,
     UploadJobListResponse,
-    UploadSAPDataResponse,
     UploadJobProgress,
     UploadJobResult,
+    UploadJobStatus,
+    UploadSAPDataResponse,
 )
-from app.api.utils import transform_db_record_to_material
+from app.models.user import UserProfile
 
 router = APIRouter()
 
@@ -819,7 +816,10 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
         insights.append(
             Insight(
                 insight_type="warning",
-                message="Material has unrestricted stock but no safety stock level defined. Consider setting a safety stock level to prevent stockouts.",
+                message=(
+                    "Material has unrestricted stock but no safety stock level defined. "
+                    "Consider setting a safety stock level to prevent stockouts."
+                ),
             )
         )
 
@@ -855,7 +855,10 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
                 insights.append(
                     Insight(
                         insight_type="warning",
-                        message=f"Material is overstocked. Current: {unrestricted_qty}, Optimal: {optimized_stock:.0f}, Potential reduction: {reduction_qty:.0f}",
+                        message=(
+                            f"Material is overstocked. Current: {unrestricted_qty}, "
+                            f"Optimal: {optimized_stock:.0f}, Potential reduction: {reduction_qty:.0f}"
+                        ),
                     )
                 )
 
@@ -875,7 +878,10 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
                 insights.append(
                     Insight(
                         insight_type="info",
-                        message=f"Material is understocked based on coverage ratio. Current: {unrestricted_qty}, Ideal: {ideal_stock:.0f}, Gap: {gap_qty:.0f}",
+                        message=(
+                            f"Material is understocked based on coverage ratio. Current: {unrestricted_qty}, "
+                            f"Ideal: {ideal_stock:.0f}, Gap: {gap_qty:.0f}"
+                        ),
                     )
                 )
             else:
@@ -1112,7 +1118,7 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.next_review_date.isnot(None),
         MaterialReviewDB.next_review_date < datetime.utcnow().date(),
         MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
-        MaterialReviewDB.is_superseded == False,
+        MaterialReviewDB.is_superseded.is_(False),
     )
     overdue_reviews_result = await db.exec(overdue_reviews_query)
     total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
@@ -1126,7 +1132,7 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.proposed_action != 'keep_no_change',
         MaterialReviewDB.sme_recommendation.isnot(None),
         MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
-        MaterialReviewDB.is_superseded == False,
+        MaterialReviewDB.is_superseded.is_(False),
     )
     total_with_sme_result = await db.exec(total_with_sme_query)
     total_with_sme = total_with_sme_result.one_or_none() or 0
@@ -1138,7 +1144,7 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.sme_recommendation.isnot(None),
         MaterialReviewDB.sme_recommendation != 'keep_no_change',
         MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
-        MaterialReviewDB.is_superseded == False,
+        MaterialReviewDB.is_superseded.is_(False),
     )
     accepted_result = await db.exec(accepted_query)
     accepted_count = accepted_result.one_or_none() or 0

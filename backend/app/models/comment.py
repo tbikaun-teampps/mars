@@ -2,8 +2,9 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from app.models.user import UserProfile
 

@@ -378,6 +378,31 @@ export function useCurrentUser(): UseQueryResult<UserResponse, Error> {
 }
 
 /**
+ * Hook to update current user's profile
+ */
+export function useUpdateProfile(): UseMutationResult<
+  UserResponse,
+  Error,
+  {
+    display_name?: string | null;
+    phone?: string | null;
+    notification_preferences?: { [key: string]: unknown } | null;
+  }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => apiClient.updateProfile(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.user.current() });
+    },
+    onError: (error) => {
+      console.error("Failed to update profile:", error);
+    },
+  });
+}
+
+/**
  * Hook to acknowledge an insight
  */
 export function useAcknowledgeInsight(): UseMutationResult<
@@ -627,5 +652,232 @@ export function useDeleteLookupOption(): UseMutationResult<
     onError: (error) => {
       console.error("Failed to delete lookup option:", error);
     },
+  });
+}
+
+// ============================================================================
+// RBAC Hooks
+// ============================================================================
+
+// Type aliases for RBAC
+type RoleListItem = components["schemas"]["RoleListItem"];
+type RoleResponse = components["schemas"]["RoleResponse"];
+type UserRoleResponse = components["schemas"]["UserRoleResponse"];
+type UserRoleCreate = components["schemas"]["UserRoleCreate"];
+type UserRoleUpdate = components["schemas"]["UserRoleUpdate"];
+type SMEExpertiseResponse = components["schemas"]["SMEExpertiseResponse"];
+type SMEExpertiseCreate = components["schemas"]["SMEExpertiseCreate"];
+type SMEExpertiseUpdate = components["schemas"]["SMEExpertiseUpdate"];
+type UserListItem = components["schemas"]["UserListItem"];
+
+/**
+ * Hook to fetch all roles
+ * @param params Filter parameters
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useRoles(
+  params?: { includeInactive?: boolean; roleType?: string },
+  enabled: boolean = true
+): UseQueryResult<RoleListItem[], Error> {
+  return useQuery({
+    queryKey: queryKeys.roles.list(params),
+    queryFn: () => apiClient.getRoles(params),
+    enabled,
+    staleTime: 1000 * 60 * 5, // 5 minutes - roles rarely change
+  });
+}
+
+/**
+ * Hook to fetch a single role by ID
+ */
+export function useRole(
+  roleId: number | null,
+  enabled: boolean = true
+): UseQueryResult<RoleResponse, Error> {
+  return useQuery({
+    queryKey: queryKeys.roles.detail(roleId!),
+    queryFn: () => apiClient.getRole(roleId!),
+    enabled: enabled && roleId !== null,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Hook to fetch user-role assignments
+ * @param params Filter parameters
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useUserRoles(
+  params?: { userId?: string; roleId?: number; includeInactive?: boolean },
+  enabled: boolean = true
+): UseQueryResult<UserRoleResponse[], Error> {
+  return useQuery({
+    queryKey: queryKeys.userRoles.list(params),
+    queryFn: () => apiClient.getUserRoles(params),
+    enabled,
+    staleTime: 1000 * 30,
+  });
+}
+
+/**
+ * Hook to create a user-role assignment
+ */
+export function useCreateUserRole(): UseMutationResult<
+  UserRoleResponse,
+  Error,
+  UserRoleCreate
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: UserRoleCreate) => apiClient.createUserRole(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.userRoles.all });
+    },
+    onError: (error) => {
+      console.error("Failed to create user role:", error);
+    },
+  });
+}
+
+/**
+ * Hook to update a user-role assignment
+ */
+export function useUpdateUserRole(): UseMutationResult<
+  UserRoleResponse,
+  Error,
+  { userRoleId: number; data: UserRoleUpdate }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userRoleId, data }) =>
+      apiClient.updateUserRole(userRoleId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.userRoles.all });
+    },
+    onError: (error) => {
+      console.error("Failed to update user role:", error);
+    },
+  });
+}
+
+/**
+ * Hook to revoke (soft-delete) a user-role assignment
+ */
+export function useDeleteUserRole(): UseMutationResult<
+  void,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userRoleId: number) => apiClient.deleteUserRole(userRoleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.userRoles.all });
+    },
+    onError: (error) => {
+      console.error("Failed to delete user role:", error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch SME expertise records
+ * @param params Filter parameters
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useSMEExpertise(
+  params?: { userId?: string; smeType?: string; isAvailable?: boolean },
+  enabled: boolean = true
+): UseQueryResult<SMEExpertiseResponse[], Error> {
+  return useQuery({
+    queryKey: queryKeys.smeExpertise.list(params),
+    queryFn: () => apiClient.getSMEExpertise(params),
+    enabled,
+    staleTime: 1000 * 30,
+  });
+}
+
+/**
+ * Hook to create an SME expertise record
+ */
+export function useCreateSMEExpertise(): UseMutationResult<
+  SMEExpertiseResponse,
+  Error,
+  SMEExpertiseCreate
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: SMEExpertiseCreate) => apiClient.createSMEExpertise(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.smeExpertise.all });
+    },
+    onError: (error) => {
+      console.error("Failed to create SME expertise:", error);
+    },
+  });
+}
+
+/**
+ * Hook to update an SME expertise record
+ */
+export function useUpdateSMEExpertise(): UseMutationResult<
+  SMEExpertiseResponse,
+  Error,
+  { expertiseId: number; data: SMEExpertiseUpdate }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ expertiseId, data }) =>
+      apiClient.updateSMEExpertise(expertiseId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.smeExpertise.all });
+    },
+    onError: (error) => {
+      console.error("Failed to update SME expertise:", error);
+    },
+  });
+}
+
+/**
+ * Hook to delete an SME expertise record
+ */
+export function useDeleteSMEExpertise(): UseMutationResult<
+  void,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (expertiseId: number) =>
+      apiClient.deleteSMEExpertise(expertiseId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.smeExpertise.all });
+    },
+    onError: (error) => {
+      console.error("Failed to delete SME expertise:", error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch users list for picker components
+ * @param params Filter parameters
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useUsersList(
+  params?: { search?: string; isActive?: boolean },
+  enabled: boolean = true
+): UseQueryResult<UserListItem[], Error> {
+  return useQuery({
+    queryKey: queryKeys.usersList.list(params),
+    queryFn: () => apiClient.getUsers(params),
+    enabled,
+    staleTime: 1000 * 60, // 1 minute
   });
 }

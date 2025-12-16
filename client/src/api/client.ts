@@ -17,6 +17,26 @@ import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
+// Impersonation header name (must match backend)
+const IMPERSONATE_HEADER = "X-Impersonate-User-Id";
+
+// Module-level state for impersonation (set by ImpersonationContext)
+let _impersonatedUserId: string | null = null;
+
+/**
+ * Set the user ID to impersonate. Called by ImpersonationContext.
+ */
+export function setImpersonatedUserId(userId: string | null): void {
+  _impersonatedUserId = userId;
+}
+
+/**
+ * Get the current impersonated user ID.
+ */
+export function getImpersonatedUserId(): string | null {
+  return _impersonatedUserId;
+}
+
 // API response types - using OpenAPI generated types
 type PaginatedMaterialsResponse =
   components["schemas"]["PaginatedMaterialsResponse"];
@@ -79,6 +99,7 @@ export class ApiClient {
       headers: {
         "Content-Type": "application/json",
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(_impersonatedUserId && { [IMPERSONATE_HEADER]: _impersonatedUserId }),
         ...options.headers,
       },
     };
@@ -298,6 +319,7 @@ export class ApiClient {
       headers: {
         // Don't set Content-Type - browser will set multipart/form-data with boundary
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(_impersonatedUserId && { [IMPERSONATE_HEADER]: _impersonatedUserId }),
       },
       body: formData,
     });
@@ -384,6 +406,14 @@ export class ApiClient {
   // User API methods
   async getCurrentUser(): Promise<UserResponse> {
     return this.get<UserResponse>("/users/me");
+  }
+
+  async updateProfile(data: {
+    display_name?: string | null;
+    phone?: string | null;
+    notification_preferences?: { [key: string]: unknown } | null;
+  }): Promise<UserResponse> {
+    return this.put<UserResponse>("/users/me", data);
   }
 
   // Insight acknowledgement methods
@@ -496,6 +526,118 @@ export class ApiClient {
 
   async deleteLookupOption(optionId: number): Promise<void> {
     await this.delete<void>(`/lookup-options/${optionId}`);
+  }
+
+  // RBAC - Roles API methods (Read-only)
+  async getRoles(params?: {
+    includeInactive?: boolean;
+    roleType?: string;
+  }): Promise<components["schemas"]["RoleListItem"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.includeInactive) queryParams.append("include_inactive", "true");
+    if (params?.roleType) queryParams.append("role_type", params.roleType);
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["RoleListItem"][]>(
+      `/roles${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async getRole(roleId: number): Promise<components["schemas"]["RoleResponse"]> {
+    return this.get<components["schemas"]["RoleResponse"]>(`/roles/${roleId}`);
+  }
+
+  // RBAC - User-Role Assignments API methods
+  async getUserRoles(params?: {
+    userId?: string;
+    roleId?: number;
+    includeInactive?: boolean;
+  }): Promise<components["schemas"]["UserRoleResponse"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.userId) queryParams.append("user_id", params.userId);
+    if (params?.roleId) queryParams.append("role_id", params.roleId.toString());
+    if (params?.includeInactive) queryParams.append("include_inactive", "true");
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["UserRoleResponse"][]>(
+      `/user-roles${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async createUserRole(
+    data: components["schemas"]["UserRoleCreate"]
+  ): Promise<components["schemas"]["UserRoleResponse"]> {
+    return this.post<components["schemas"]["UserRoleResponse"]>(
+      `/user-roles`,
+      data
+    );
+  }
+
+  async updateUserRole(
+    userRoleId: number,
+    data: components["schemas"]["UserRoleUpdate"]
+  ): Promise<components["schemas"]["UserRoleResponse"]> {
+    return this.put<components["schemas"]["UserRoleResponse"]>(
+      `/user-roles/${userRoleId}`,
+      data
+    );
+  }
+
+  async deleteUserRole(userRoleId: number): Promise<void> {
+    await this.delete<void>(`/user-roles/${userRoleId}`);
+  }
+
+  // RBAC - SME Expertise API methods
+  async getSMEExpertise(params?: {
+    userId?: string;
+    smeType?: string;
+    isAvailable?: boolean;
+  }): Promise<components["schemas"]["SMEExpertiseResponse"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.userId) queryParams.append("user_id", params.userId);
+    if (params?.smeType) queryParams.append("sme_type", params.smeType);
+    if (params?.isAvailable !== undefined)
+      queryParams.append("is_available", params.isAvailable.toString());
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["SMEExpertiseResponse"][]>(
+      `/sme-expertise${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async createSMEExpertise(
+    data: components["schemas"]["SMEExpertiseCreate"]
+  ): Promise<components["schemas"]["SMEExpertiseResponse"]> {
+    return this.post<components["schemas"]["SMEExpertiseResponse"]>(
+      `/sme-expertise`,
+      data
+    );
+  }
+
+  async updateSMEExpertise(
+    expertiseId: number,
+    data: components["schemas"]["SMEExpertiseUpdate"]
+  ): Promise<components["schemas"]["SMEExpertiseResponse"]> {
+    return this.put<components["schemas"]["SMEExpertiseResponse"]>(
+      `/sme-expertise/${expertiseId}`,
+      data
+    );
+  }
+
+  async deleteSMEExpertise(expertiseId: number): Promise<void> {
+    await this.delete<void>(`/sme-expertise/${expertiseId}`);
+  }
+
+  // RBAC - Users list for picker
+  async getUsers(params?: {
+    search?: string;
+    isActive?: boolean;
+  }): Promise<components["schemas"]["UserListItem"][]> {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.isActive !== undefined)
+      queryParams.append("is_active", params.isActive.toString());
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["UserListItem"][]>(
+      `/users${queryString ? `?${queryString}` : ""}`
+    );
   }
 }
 

@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { RequirePermission } from "@/components/ui/require-permission";
 
 const navItems = [
   {
@@ -45,7 +46,11 @@ export function AppSidebar({ onUploadClick, ...props }: AppSidebarProps) {
   return (
     <Sidebar
       collapsible="none"
-      className="h-screen w-[calc(var(--sidebar-width-icon)+1px)]! border-r sticky top-0"
+      className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r sticky"
+      style={{
+        top: "var(--banner-height, 0px)",
+        height: "calc(100vh - var(--banner-height, 0px))",
+      }}
       {...props}
     >
       <SidebarHeader>
@@ -93,19 +98,21 @@ export function AppSidebar({ onUploadClick, ...props }: AppSidebarProps) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip={{
-                children: "Data Upload",
-                hidden: false,
-              }}
-              className="px-2 cursor-pointer"
-              onClick={onUploadClick}
-            >
-              <Upload />
-              <span>Data Upload</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <RequirePermission permission="can_upload_data" fallback="hide">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip={{
+                  children: "Data Upload",
+                  hidden: false,
+                }}
+                className="px-2 cursor-pointer"
+                onClick={onUploadClick}
+              >
+                <Upload />
+                <span>Data Upload</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </RequirePermission>
           {isAdmin && (
             <SidebarMenuItem>
               <SidebarMenuButton

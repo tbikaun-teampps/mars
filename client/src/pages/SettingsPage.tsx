@@ -1,8 +1,12 @@
 import { useCurrentUser } from "@/api/queries";
 import { AppLayout } from "@/components/app-layout";
 import { LookupOptionsManager } from "@/components/settings/lookup-options-manager";
+import { RolesList } from "@/components/settings/roles-list";
+import { UserRoleManager } from "@/components/settings/user-role-manager";
+import { SMEExpertiseManager } from "@/components/settings/sme-expertise-manager";
 import { Navigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function SettingsPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
@@ -39,7 +43,30 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <LookupOptionsManager />
+      <Tabs defaultValue="lookups" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="lookups">Lookup Options</TabsTrigger>
+          <TabsTrigger value="roles">Roles</TabsTrigger>
+          <TabsTrigger value="user-roles">User Assignments</TabsTrigger>
+          <TabsTrigger value="sme-expertise">SME Expertise</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="lookups">
+          <LookupOptionsManager />
+        </TabsContent>
+
+        <TabsContent value="roles">
+          <RolesList />
+        </TabsContent>
+
+        <TabsContent value="user-roles">
+          <UserRoleManager />
+        </TabsContent>
+
+        <TabsContent value="sme-expertise">
+          <SMEExpertiseManager />
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }

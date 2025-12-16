@@ -1,19 +1,18 @@
 """Review comment endpoints."""
 
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select, func
+from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.auth import User, get_current_user
+from app.core.database import get_db
 from app.models.comment import (
+    PaginatedReviewCommentsResponse,
     ReviewCommentCreate,
     ReviewCommentResponse,
-    PaginatedReviewCommentsResponse,
 )
-from app.models.db_models import ReviewCommentDB, ProfileDB, MaterialReviewDB
+from app.models.db_models import MaterialReviewDB, ProfileDB, ReviewCommentDB
 from app.models.user import UserProfile
-from app.core.database import get_db
-from app.core.auth import get_current_user, User
 
 router = APIRouter()
 

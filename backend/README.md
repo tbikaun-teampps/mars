@@ -16,9 +16,9 @@ FastAPI backend with Supabase PostgreSQL.
 
 4. Run the development server:
 
-   ```bash
-   uv run uvicorn app.main:app --reload
-   ```
+```bash
+uv run uvicorn app.main:app --reload
+```
 
 The API will be available at `http://localhost:8000`
 

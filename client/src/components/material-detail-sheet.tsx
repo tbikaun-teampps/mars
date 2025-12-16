@@ -47,6 +47,7 @@ import {
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
+import { RequirePermission } from "@/components/ui/require-permission";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReview = components["schemas"]["MaterialReview"];
@@ -207,43 +208,48 @@ function InsightsPanel({ insights, materialNumber }: InsightsPanelProps) {
                         {insight.message}
                       </span>
                       {insight.insight_id && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={() =>
-                                insight.acknowledged_at
-                                  ? handleUnacknowledge(insight.insight_id!)
-                                  : handleAcknowledge(insight.insight_id!)
-                              }
-                              className="flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-                              disabled={
-                                acknowledgeInsight.isPending ||
-                                unacknowledgeInsight.isPending
-                              }
-                            >
+                        <RequirePermission
+                          permission="can_manage_acknowledgements"
+                          fallback="hide"
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() =>
+                                  insight.acknowledged_at
+                                    ? handleUnacknowledge(insight.insight_id!)
+                                    : handleAcknowledge(insight.insight_id!)
+                                }
+                                className="flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                                disabled={
+                                  acknowledgeInsight.isPending ||
+                                  unacknowledgeInsight.isPending
+                                }
+                              >
+                                {insight.acknowledged_at ? (
+                                  <X className="h-3 w-3" />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
                               {insight.acknowledged_at ? (
-                                <X className="h-3 w-3" />
+                                <p className="text-xs">
+                                  Acknowledged by{" "}
+                                  {insight.acknowledged_by_user?.full_name ||
+                                    "Unknown"}
+                                  <br />
+                                  Click to restore
+                                </p>
                               ) : (
-                                <Check className="h-3 w-3" />
+                                <p className="text-xs">
+                                  Acknowledge this insight
+                                </p>
                               )}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {insight.acknowledged_at ? (
-                              <p className="text-xs">
-                                Acknowledged by{" "}
-                                {insight.acknowledged_by_user?.full_name ||
-                                  "Unknown"}
-                                <br />
-                                Click to restore
-                              </p>
-                            ) : (
-                              <p className="text-xs">
-                                Acknowledge this insight
-                              </p>
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
+                            </TooltipContent>
+                          </Tooltip>
+                        </RequirePermission>
                       )}
                     </li>
                   ))}

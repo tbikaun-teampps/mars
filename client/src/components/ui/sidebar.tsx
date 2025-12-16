@@ -58,11 +58,13 @@ function SidebarProvider({
   className,
   style,
   children,
+  bannerHeight = "0px",
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  bannerHeight?: string;
 }) {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
@@ -133,6 +135,7 @@ function SidebarProvider({
             {
               "--sidebar-width": SIDEBAR_WIDTH,
               "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+              "--banner-height": bannerHeight,
               ...style,
             } as React.CSSProperties
           }
