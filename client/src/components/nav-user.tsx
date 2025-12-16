@@ -19,23 +19,32 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useCurrentUser } from "@/api/queries";
 import { Skeleton } from "./ui/skeleton";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
   const { displayVersion } = getVersionInfo();
 
-  const { user, loading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
+  // Use API profile for display (respects impersonation)
+  const { data: profile, isLoading: profileLoading } = useCurrentUser();
 
-  const userName = (user?.user_metadata?.name as string) || user?.email?.split("@")[0] || "User";
-  const userEmail = user?.email || "user@example.com";
+  // Prefer profile data (impersonation-aware) over Supabase user metadata
+  const userName =
+    profile?.display_name ||
+    profile?.full_name ||
+    (user?.user_metadata?.name as string) ||
+    user?.email?.split("@")[0] ||
+    "User";
+  const userEmail = profile?.email || user?.email || "user@example.com";
   const userAvatar = (user?.user_metadata?.avatar as string) || "/avatars/demo-user.png";
 
   const handleLogout = async () => {
     await signOut();
   };
 
-  if (loading) {
+  if (authLoading || profileLoading) {
     return <Skeleton className="h-8 w-full rounded-lg bg-sidebar-primary/10" />;
   }
 
