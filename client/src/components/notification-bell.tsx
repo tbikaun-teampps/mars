@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, CheckCheck, ExternalLink } from "lucide-react";
+import { Bell, BellOff, CheckCheck, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -107,7 +107,7 @@ export function NotificationBell() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent side="right" align="start" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Notifications</span>
           {unreadCount > 0 && (
@@ -129,8 +129,14 @@ export function NotificationBell() {
               Loading...
             </div>
           ) : notificationsData?.items.length === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              No notifications
+            <div className="py-8 px-4 text-center">
+              <BellOff className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">
+                No notifications
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                You're all caught up
+              </p>
             </div>
           ) : (
             notificationsData?.items.map((notification) => (
