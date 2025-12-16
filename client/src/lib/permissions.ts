@@ -24,6 +24,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "can_view_all_reviews",
   "can_export_data",
   "can_manage_acknowledgements",
+  "can_upload_data",
 ];
 
 /**
@@ -42,4 +43,5 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   can_view_all_reviews: "View All Reviews",
   can_export_data: "Export Data",
   can_manage_acknowledgements: "Manage Acknowledgements",
+  can_upload_data: "Upload Data",
 };

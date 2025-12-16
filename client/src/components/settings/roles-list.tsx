@@ -77,6 +77,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   can_view_all_reviews: "View All Reviews",
   can_export_data: "Export Data",
   can_manage_acknowledgements: "Manage Acknowledgements",
+  can_upload_data: "Upload Data",
 };
 
 export function RolesList() {

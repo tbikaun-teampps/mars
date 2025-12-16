@@ -46,6 +46,7 @@ class RoleResponse(BaseModel):
     can_view_all_reviews: bool
     can_export_data: bool
     can_manage_acknowledgements: bool
+    can_upload_data: bool
 
     approval_limit: Optional[float] = None
     is_active: bool

@@ -500,6 +500,7 @@ class RoleDB(SQLModel, table=True):
     can_view_all_reviews: bool = Field(default=False)
     can_export_data: bool = Field(default=False)
     can_manage_acknowledgements: bool = Field(default=False)
+    can_upload_data: bool = Field(default=False)
 
     # Approval authority
     approval_limit: Optional[float] = None

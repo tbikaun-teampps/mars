@@ -39,6 +39,7 @@ import { ALL_PERMISSIONS, PERMISSION_LABELS } from "@/lib/permissions";
 | `can_view_all_reviews`       | View All Reviews       |
 | `can_export_data`            | Export Data            |
 | `can_manage_acknowledgements`| Manage Acknowledgements|
+| `can_upload_data`            | Upload Data            |
 
 ---
 

@@ -50,6 +50,8 @@ PERMISSION_FIELDS = [
     'can_manage_settings',
     'can_view_all_reviews',
     'can_export_data',
+    'can_manage_acknowledgements',
+    'can_upload_data',
 ]
 
 
