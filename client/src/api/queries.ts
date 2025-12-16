@@ -1008,3 +1008,24 @@ export function useUpdateNotificationPreferences(): UseMutationResult<
     },
   });
 }
+
+/**
+ * Hook to create a debug notification (development only)
+ */
+export function useCreateDebugNotification(): UseMutationResult<
+  components["schemas"]["NotificationResponse"],
+  Error,
+  components["schemas"]["DebugNotificationCreate"]
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => apiClient.createDebugNotification(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to create debug notification:", error);
+    },
+  });
+}

@@ -174,6 +174,7 @@ Summarise all changes to this document below. Add new entries at the top.
 
 | Date       | Summary                                                                 |
 | ---------- | ----------------------------------------------------------------------- |
+| 2025-12-16 | Added notification debugging to debug FAB (create test notifications)  |
 | 2025-12-16 | Added `docs/notifications.md` for in-app notification system            |
 | 2025-12-16 | Added `docs/extending-permissions.md` guide for adding new permissions  |
 | 2025-12-16 | Added `can_upload_data` permission to RBAC system                       |

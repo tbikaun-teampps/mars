@@ -5,6 +5,7 @@ from typing import Any, Literal, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import ARRAY, TIMESTAMP, String, text
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 
@@ -221,7 +222,11 @@ class NotificationDB(SQLModel, table=True):
 
     notification_id: Optional[int] = Field(default=None, primary_key=True)
     user_id: UUID = Field(foreign_key="profiles.id")
-    notification_type: str = Field(max_length=50)
+    notification_type: str = Field(
+        sa_column=Column(
+            SAEnum("review_assigned", "review_status_changed", "comment_added", name="notification_type", create_type=False)
+        )
+    )
     title: str = Field(max_length=200)
     message: str
 

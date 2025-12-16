@@ -60,3 +60,12 @@ class NotificationPreferencesUpdate(BaseModel):
     review_assigned: Optional[bool] = None
     review_status_changed: Optional[bool] = None
     comment_added: Optional[bool] = None
+
+
+class DebugNotificationCreate(BaseModel):
+    """Schema for creating a debug notification (dev mode only)."""
+
+    notification_type: NotificationType
+    title: Optional[str] = None
+    message: Optional[str] = None
+    material_number: Optional[int] = None

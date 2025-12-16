@@ -15,6 +15,8 @@ import {
   ChevronRight,
   UserCog,
   LogOut,
+  Bell,
+  CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,7 +28,20 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useMaterials, useMaterialDetails, useUsersList, useCurrentUser } from "@/api/queries";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  useMaterials,
+  useMaterialDetails,
+  useUsersList,
+  useCurrentUser,
+  useNotifications,
+  useUnreadNotificationCount,
+  useMarkAllNotificationsRead,
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+  useCreateDebugNotification,
+} from "@/api/queries";
 import { useDebugActions, canAdvanceTo, type ReviewStatus } from "@/hooks/use-debug-actions";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useImpersonation } from "@/contexts/ImpersonationContext";
@@ -59,10 +74,17 @@ const STATUS_CONFIG: Record<
 
 const ALL_STATUSES: ReviewStatus[] = ["draft", "pending_sme", "pending_decision", "completed"];
 
+const NOTIFICATION_TYPES = [
+  { value: "review_assigned", label: "Review Assigned" },
+  { value: "review_status_changed", label: "Status Changed" },
+  { value: "comment_added", label: "Comment Added" },
+] as const;
+
 export function DebugFAB() {
   const [open, setOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<string>("");
   const [selectedUserToImpersonate, setSelectedUserToImpersonate] = useState<string>("");
+  const [selectedNotificationType, setSelectedNotificationType] = useState<string>("review_assigned");
 
   // Get admin status and impersonation context
   const { isAdmin } = usePermissions();
@@ -94,6 +116,17 @@ export function DebugFAB() {
 
   const { createAtStatus, advanceToStatus, cancelReview, isCreating, isAdvancing, isCancelling } =
     useDebugActions();
+
+  // Notification hooks
+  const { data: unreadCountData } = useUnreadNotificationCount();
+  const { data: notificationsData, isLoading: notificationsLoading } = useNotifications(
+    { limit: 10 },
+    open
+  );
+  const markAllRead = useMarkAllNotificationsRead();
+  const { data: preferences, isLoading: preferencesLoading } = useNotificationPreferences();
+  const updatePreferences = useUpdateNotificationPreferences();
+  const createDebugNotification = useCreateDebugNotification();
 
   const materials = materialsData?.items || [];
 
@@ -157,6 +190,31 @@ export function DebugFAB() {
     }
   };
 
+  const handleCreateTestNotification = async () => {
+    try {
+      await createDebugNotification.mutateAsync({
+        notification_type: selectedNotificationType as "review_assigned" | "review_status_changed" | "comment_added",
+      });
+      toast.success(`Created test notification: ${selectedNotificationType.replace(/_/g, " ")}`);
+    } catch (error) {
+      toast.error(
+        `Failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  };
+
+  const handleTogglePreference = async (
+    key: "review_assigned" | "review_status_changed" | "comment_added",
+    value: boolean
+  ) => {
+    try {
+      await updatePreferences.mutateAsync({ [key]: value });
+      toast.success("Preference updated");
+    } catch {
+      toast.error("Failed to update preference");
+    }
+  };
+
   const isLoading = isCreating || isAdvancing || isCancelling;
 
   return (
@@ -186,7 +244,7 @@ export function DebugFAB() {
           </div>
 
           <Tabs defaultValue="reviews" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="reviews" className="text-xs">
                 <FileText className="h-3 w-3 mr-1" />
                 Reviews
@@ -196,6 +254,13 @@ export function DebugFAB() {
                 Users
                 {isImpersonating && (
                   <span className="ml-1 h-2 w-2 rounded-full bg-amber-500" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="text-xs">
+                <Bell className="h-3 w-3 mr-1" />
+                Notifs
+                {(unreadCountData?.unread_count ?? 0) > 0 && (
+                  <span className="ml-1 h-2 w-2 rounded-full bg-red-500" />
                 )}
               </TabsTrigger>
             </TabsList>
@@ -406,6 +471,141 @@ export function DebugFAB() {
                   </Button>
                 </div>
               )}
+            </TabsContent>
+
+            {/* Notifications Tab */}
+            <TabsContent value="notifications" className="space-y-3 mt-3">
+              {/* Unread Count */}
+              <div className="rounded-md bg-muted p-2 text-xs flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  Unread: <strong>{unreadCountData?.unread_count ?? 0}</strong>
+                </span>
+                {(unreadCountData?.unread_count ?? 0) > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs"
+                    onClick={() => {
+                      markAllRead.mutate();
+                      toast.success("All notifications marked as read");
+                    }}
+                  >
+                    <CheckCheck className="h-3 w-3 mr-1" />
+                    Mark All Read
+                  </Button>
+                )}
+              </div>
+
+              {/* Recent Notifications List */}
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Recent Notifications
+                </label>
+                <div className="h-28 rounded-md border overflow-y-auto">
+                  <div className="p-1">
+                    {notificationsLoading ? (
+                      <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                        Loading...
+                      </div>
+                    ) : !notificationsData?.items.length ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground">
+                        No notifications
+                      </div>
+                    ) : (
+                      notificationsData.items.map((n) => (
+                        <div
+                          key={n.notification_id}
+                          className={`px-2 py-1.5 text-xs rounded-sm ${
+                            !n.is_read ? "bg-blue-50 dark:bg-blue-950/20" : ""
+                          }`}
+                        >
+                          <div className="font-medium truncate">{n.title}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">
+                            {n.message}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Create Test Notification */}
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Select notification type
+                </label>
+                <div className="h-20 rounded-md border overflow-y-auto">
+                  <div className="p-1">
+                    {NOTIFICATION_TYPES.map((type) => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        className={`w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent transition-colors ${
+                          selectedNotificationType === type.value
+                            ? "bg-accent font-medium"
+                            : ""
+                        }`}
+                        onClick={() => setSelectedNotificationType(type.value)}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleCreateTestNotification}
+                  disabled={createDebugNotification.isPending}
+                >
+                  {createDebugNotification.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  ) : (
+                    <Bell className="h-3 w-3 mr-2" />
+                  )}
+                  Create Test Notification
+                </Button>
+              </div>
+
+              {/* Notification Preferences */}
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Preferences
+                </label>
+                {preferencesLoading ? (
+                  <div className="flex items-center justify-center py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                    Loading...
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {NOTIFICATION_TYPES.map((type) => (
+                      <div
+                        key={type.value}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <Label htmlFor={`pref-${type.value}`} className="text-xs cursor-pointer">
+                          {type.label}
+                        </Label>
+                        <Switch
+                          id={`pref-${type.value}`}
+                          checked={preferences?.[type.value as keyof typeof preferences] ?? true}
+                          onCheckedChange={(checked) =>
+                            handleTogglePreference(
+                              type.value as "review_assigned" | "review_status_changed" | "comment_added",
+                              checked
+                            )
+                          }
+                          disabled={updatePreferences.isPending}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </div>

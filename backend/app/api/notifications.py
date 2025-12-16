@@ -9,9 +9,11 @@ from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.auth import User, get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.db_models import NotificationDB, ProfileDB
 from app.models.notification import (
+    DebugNotificationCreate,
     NotificationPreferences,
     NotificationPreferencesUpdate,
     NotificationResponse,
@@ -225,3 +227,45 @@ async def update_notification_preferences(
     await db.refresh(profile)
 
     return NotificationPreferences(**profile.notification_preferences)
+
+
+@router.post("/notifications/debug/create", response_model=NotificationResponse)
+async def create_debug_notification(
+    data: DebugNotificationCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> NotificationResponse:
+    """Create a test notification (debug mode only)."""
+    if not settings.debug_mode:
+        raise HTTPException(status_code=403, detail="Debug mode is not enabled")
+
+    user_id = UUID(current_user.id)
+
+    # Generate default title/message if not provided
+    type_label = data.notification_type.value.replace("_", " ").title()
+    title = data.title or f"Test: {type_label}"
+    message = data.message or f"This is a test notification of type '{data.notification_type.value}'."
+
+    # Create notification
+    notification = NotificationDB(
+        user_id=user_id,
+        notification_type=data.notification_type.value,
+        title=title,
+        message=message,
+        material_number=data.material_number,
+    )
+
+    db.add(notification)
+    await db.commit()
+    await db.refresh(notification)
+
+    return NotificationResponse(
+        notification_id=notification.notification_id,
+        user_id=notification.user_id,
+        notification_type=data.notification_type,
+        title=notification.title,
+        message=notification.message,
+        material_number=notification.material_number,
+        is_read=notification.is_read,
+        created_at=notification.created_at,
+    )

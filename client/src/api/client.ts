@@ -694,6 +694,16 @@ export class ApiClient {
       data
     );
   }
+
+  // Debug: Create test notification (development only)
+  async createDebugNotification(
+    data: components["schemas"]["DebugNotificationCreate"]
+  ): Promise<components["schemas"]["NotificationResponse"]> {
+    return this.post<components["schemas"]["NotificationResponse"]>(
+      "/notifications/debug/create",
+      data
+    );
+  }
 }
 
 // Export a default instance
