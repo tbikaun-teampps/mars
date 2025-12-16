@@ -15,6 +15,7 @@ class ProfileDB(SQLModel, table=True):
 
     id: UUID = Field(primary_key=True)
     full_name: Optional[str] = None
+    email: Optional[str] = Field(default=None, max_length=255)
     display_name: Optional[str] = Field(default=None, max_length=100)
     job_title: Optional[str] = Field(default=None, max_length=100)
     department: Optional[str] = Field(default=None, max_length=100)

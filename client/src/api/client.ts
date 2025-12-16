@@ -17,6 +17,26 @@ import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
+// Impersonation header name (must match backend)
+const IMPERSONATE_HEADER = "X-Impersonate-User-Id";
+
+// Module-level state for impersonation (set by ImpersonationContext)
+let _impersonatedUserId: string | null = null;
+
+/**
+ * Set the user ID to impersonate. Called by ImpersonationContext.
+ */
+export function setImpersonatedUserId(userId: string | null): void {
+  _impersonatedUserId = userId;
+}
+
+/**
+ * Get the current impersonated user ID.
+ */
+export function getImpersonatedUserId(): string | null {
+  return _impersonatedUserId;
+}
+
 // API response types - using OpenAPI generated types
 type PaginatedMaterialsResponse =
   components["schemas"]["PaginatedMaterialsResponse"];
@@ -79,6 +99,7 @@ export class ApiClient {
       headers: {
         "Content-Type": "application/json",
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(_impersonatedUserId && { [IMPERSONATE_HEADER]: _impersonatedUserId }),
         ...options.headers,
       },
     };
@@ -298,6 +319,7 @@ export class ApiClient {
       headers: {
         // Don't set Content-Type - browser will set multipart/form-data with boundary
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(_impersonatedUserId && { [IMPERSONATE_HEADER]: _impersonatedUserId }),
       },
       body: formData,
     });

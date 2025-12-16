@@ -6,6 +6,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { UploadDataDialog } from "@/components/upload-data-dialog";
 import { DebugFAB } from "@/components/debug-fab";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
+import { useImpersonation } from "@/contexts/ImpersonationContext";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,6 +16,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+
+// Height of the impersonation banner (py-2 + h-7 button = ~40px)
+const BANNER_HEIGHT = "2.5rem";
 
 interface BreadcrumbItem {
   label: string;
@@ -29,6 +34,10 @@ interface AppLayoutProps {
 export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps) {
   const { user, loading } = useAuth();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const { isImpersonating } = useImpersonation();
+
+  // Calculate banner height for sidebar offset
+  const bannerHeight = import.meta.env.DEV && isImpersonating ? BANNER_HEIGHT : "0px";
 
   // Show loading state while checking auth
   if (loading) {
@@ -55,7 +64,8 @@ export function AppLayout({ children, breadcrumbs, headerRight }: AppLayoutProps
 
   return (
     <>
-      <SidebarProvider>
+      {import.meta.env.DEV && <ImpersonationBanner />}
+      <SidebarProvider bannerHeight={bannerHeight}>
         <AppSidebar onUploadClick={() => setUploadDialogOpen(true)} />
         <SidebarInset>
           <header className="bg-background sticky top-0 flex shrink-0 items-center gap-2 border-b px-4 py-2 z-10">

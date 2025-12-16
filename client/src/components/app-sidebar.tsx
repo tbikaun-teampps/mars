@@ -45,7 +45,11 @@ export function AppSidebar({ onUploadClick, ...props }: AppSidebarProps) {
   return (
     <Sidebar
       collapsible="none"
-      className="h-screen w-[calc(var(--sidebar-width-icon)+1px)]! border-r sticky top-0"
+      className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r sticky"
+      style={{
+        top: "var(--banner-height, 0px)",
+        height: "calc(100vh - var(--banner-height, 0px))",
+      }}
       {...props}
     >
       <SidebarHeader>
