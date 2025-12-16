@@ -672,6 +672,14 @@ export class ApiClient {
     );
   }
 
+  async markNotificationAsUnread(
+    notificationId: number
+  ): Promise<{ message: string }> {
+    return this.put<{ message: string }>(
+      `/notifications/${notificationId}/unread`
+    );
+  }
+
   async markAllNotificationsAsRead(): Promise<{ message: string }> {
     return this.put<{ message: string }>("/notifications/mark-all-read");
   }

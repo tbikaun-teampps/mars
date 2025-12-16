@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Bell, BellOff, CheckCheck, ExternalLink } from "lucide-react";
+import { Bell, BellOff, CheckCheck, ExternalLink, Circle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
   useNotifications,
   useUnreadNotificationCount,
   useMarkNotificationRead,
+  useMarkNotificationUnread,
   useMarkAllNotificationsRead,
 } from "@/api/queries";
 import {
@@ -26,12 +27,39 @@ type NotificationResponse = components["schemas"]["NotificationResponse"];
 function NotificationItem({
   notification,
   onMarkRead,
+  onMarkUnread,
 }: {
   notification: NotificationResponse;
   onMarkRead: () => void;
+  onMarkUnread: () => void;
 }) {
+  const handleToggleRead = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (notification.is_read) {
+      onMarkUnread();
+    } else {
+      onMarkRead();
+    }
+  };
+
   const content = (
     <>
+      <button
+        type="button"
+        onClick={handleToggleRead}
+        className="flex-shrink-0 mt-1 hover:scale-110 transition-transform"
+        title={notification.is_read ? "Mark as unread" : "Mark as read"}
+      >
+        <Circle
+          className={cn(
+            "h-2.5 w-2.5",
+            notification.is_read
+              ? "text-muted-foreground/30"
+              : "fill-blue-500 text-blue-500"
+          )}
+        />
+      </button>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{notification.title}</p>
         <p className="text-xs text-muted-foreground line-clamp-2">
@@ -91,6 +119,7 @@ export function NotificationBell() {
     open // Only fetch when dropdown is open
   );
   const markRead = useMarkNotificationRead();
+  const markUnread = useMarkNotificationUnread();
   const markAllRead = useMarkAllNotificationsRead();
 
   const unreadCount = countData?.unread_count ?? 0;
@@ -99,6 +128,10 @@ export function NotificationBell() {
     if (!isRead) {
       markRead.mutate(notificationId);
     }
+  };
+
+  const handleMarkUnread = (notificationId: number) => {
+    markUnread.mutate(notificationId);
   };
 
   const handleMarkAllRead = () => {
@@ -161,6 +194,9 @@ export function NotificationBell() {
                     notification.notification_id,
                     notification.is_read
                   )
+                }
+                onMarkUnread={() =>
+                  handleMarkUnread(notification.notification_id)
                 }
               />
             ))

@@ -948,6 +948,28 @@ export function useMarkNotificationRead(): UseMutationResult<
 }
 
 /**
+ * Hook to mark a notification as unread
+ */
+export function useMarkNotificationUnread(): UseMutationResult<
+  { message: string },
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (notificationId: number) =>
+      apiClient.markNotificationAsUnread(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to mark notification as unread:", error);
+    },
+  });
+}
+
+/**
  * Hook to mark all notifications as read
  */
 export function useMarkAllNotificationsRead(): UseMutationResult<
