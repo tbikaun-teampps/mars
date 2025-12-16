@@ -122,6 +122,14 @@ async def get_current_user(
         impersonated_email = await _get_user_email_for_impersonation(
             impersonate_user_id
         )
+        if not impersonated_email:
+            logger.warning(
+                f"Impersonation failed: user {impersonate_user_id} does not have an email address"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Impersonated user not found or has no email address",
+            )
 
         logger.info(
             f"User {user_id} ({email}) is impersonating user {impersonate_user_id}"
@@ -174,7 +182,7 @@ async def _check_user_is_admin_for_impersonation(user_id: str) -> bool:
         return len(admin_roles) > 0
 
 
-async def _get_user_email_for_impersonation(user_id: str) -> str:
+async def _get_user_email_for_impersonation(user_id: str) -> Optional[str]:
     """
     Fetch user email from the profiles table for impersonation.
 
@@ -200,5 +208,3 @@ async def _get_user_email_for_impersonation(user_id: str) -> str:
 
         if profile and profile.email:
             return profile.email
-
-        return ""
