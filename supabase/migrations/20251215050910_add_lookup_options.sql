@@ -18,6 +18,9 @@ CREATE TABLE lookup_options (
 
     is_active BOOLEAN DEFAULT true,         -- Soft disable without breaking history
 
+    -- Category-specific configuration (e.g., workflow flags for proposed_action)
+    config JSONB DEFAULT '{}',
+
     -- Audit fields
     created_by UUID DEFAULT auth.uid(),
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -42,6 +45,7 @@ CREATE TABLE lookup_options_history (
 CREATE INDEX idx_lookup_options_category ON lookup_options(category);
 CREATE INDEX idx_lookup_options_active ON lookup_options(category, is_active);
 CREATE INDEX idx_lookup_history_option ON lookup_options_history(option_id);
+CREATE INDEX idx_lookup_options_config ON lookup_options USING gin (config);
 
 
 -- ============================================================================
@@ -156,14 +160,15 @@ INSERT INTO lookup_options (category, value, label, description, color, group_na
 -- ============================================================================
 
 -- Retain (Green tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'keep_no_change', 'Keep - No Change', 'Retain current stock levels and settings unchanged', '#22c55e', 'Retain', 1, 1),
-('proposed_action', 'keep_adjust_levels', 'Keep - Adjust Levels', 'Retain material but modify min/max, safety stock, or reorder point', '#16a34a', 'Retain', 1, 2),
-('proposed_action', 'keep_reclassify', 'Keep - Reclassify', 'Retain but change criticality, stock type, or material group', '#15803d', 'Retain', 1, 3);
+-- config: requires_sme (whether SME review is required), requires_approval (whether formal approval is required)
+INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order, config) VALUES
+('proposed_action', 'keep_no_change', 'Keep - No Change', 'Retain current stock levels and settings unchanged', '#22c55e', 'Retain', 1, 1, '{"requires_sme": false, "requires_approval": false}'),
+('proposed_action', 'keep_adjust_levels', 'Keep - Adjust Levels', 'Retain material but modify min/max, safety stock, or reorder point', '#16a34a', 'Retain', 1, 2, '{"requires_sme": true, "requires_approval": true}'),
+('proposed_action', 'keep_reclassify', 'Keep - Reclassify', 'Retain but change criticality, stock type, or material group', '#15803d', 'Retain', 1, 3, '{"requires_sme": true, "requires_approval": true}');
 
 -- Consume & Run Down (Amber/Yellow tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'run_down', 'Run Down - Do Not Reorder', 'Consume existing stock but do not replenish', '#eab308', 'Consume & Run Down', 2, 1);
+INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order, config) VALUES
+('proposed_action', 'run_down', 'Run Down - Do Not Reorder', 'Consume existing stock but do not replenish', '#eab308', 'Consume & Run Down', 2, 1, '{"requires_sme": true, "requires_approval": true}');
 -- ('proposed_action', 'consume_accelerate', 'Consume - Accelerate Usage', 'Actively find opportunities to use stock before expiry or obsolescence', '#ca8a04', 'Consume & Run Down', 2, 2),
 -- ('proposed_action', 'substitute', 'Substitute - Use as Alternative', 'Use as substitute for another part number where applicable', '#a16207', 'Consume & Run Down', 2, 3);
 

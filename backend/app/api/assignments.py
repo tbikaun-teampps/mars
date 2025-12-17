@@ -7,6 +7,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.rbac import check_user_is_admin, get_user_permissions, require_permission
+from app.api.utils import get_proposed_action_config, is_sme_required
 from app.core.auth import User, get_current_user
 from app.core.database import get_db
 from app.models.assignment import (
@@ -279,8 +280,15 @@ async def create_review_assignments(
         db.add(approver_assignment)
     created_assignments.append(approver_assignment)
 
-    # Update review status to pending_sme
-    review.status = "pending_sme"
+    # Update review status based on whether SME review is required
+    config = None
+    if review.proposed_action:
+        config = await get_proposed_action_config(db, review.proposed_action)
+    if is_sme_required(review.proposed_action, config):
+        review.status = "pending_sme"
+    else:
+        # Skip SME step, go directly to pending_decision
+        review.status = "pending_decision"
     db.add(review)
 
     await db.commit()

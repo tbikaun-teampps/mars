@@ -1,9 +1,65 @@
-from app.models.db_models import MaterialReviewDB
+from typing import Any, Optional
+
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.models.db_models import LookupOptionDB, MaterialReviewDB
 from app.models.material import ConsumptionHistory, Material
 from app.models.review import (
     ReviewStatus,
     ReviewStepEnum,
 )
+
+# Fallback set for SME-required actions (used when config not available)
+# These should match the `requires_sme: true` flags in lookup_options.config
+_SME_REQUIRED_ACTIONS_FALLBACK = {"keep_reclassify", "keep_adjust_levels", "run_down", "dispose"}
+
+
+async def get_proposed_action_config(
+    db: AsyncSession, proposed_action: str
+) -> Optional[dict[str, Any]]:
+    """Get the config for a proposed action from lookup_options.
+
+    Args:
+        db: Database session
+        proposed_action: The proposed action value (e.g., 'keep_no_change')
+
+    Returns:
+        The config dict if found, None otherwise
+    """
+    stmt = select(LookupOptionDB.config).where(
+        LookupOptionDB.category == "proposed_action",
+        LookupOptionDB.value == proposed_action,
+        LookupOptionDB.is_active.is_(True),
+    )
+    result = await db.exec(stmt)
+    return result.first()
+
+
+def is_sme_required(
+    proposed_action: str | None,
+    config: Optional[dict[str, Any]] = None,
+) -> bool:
+    """Determine if SME review is required based on proposed action.
+
+    Args:
+        proposed_action: The proposed action value
+        config: Optional config dict from lookup_options. If provided,
+                uses the 'requires_sme' flag. Otherwise falls back to
+                hardcoded set.
+
+    Returns:
+        True if SME review is required, False otherwise
+    """
+    if not proposed_action:
+        return False
+
+    # If config provided, use the requires_sme flag
+    if config is not None:
+        return config.get("requires_sme", False)
+
+    # Fallback to hardcoded set
+    return proposed_action in _SME_REQUIRED_ACTIONS_FALLBACK
 
 
 def transform_db_record_to_material(record: dict) -> Material:

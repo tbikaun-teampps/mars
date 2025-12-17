@@ -334,6 +334,9 @@ class LookupOptionDB(SQLModel, table=True):
 
     is_active: bool = Field(default=True)
 
+    # Category-specific configuration (e.g., workflow flags for proposed_action)
+    config: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+
     # Audit fields
     created_by: Optional[UUID] = Field(default=None, sa_column_kwargs={"server_default": text("auth.uid()")})
     created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))

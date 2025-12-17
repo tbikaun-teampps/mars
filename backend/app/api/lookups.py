@@ -57,6 +57,7 @@ def db_to_response(option: LookupOptionDB) -> LookupOption:
         group_order=option.group_order,
         sort_order=option.sort_order,
         is_active=option.is_active,
+        config=option.config,
         created_by=option.created_by,
         created_at=option.created_at,
         updated_by=option.updated_by,
@@ -82,6 +83,7 @@ def options_to_grouped(category: str, options: list[LookupOptionDB]) -> LookupOp
                 color=opt.color,
                 sort_order=opt.sort_order,
                 is_active=opt.is_active,
+                config=opt.config,
             )
         )
 
@@ -116,6 +118,7 @@ def options_to_grouped(category: str, options: list[LookupOptionDB]) -> LookupOp
             color=opt.color,
             sort_order=opt.sort_order,
             is_active=opt.is_active,
+            config=opt.config,
         )
         for opt in sorted(options, key=lambda x: (x.group_order, x.sort_order))
     ]
@@ -286,6 +289,7 @@ async def create_lookup_option(
         group_name=option_data.group_name,
         group_order=option_data.group_order,
         sort_order=option_data.sort_order,
+        config=option_data.config,
         is_active=True,
         created_by=UUID(current_user.id),
         updated_by=UUID(current_user.id),
@@ -311,6 +315,7 @@ async def create_lookup_option(
                 "group_name": option_db.group_name,
                 "group_order": option_db.group_order,
                 "sort_order": option_db.sort_order,
+                "config": option_db.config,
             },
             changed_by=current_user.id,
         )
@@ -356,6 +361,7 @@ async def update_lookup_option(
         "group_order": option.group_order,
         "sort_order": option.sort_order,
         "is_active": option.is_active,
+        "config": option.config,
     }
 
     # Apply updates (only non-None values)
@@ -390,6 +396,7 @@ async def update_lookup_option(
             "group_order": option.group_order,
             "sort_order": option.sort_order,
             "is_active": option.is_active,
+            "config": option.config,
         }
         await record_history(
             db=db,
