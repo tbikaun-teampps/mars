@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.review import MaterialReview
+from app.models.review import ReviewSummary
 from app.models.user import UserProfile
 
 
@@ -79,9 +79,9 @@ class Material(BaseModel):
 
 
 class MaterialWithReviews(Material):
-    """Material model with reviews."""
+    """Material model with review summaries for history display."""
 
-    reviews: list[MaterialReview]  # List of material reviews
+    reviews: list[ReviewSummary]  # List of review summaries (not full review details)
 
 
 class PaginatedMaterialsResponse(BaseModel):

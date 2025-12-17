@@ -65,14 +65,14 @@ const STATUS_CONFIG: Record<
     icon: <Play className="h-3 w-3" />,
     description: "Steps 1-3",
   },
-  completed: {
-    label: "Completed",
+  approved: {
+    label: "Approved",
     icon: <CheckCircle className="h-3 w-3" />,
     description: "All steps",
   },
 };
 
-const ALL_STATUSES: ReviewStatus[] = ["draft", "pending_sme", "pending_decision", "completed"];
+const ALL_STATUSES: ReviewStatus[] = ["draft", "pending_sme", "pending_decision", "approved"];
 
 const NOTIFICATION_TYPES = [
   { value: "review_assigned", label: "Review Assigned" },
@@ -134,9 +134,9 @@ export function DebugFAB() {
   // Find impersonated user info
   const impersonatedUser = users?.find((u) => u.user_id === impersonatedUserId);
 
-  // Find active review (not completed or cancelled)
+  // Find active review (not in terminal state)
   const activeReview = materialDetails?.reviews?.find(
-    (r) => r.status !== "completed" && r.status !== "cancelled"
+    (r) => r.status !== "approved" && r.status !== "rejected" && r.status !== "cancelled"
   );
 
   const currentStatus = activeReview?.status ?? null;

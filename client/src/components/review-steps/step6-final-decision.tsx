@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useFormContext } from "react-hook-form";
-import { Info } from "lucide-react";
+import { Info, Lock } from "lucide-react";
 import {
   FormGroupedSelectField,
   FormInputField,
@@ -9,8 +9,17 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Stepheader } from "./step-header";
 import { useProposedActionOptions } from "./use-proposed-action-options";
+import { useReviewAssignments, useCurrentUser } from "@/api/queries";
 
-export function Step5FinalDecision() {
+interface Step6FinalDecisionProps {
+  materialNumber?: number;
+  reviewId?: number | null;
+}
+
+export function Step6FinalDecision({
+  materialNumber,
+  reviewId,
+}: Step6FinalDecisionProps) {
   const { watch, setValue } = useFormContext();
   const proposedSafetyStockQty = watch("proposedSafetyStockQty");
   const proposedUnrestrictedQty = watch("proposedUnrestrictedQty");
@@ -19,6 +28,40 @@ export function Step5FinalDecision() {
   const finalSafetyStockQty = watch("finalSafetyStockQty");
   const finalUnrestrictedQty = watch("finalUnrestrictedQty");
   const finalDecision = watch("finalDecision");
+
+  // Fetch current user and assignments for view-only mode
+  const { data: currentUser } = useCurrentUser();
+  const { data: assignments } = useReviewAssignments(materialNumber, reviewId);
+
+  // Determine if user can edit this step (must be assigned as approver or be admin)
+  const viewOnlyInfo = React.useMemo(() => {
+    if (!currentUser || !assignments) {
+      return { isViewOnly: false, assigneeName: null };
+    }
+
+    // Admins can always edit
+    if (currentUser.is_admin) {
+      return { isViewOnly: false, assigneeName: null };
+    }
+
+    // Find approver assignment
+    const approverAssignment = assignments.find((a) => a.assignment_type === "approver");
+
+    // If no assignment exists yet, allow editing (assignment step not completed)
+    if (!approverAssignment) {
+      return { isViewOnly: false, assigneeName: null };
+    }
+
+    // Check if current user is the assigned approver
+    const isAssignedApprover = approverAssignment.user_id === currentUser.id;
+
+    return {
+      isViewOnly: !isAssignedApprover,
+      assigneeName: approverAssignment.user_name || "another user",
+    };
+  }, [currentUser, assignments]);
+
+  const isViewOnly = viewOnlyInfo.isViewOnly;
 
   // Fetch proposed action options for final decision
   const { groups: proposedActionGroups, isLoading: actionsLoading } =
@@ -69,12 +112,22 @@ export function Step5FinalDecision() {
         Document the final decision and actions to be taken for this material.
       </p>
 
+      {viewOnlyInfo.isViewOnly && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-800 [&>svg]:text-amber-600">
+          <Lock className="h-4 w-4" />
+          <AlertDescription className="text-amber-700">
+            This step is assigned to <strong>{viewOnlyInfo.assigneeName}</strong>.
+            You can view the information but cannot make changes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <FormGroupedSelectField
         name="finalDecision"
         label="What is the final decision? *"
         placeholder="Select final decision"
         groups={proposedActionGroups}
-        disabled={actionsLoading}
+        disabled={actionsLoading || isViewOnly}
       />
 
       {finalDecision === "other" && (
@@ -82,10 +135,11 @@ export function Step5FinalDecision() {
           name="finalDecisionOther"
           label="Please specify the final decision *"
           placeholder="Enter custom final decision"
+          disabled={isViewOnly}
         />
       )}
 
-      {isQtyAdjustmentLocked && (
+      {isQtyAdjustmentLocked && !isViewOnly && (
         <Alert className="border-blue-200 bg-blue-50 text-blue-800 [&>svg]:text-blue-600">
           <Info className="h-4 w-4" />
           <AlertDescription className="text-blue-700">
@@ -101,14 +155,14 @@ export function Step5FinalDecision() {
           label="Final Safety Stock Quantity"
           type="number"
           placeholder="Enter final safety stock"
-          disabled={isQtyAdjustmentLocked}
+          disabled={isQtyAdjustmentLocked || isViewOnly}
         />
         <FormInputField
           name="finalUnrestrictedQty"
           label="Final Unrestricted Quantity"
           type="number"
           placeholder="Enter final unrestricted"
-          disabled={isQtyAdjustmentLocked}
+          disabled={isQtyAdjustmentLocked || isViewOnly}
         />
       </div>
 
@@ -117,6 +171,7 @@ export function Step5FinalDecision() {
         label="If there are any notes regarding the final decision, please provide them here."
         placeholder="Enter any notes regarding the final decision"
         rows={4}
+        disabled={isViewOnly}
       />
     </div>
   );

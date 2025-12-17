@@ -23,14 +23,16 @@ import {
 import { StepProgressIndicator } from "./step-progress-indicator";
 import { Step1GeneralInfo } from "./review-steps/step1-general-info";
 import { Step2Checklist } from "./review-steps/step2-checklist";
-import { Step3SMEInvestigation } from "./review-steps/step3-sme-investigation";
-import { Step4FollowUp } from "./review-steps/step4-follow-up";
-import { Step5FinalDecision } from "./review-steps/step5-final-decision";
+import { Step3Assignment } from "./review-steps/step3-assignment";
+import { Step4SMEInvestigation } from "./review-steps/step4-sme-investigation";
+import { Step5FollowUp } from "./review-steps/step5-follow-up";
+import { Step6FinalDecision } from "./review-steps/step6-final-decision";
 import { ReviewCommentsDialog } from "./review-comments-dialog";
 import { Badge } from "./ui/badge";
 import {
   step1Schema,
   step2Schema,
+  stepAssignmentSchema,
   step3Schema,
   step3RequiredSchema,
   step4Schema,
@@ -65,13 +67,11 @@ interface MaterialReviewFormProps {
 const getReviewSteps = (hasProposedQty: boolean): Step[] => [
   { id: "general-info", title: "General Info" },
   { id: "checklist", title: "Checklist" },
+  { id: "assignment", title: "Assignment" },
   { id: "sme-investigation", title: "SME Review", isOptional: !hasProposedQty },
   { id: "follow-up", title: "Follow-up", isOptional: true },
   { id: "final-decision", title: "Final Decision" },
 ];
-
-// Default steps for initial render (before form values are available)
-const DEFAULT_REVIEW_STEPS: Step[] = getReviewSteps(false);
 
 // Step-specific payload extraction functions
 function extractStep1Payload(
@@ -192,17 +192,25 @@ function extractStep5Payload(
   };
 }
 
+// Placeholder for assignment step - actual submission handled separately via assignments API
+function extractAssignmentPayload(): Partial<MaterialReviewUpdate> {
+  // Assignment step uses a separate API endpoint, not the review update endpoint
+  return {};
+}
+
 // Main extraction function that routes to the appropriate step
+// Step indices: 0=General, 1=Checklist, 2=Assignment, 3=SME, 4=FollowUp, 5=FinalDecision
 function extractPayloadForStep(
   step: number,
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
   const extractors = [
-    extractStep1Payload,
-    extractStep2Payload,
-    extractStep3Payload,
-    extractStep4Payload,
-    extractStep5Payload,
+    extractStep1Payload,     // Step 0: General Info
+    extractStep2Payload,     // Step 1: Checklist
+    extractAssignmentPayload, // Step 2: Assignment (handled separately)
+    extractStep3Payload,     // Step 3: SME Investigation
+    extractStep4Payload,     // Step 4: Follow-up
+    extractStep5Payload,     // Step 5: Final Decision
   ];
 
   return extractors[step](formData);
@@ -335,16 +343,17 @@ function MaterialReviewFormInner({
   }, [currentStep, isStepComplete]);
 
   // Check if current step requires a permission the user doesn't have
+  // Step indices: 0=General, 1=Checklist, 2=Assignment, 3=SME, 4=FollowUp, 5=FinalDecision
   const stepPermissionInfo = React.useMemo(() => {
-    // Step 2 (SME Investigation) requires can_provide_sme_review
-    if (currentStep === 2 && !canProvideSmeReview) {
+    // Step 3 (SME Investigation) requires can_provide_sme_review
+    if (currentStep === 3 && !canProvideSmeReview) {
       return {
         blocked: true,
         message: "You need 'Provide SME Review' permission to save this step.",
       };
     }
-    // Step 4 (Final Decision) requires can_approve_reviews
-    if (currentStep === 4 && !canApproveReviews) {
+    // Step 5 (Final Decision) requires can_approve_reviews
+    if (currentStep === 5 && !canApproveReviews) {
       return {
         blocked: true,
         message: "You need 'Approve Reviews' permission to complete this review.",
@@ -511,6 +520,24 @@ function MaterialReviewFormInner({
         throw new Error("No material number provided");
       }
 
+      // Step 2 (Assignment) uses a different API endpoint
+      if (step === 2 && reviewId) {
+        const formData = data as MaterialReviewFormData;
+        if (!formData.smeUserId || !formData.approverUserId) {
+          throw new Error("SME and Approver must be selected");
+        }
+        await apiClient.createReviewAssignments(
+          materialData.material_number,
+          reviewId,
+          {
+            sme_user_id: formData.smeUserId,
+            approver_user_id: formData.approverUserId,
+          }
+        );
+        // Return the current review data (assignments API doesn't return full review)
+        return existingReview || null;
+      }
+
       // Extract only the fields relevant to this step
       const apiData = extractPayloadForStep(
         step,
@@ -581,9 +608,11 @@ function MaterialReviewFormInner({
 
     // Get the appropriate schema for current step
     // Use step3RequiredSchema when SME is required (qty adjustment is non-zero)
+    // Step indices: 0=General, 1=Checklist, 2=Assignment, 3=SME, 4=FollowUp, 5=FinalDecision
     const stepSchemas = [
       step1Schema,
       step2Schema,
+      stepAssignmentSchema,
       isSmeRequired ? step3RequiredSchema : step3Schema,
       step4Schema,
       step5Schema,
@@ -669,6 +698,7 @@ function MaterialReviewFormInner({
       const stepSchemas = [
         step1Schema,
         step2Schema,
+        stepAssignmentSchema,
         isSmeRequired ? step3RequiredSchema : step3Schema,
         step4Schema,
         step5Schema,
@@ -711,6 +741,9 @@ function MaterialReviewFormInner({
 
   // Pre-fill form with existing review data if editing
   // Wait for lookup options to load before mapping to correctly detect custom values
+  // NOTE: Step completion is now derived from backend state (current_step field)
+  // passed via initialCompletedSteps to MultiStepFormProvider. Validators are only
+  // used for UX feedback, not workflow state.
   React.useEffect(() => {
     if (existingReview && isEditMode && lookupOptionsLoaded) {
       // Only reset the form if this is a NEW review or we haven't reset for this review yet
@@ -729,29 +762,8 @@ function MaterialReviewFormInner({
       const formData = mapReviewToFormData(existingReview, predefinedOptions);
 
       form.reset(formData);
-
-      // Validate each step using Zod schemas and mark as complete if valid
-      if (step1Schema.safeParse(formData).success) {
-        markStepComplete(0);
-      }
-
-      if (step2Schema.safeParse(formData).success) {
-        markStepComplete(1);
-      }
-
-      if (step3Schema.safeParse(formData).success) {
-        markStepComplete(2);
-      }
-
-      if (step4Schema.safeParse(formData).success) {
-        markStepComplete(3);
-      }
-
-      if (step5Schema.safeParse(formData).success) {
-        markStepComplete(4);
-      }
     }
-  }, [materialData, existingReview, isEditMode, form, markStepComplete, predefinedOptions, lookupOptionsLoaded]);
+  }, [existingReview, isEditMode, form, predefinedOptions, lookupOptionsLoaded]);
 
   return (
     <div className="space-y-6">
@@ -798,19 +810,33 @@ function MaterialReviewFormInner({
             <Step2Checklist />
           </StepContent>
 
-          {/* Step 3: SME Investigation */}
+          {/* Step 3: Assignment */}
           <StepContent step={2}>
-            <Step3SMEInvestigation />
+            <Step3Assignment
+              materialNumber={materialData?.material_number}
+              reviewId={reviewId}
+            />
           </StepContent>
 
-          {/* Step 4: Follow-up Scheduling */}
+          {/* Step 4: SME Investigation */}
           <StepContent step={3}>
-            <Step4FollowUp />
+            <Step4SMEInvestigation
+              materialNumber={materialData?.material_number}
+              reviewId={reviewId}
+            />
           </StepContent>
 
-          {/* Step 5: Final Decision */}
+          {/* Step 5: Follow-up Scheduling */}
           <StepContent step={4}>
-            <Step5FinalDecision />
+            <Step5FollowUp />
+          </StepContent>
+
+          {/* Step 6: Final Decision */}
+          <StepContent step={5}>
+            <Step6FinalDecision
+              materialNumber={materialData?.material_number}
+              reviewId={reviewId}
+            />
           </StepContent>
 
           {/* Navigation Buttons */}
@@ -918,10 +944,55 @@ function MaterialReviewFormInner({
   );
 }
 
+// Helper to derive completed steps from backend workflow state
+function deriveCompletedSteps(review: MaterialReview | null | undefined): number[] {
+  if (!review) return [];
+
+  // If backend provides current_step, derive completed steps from it
+  // All steps before current_step are considered complete
+  const currentStep = review.current_step ?? 0;
+  const completed: number[] = [];
+  for (let i = 0; i < currentStep; i++) {
+    completed.push(i);
+  }
+  return completed;
+}
+
+// Helper to derive initial step from backend workflow state
+function deriveInitialStep(review: MaterialReview | null | undefined): number {
+  if (!review) return 0;
+  // Cap at last step (5) to prevent out-of-bounds
+  return Math.min(review.current_step ?? 0, 5);
+}
+
 // Main export wrapper with MultiStepFormProvider
 export function MaterialReviewForm(props: MaterialReviewFormProps) {
+  const { existingReview } = props;
+
+  // Derive workflow state from backend
+  const initialCompletedSteps = React.useMemo(
+    () => deriveCompletedSteps(existingReview),
+    [existingReview]
+  );
+
+  const initialStep = React.useMemo(
+    () => deriveInitialStep(existingReview),
+    [existingReview]
+  );
+
+  // Use backend's sme_required for step definitions (fallback to false for new reviews)
+  const smeRequired = existingReview?.sme_required ?? false;
+  const reviewSteps = React.useMemo(
+    () => getReviewSteps(smeRequired),
+    [smeRequired]
+  );
+
   return (
-    <MultiStepFormProvider steps={DEFAULT_REVIEW_STEPS}>
+    <MultiStepFormProvider
+      steps={reviewSteps}
+      initialStep={initialStep}
+      initialCompletedSteps={initialCompletedSteps}
+    >
       <MaterialReviewFormInner {...props} />
     </MultiStepFormProvider>
   );

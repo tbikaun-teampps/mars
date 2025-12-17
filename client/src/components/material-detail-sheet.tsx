@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
 import { RequirePermission } from "@/components/ui/require-permission";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
-type MaterialReview = components["schemas"]["MaterialReview"];
+type ReviewSummary = components["schemas"]["ReviewSummary"];
 type Insight = components["schemas"]["Insight"];
 
 // Insights Panel Component
@@ -271,9 +271,9 @@ interface MaterialDetailSheetProps {
 
 // Review History Timeline Component
 interface ReviewHistoryTimelineProps {
-  reviews: MaterialReview[] | undefined;
+  reviews: ReviewSummary[] | undefined;
   materialNumber: number;
-  onCancelReview: (review: MaterialReview) => void;
+  onCancelReview: (review: ReviewSummary) => void;
   onCloseSheet: () => void;
   disabled: boolean;
 }
@@ -296,10 +296,15 @@ function getStatusColors(status: string): { border: string; badge: string } {
         border: "border-l-purple-500",
         badge: "bg-purple-500/10 text-purple-600 border-purple-500",
       };
-    case "completed":
+    case "approved":
       return {
         border: "border-l-green-500",
         badge: "bg-green-500/10 text-green-600 border-green-500",
+      };
+    case "rejected":
+      return {
+        border: "border-l-red-500",
+        badge: "bg-red-500/10 text-red-600 border-red-500",
       };
     case "cancelled":
       return {
@@ -325,9 +330,9 @@ function ReviewHistoryTimeline({
   const [cancelDialogOpen, setCancelDialogOpen] =
     React.useState<boolean>(false);
   const [reviewToCancel, setReviewToCancel] =
-    React.useState<MaterialReview | null>(null);
+    React.useState<ReviewSummary | null>(null);
 
-  const handleCancelClick = (review: MaterialReview) => {
+  const handleCancelClick = (review: ReviewSummary) => {
     setReviewToCancel(review);
     setCancelDialogOpen(true);
   };
@@ -345,7 +350,7 @@ function ReviewHistoryTimeline({
     navigate(`/app/materials/${materialNumber}/review`);
   };
 
-  const handleEditReview = (review: MaterialReview) => {
+  const handleEditReview = (review: ReviewSummary) => {
     onCloseSheet();
     navigate(`/app/materials/${materialNumber}/review/${review.review_id}`);
   };
@@ -369,7 +374,7 @@ function ReviewHistoryTimeline({
         <div className="overflow-y-auto pr-2 flex-1 space-y-3">
           {[...reviews]
             .sort((a, b) => (a.created_at! < b.created_at! ? 1 : -1))
-            .map((review: MaterialReview, index: number) => {
+            .map((review: ReviewSummary, index: number) => {
               const statusColors = getStatusColors(review.status);
               return (
                 <div key={index} className="group">
@@ -584,7 +589,7 @@ interface MaterialDetailsContentProps {
   loading: boolean;
   isError: boolean;
   error: Error | null;
-  onCancelReview: (review: MaterialReview) => void;
+  onCancelReview: (review: ReviewSummary) => void;
   onCloseSheet: () => void;
 }
 
@@ -728,7 +733,7 @@ function MaterialDetailsContent({
   const hasActiveReview =
     materialDetails?.reviews?.some(
       (review) =>
-        review.status && !["cancelled", "completed"].includes(review.status)
+        review.status && !["cancelled", "approved", "rejected"].includes(review.status)
     ) ?? false;
 
   return (
@@ -1007,7 +1012,7 @@ export function MaterialDetailSheet({
   // Cancel review mutation
   const cancelReviewMutation = useCancelReview();
 
-  const handleCancelReview = async (review: MaterialReview) => {
+  const handleCancelReview = async (review: ReviewSummary) => {
     if (!materialNumber || !review.review_id) return;
 
     try {

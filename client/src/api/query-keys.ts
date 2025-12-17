@@ -58,6 +58,14 @@ export const queryKeys = {
       [...queryKeys.materialAuditLogs.all, "list", params] as const,
   },
 
+  // Review queries
+  reviews: {
+    all: ["reviews"] as const,
+    // Single review detail
+    detail: (materialNumber: number, reviewId: number) =>
+      [...queryKeys.reviews.all, "detail", materialNumber, reviewId] as const,
+  },
+
   // Review comments queries
   reviewComments: {
     all: ["reviewComments"] as const,

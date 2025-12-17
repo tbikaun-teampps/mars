@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Command, Home, ScrollText, Upload, History, Settings } from "lucide-react";
+import { Command, Home, ClipboardList, ScrollText, Upload, History, Settings } from "lucide-react";
 import { NavUser } from "@/components/nav-user";
 import { NotificationBell } from "@/components/notification-bell";
 import { useCurrentUser } from "@/api/queries";
@@ -22,6 +22,11 @@ const navItems = [
     title: "Dashboard",
     url: "/app/dashboard",
     icon: Home,
+  },
+  {
+    title: "My Reviews",
+    url: "/app/my-reviews",
+    icon: ClipboardList,
   },
   {
     title: "Uploads",

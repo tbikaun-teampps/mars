@@ -1,4 +1,3 @@
-import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, AlertCircle, ShieldX } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
@@ -6,11 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { MaterialDetailsPanel } from "@/components/material-details-panel";
-import { useMaterialDetails } from "@/api/queries";
+import { useMaterialDetails, useReviewDetails } from "@/api/queries";
 import { usePermissions } from "@/hooks/use-permissions";
-import { components } from "@/types/api";
-
-type MaterialReview = components["schemas"]["MaterialReview"];
 
 export function MaterialReviewPage() {
   const { materialNumber: materialNumberParam, reviewId: reviewIdParam } =
@@ -23,21 +19,21 @@ export function MaterialReviewPage() {
     : null;
   const reviewId = reviewIdParam ? parseInt(reviewIdParam, 10) : null;
 
-  // Fetch material details
+  // Fetch material details (now returns ReviewSummary, not full reviews)
   const {
     data: materialDetails,
-    isLoading,
-    isError,
-    error,
+    isLoading: materialLoading,
+    isError: materialError,
+    error: materialErrorObj,
   } = useMaterialDetails(materialNumber, true);
 
-  // Find existing review if reviewId provided
-  const existingReview = React.useMemo((): MaterialReview | null => {
-    if (!reviewId || !materialDetails?.reviews) return null;
-    return (
-      materialDetails.reviews.find((r) => r.review_id === reviewId) || null
-    );
-  }, [reviewId, materialDetails]);
+  // Fetch full review details if editing an existing review
+  const {
+    data: existingReview,
+    isLoading: reviewLoading,
+    isError: reviewError,
+    error: reviewErrorObj,
+  } = useReviewDetails(materialNumber, reviewId);
 
   // Permission check
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
@@ -59,6 +55,7 @@ export function MaterialReviewPage() {
 
   // Breadcrumbs for page
   const breadcrumbs = [
+    { label: "App", href: "/app" },
     { label: "Dashboard", href: "/app/dashboard" },
     {
       label: `Material ${materialNumber}`,
@@ -67,8 +64,9 @@ export function MaterialReviewPage() {
     { label: reviewId ? "Edit Review" : "New Review" },
   ];
 
-  // Loading state
-  if (isLoading || permissionsLoading) {
+  // Loading state (wait for material, permissions, and review if editing)
+  const isLoading = materialLoading || permissionsLoading || (reviewId && reviewLoading);
+  if (isLoading) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
@@ -99,7 +97,9 @@ export function MaterialReviewPage() {
     );
   }
 
-  // Error state
+  // Error state (material or review fetch failed)
+  const isError = materialError || reviewError;
+  const errorMessage = materialErrorObj?.message || reviewErrorObj?.message || "Failed to load data";
   if (isError || !materialNumber) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
@@ -108,7 +108,7 @@ export function MaterialReviewPage() {
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-destructive" />
               <p className="text-sm text-destructive">
-                {error?.message || "Failed to load material details"}
+                {errorMessage}
               </p>
             </div>
             <Button
@@ -188,9 +188,9 @@ export function MaterialReviewPage() {
           <CardContent className="flex-1 overflow-y-auto">
             <MaterialDetailsPanel
               materialDetails={materialDetails}
-              loading={isLoading}
-              isError={isError}
-              error={error}
+              loading={materialLoading}
+              isError={materialError}
+              error={materialErrorObj}
             />
           </CardContent>
         </Card>

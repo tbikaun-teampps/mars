@@ -25,7 +25,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -45,6 +44,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { RequirePermission } from "@/components/ui/require-permission";
+import { ReviewHistoryCard } from "@/components/review-history-card";
 import {
   useMaterialDetails,
   useCancelReview,
@@ -55,7 +55,7 @@ import {
 import { cn } from "@/lib/utils";
 import { components } from "@/types/api";
 
-type MaterialReview = components["schemas"]["MaterialReview"];
+type ReviewSummary = components["schemas"]["ReviewSummary"];
 type Insight = components["schemas"]["Insight"];
 
 // Helper function for currency formatting
@@ -64,42 +64,6 @@ function formatCurrency(value: number) {
     style: "currency",
     currency: "AUD",
   }).format(value);
-}
-
-// Helper function for status colors
-function getStatusColors(status: string): { border: string; badge: string } {
-  switch (status.toLowerCase()) {
-    case "draft":
-      return {
-        border: "border-l-yellow-500",
-        badge: "bg-yellow-500/10 text-yellow-600 border-yellow-500",
-      };
-    case "pending_sme":
-      return {
-        border: "border-l-blue-500",
-        badge: "bg-blue-500/10 text-blue-600 border-blue-500",
-      };
-    case "pending_decision":
-      return {
-        border: "border-l-purple-500",
-        badge: "bg-purple-500/10 text-purple-600 border-purple-500",
-      };
-    case "completed":
-      return {
-        border: "border-l-green-500",
-        badge: "bg-green-500/10 text-green-600 border-green-500",
-      };
-    case "cancelled":
-      return {
-        border: "border-l-red-500",
-        badge: "bg-red-500/10 text-red-600 border-red-500",
-      };
-    default:
-      return {
-        border: "border-l-gray-500",
-        badge: "bg-gray-500/10 text-gray-600 border-gray-500",
-      };
-  }
 }
 
 // Insights Panel Component
@@ -415,7 +379,7 @@ export function MaterialDetailPage() {
   // State for cancel dialog
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
   const [reviewToCancel, setReviewToCancel] =
-    React.useState<MaterialReview | null>(null);
+    React.useState<ReviewSummary | null>(null);
 
   // Fetch material details
   const {
@@ -442,11 +406,11 @@ export function MaterialDetailPage() {
     navigate(`/app/materials/${materialNumber}/review`);
   };
 
-  const handleViewReview = (review: MaterialReview) => {
+  const handleViewReview = (review: ReviewSummary) => {
     navigate(`/app/materials/${materialNumber}/review/${review.review_id}`);
   };
 
-  const handleCancelClick = (review: MaterialReview) => {
+  const handleCancelClick = (review: ReviewSummary) => {
     setReviewToCancel(review);
     setCancelDialogOpen(true);
   };
@@ -602,7 +566,7 @@ export function MaterialDetailPage() {
   const hasActiveReview =
     materialDetails.reviews?.some(
       (review) =>
-        review.status && !["cancelled", "completed"].includes(review.status)
+        review.status && !["cancelled", "approved", "rejected"].includes(review.status)
     ) ?? false;
 
   return (
@@ -791,165 +755,19 @@ export function MaterialDetailPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Review timeline */}
             {materialDetails.reviews && materialDetails.reviews.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-2">
                 {[...materialDetails.reviews]
-                  .sort((a, b) => (a.created_at! < b.created_at! ? 1 : -1))
-                  .map((review, index) => {
-                    const statusColors = getStatusColors(review.status);
-                    return (
-                      <div key={index} className="group">
-                        <div
-                          className={cn(
-                            "pl-4 py-2 border-l-4 rounded-l hover:bg-muted/50 transition-colors space-y-2",
-                            statusColors.border
-                          )}
-                        >
-                          {/* Row 1: Status badge + timestamps */}
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <Badge
-                              variant="outline"
-                              className={cn("capitalize", statusColors.badge)}
-                            >
-                              {review.status
-                                .replace("_", " ")
-                                .replace("sme", "SME")}
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              Created {formatDate(review.created_at, "PP")}{" "}
-                              <span className="opacity-70">
-                                (
-                                {formatDistanceToNow(review.created_at, {
-                                  addSuffix: true,
-                                })}
-                                )
-                              </span>
-                            </span>
-                          </div>
-
-                          {/* Row 2: People */}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                            <span>
-                              <span className="text-muted-foreground">
-                                Initiated by:
-                              </span>{" "}
-                              <span className="font-medium capitalize">
-                                {review.initiated_by_user?.full_name ??
-                                  "Unknown"}
-                              </span>
-                            </span>
-                            <span className="text-muted-foreground">•</span>
-                            <span>
-                              <span className="text-muted-foreground">
-                                Decided by:
-                              </span>{" "}
-                              <span className="font-medium capitalize">
-                                {review.decided_by_user?.full_name ?? "—"}
-                              </span>
-                            </span>
-                            {review.comments_count != null &&
-                              review.comments_count > 0 && (
-                                <>
-                                  <span className="text-muted-foreground">
-                                    •
-                                  </span>
-                                  <span>
-                                    <span className="text-muted-foreground">
-                                      Comments:
-                                    </span>{" "}
-                                    {review.comments_count}
-                                  </span>
-                                </>
-                              )}
-                          </div>
-
-                          {/* Row 3: Decision details */}
-                          {(review.final_decision ||
-                            review.final_safety_stock_qty != null ||
-                            review.final_unrestricted_qty != null) && (
-                            <div className="flex flex-wrap items-start gap-x-4 gap-y-1 text-xs">
-                              {review.final_decision && (
-                                <span>
-                                  <span className="text-muted-foreground">
-                                    Decision:
-                                  </span>{" "}
-                                  <span className="capitalize">
-                                    {review.final_decision.replace(/_/g, " ")}
-                                  </span>
-                                </span>
-                              )}
-                              {review.final_safety_stock_qty != null && (
-                                <>
-                                  <span className="text-muted-foreground">
-                                    •
-                                  </span>
-                                  <span>
-                                    <span className="text-muted-foreground">
-                                      Safety Stock:
-                                    </span>{" "}
-                                    {review.final_safety_stock_qty.toLocaleString()}
-                                  </span>
-                                </>
-                              )}
-                              {review.final_unrestricted_qty != null && (
-                                <>
-                                  <span className="text-muted-foreground">
-                                    •
-                                  </span>
-                                  <span>
-                                    <span className="text-muted-foreground">
-                                      Unrestricted:
-                                    </span>{" "}
-                                    {review.final_unrestricted_qty.toLocaleString()}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Row 4: Actions */}
-                          <div className="flex justify-end items-center pt-1">
-                            <div className="flex gap-3">
-                              {review.is_read_only ? (
-                                <button
-                                  className="text-xs text-primary hover:underline"
-                                  onClick={() => handleViewReview(review)}
-                                >
-                                  Show Details
-                                </button>
-                              ) : (
-                                <RequirePermission
-                                  permission="can_edit_reviews"
-                                  fallback="hide"
-                                >
-                                  <button
-                                    className="text-xs text-primary hover:underline"
-                                    onClick={() => handleViewReview(review)}
-                                  >
-                                    Continue Review
-                                  </button>
-                                </RequirePermission>
-                              )}
-                              {!review.is_read_only && (
-                                <RequirePermission
-                                  permission="can_delete_reviews"
-                                  fallback="hide"
-                                >
-                                  <button
-                                    className="text-xs text-destructive hover:underline"
-                                    onClick={() => handleCancelClick(review)}
-                                  >
-                                    Cancel Review
-                                  </button>
-                                </RequirePermission>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+                  .map((review) => (
+                    <ReviewHistoryCard
+                      key={review.review_id}
+                      review={review}
+                      materialNumber={materialNumber!}
+                      onView={handleViewReview}
+                      onCancel={handleCancelClick}
+                    />
+                  ))}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">

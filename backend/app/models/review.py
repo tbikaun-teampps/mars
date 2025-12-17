@@ -14,9 +14,11 @@ class ReviewStatus(str, Enum):
     """Review status options."""
 
     DRAFT = "draft"
+    PENDING_ASSIGNMENT = "pending_assignment"  # After checklist, waiting for SME/approver assignment
     PENDING_SME = "pending_sme"
     PENDING_DECISION = "pending_decision"
-    COMPLETED = "completed"
+    APPROVED = "approved"  # Review approved, stock changes executed
+    REJECTED = "rejected"  # Review rejected, no stock changes made
     CANCELLED = "cancelled"
 
 
@@ -53,6 +55,41 @@ class ReviewChecklist(BaseModel):
     forecast_next_12m: Optional[float] = None
     alternate_plant_qty: Optional[float] = None
     procurement_feedback: Optional[str] = None
+
+
+class ReviewSummary(BaseModel):
+    """Minimal review data for history display."""
+
+    review_id: int
+    status: ReviewStatus
+    review_date: date
+    created_at: datetime
+    updated_at: datetime
+
+    # Initiator
+    initiated_by: UUID
+    initiated_by_user: Optional[UserProfile] = None
+
+    # Workflow state
+    current_step: int = 0
+
+    # Assignments
+    assigned_sme_id: Optional[UUID] = None
+    assigned_sme_name: Optional[str] = None
+    assigned_approver_id: Optional[UUID] = None
+    assigned_approver_name: Optional[str] = None
+
+    # Decision
+    decided_by: Optional[UUID] = None
+    decided_by_user: Optional[UserProfile] = None
+    final_decision: Optional[str] = None
+    final_safety_stock_qty: Optional[float] = None
+    final_unrestricted_qty: Optional[float] = None
+    final_notes: Optional[str] = None
+
+    # Metadata
+    comments_count: int = 0
+    is_read_only: bool = False
 
 
 class MaterialReview(BaseModel):
@@ -124,8 +161,19 @@ class MaterialReview(BaseModel):
     # Checklist data (joined from review_checklist table)
     checklist: Optional[ReviewChecklist] = None
 
+    # Assignment info (populated from review_assignments)
+    assigned_sme_id: Optional[UUID] = None
+    assigned_sme_name: Optional[str] = None
+    assigned_approver_id: Optional[UUID] = None
+    assigned_approver_name: Optional[str] = None
+
     is_read_only: Optional[bool] = False  # Computed property for UI logic
     comments_count: Optional[int] = 0  # Number of comments on this review
+
+    # Workflow state (computed by backend, used by frontend for navigation)
+    current_step: int = 0  # 0-5 based on status and saved data
+    sme_required: bool = False  # True if qty adjustment proposed (non-zero)
+    has_assignments: bool = False  # True if SME and approver are assigned
 
 
 class MaterialReviewCreate(BaseModel):
@@ -252,6 +300,7 @@ class ReviewStepEnum(str, Enum):
 
     GENERAL_INFO = "general_info"
     CHECKLIST = "checklist"
+    ASSIGNMENT = "assignment"  # Step 3: Assign SME and approver
     SME_INVESTIGATION = "sme_investigation"
     FOLLOW_UP = "follow_up"
     FINAL_DECISION = "final_decision"

@@ -312,7 +312,7 @@ class UploadSnapshot(SQLModel, table=True):
     total_inventory_value: Optional[float] = None
     total_opportunity_value: Optional[float] = None
     total_overdue_reviews: Optional[int] = None
-    acceptance_rate: Optional[float] = None
+    agreement_rate: Optional[float] = None
 
 
 class LookupOptionDB(SQLModel, table=True):
@@ -456,3 +456,62 @@ class SMEExpertiseDB(SQLModel, table=True):
 
     created_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
     updated_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+
+
+class ReviewAssignmentDB(SQLModel, table=True):
+    """Review Assignment table model for tracking SME and approver assignments."""
+
+    __tablename__ = "review_assignments"
+
+    assignment_id: Optional[int] = Field(default=None, primary_key=True)
+    review_id: int = Field(foreign_key="material_reviews.review_id")
+    user_id: UUID = Field(foreign_key="profiles.id")
+
+    # Assignment type: 'owner', 'sme', 'approver', 'watcher'
+    assignment_type: str = Field(max_length=30)
+
+    # For SME assignments - which discipline
+    sme_type: Optional[str] = Field(default=None, max_length=50)
+
+    # For approval assignments
+    approval_tier: Optional[int] = None
+    approval_sequence: Optional[int] = None
+
+    # Status: 'pending', 'accepted', 'declined', 'completed', 'reassigned'
+    status: str = Field(default="pending", max_length=30)
+
+    # SLA tracking
+    assigned_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))
+    due_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    accepted_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+
+    # Response
+    response_notes: Optional[str] = None
+
+    # Reassignment tracking
+    reassigned_from_user_id: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    reassigned_reason: Optional[str] = None
+
+    # Audit
+    assigned_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+
+
+class ReviewAssignmentHistoryDB(SQLModel, table=True):
+    """Review Assignment History table model for audit trail."""
+
+    __tablename__ = "review_assignment_history"
+
+    history_id: Optional[int] = Field(default=None, primary_key=True)
+    assignment_id: int = Field(foreign_key="review_assignments.assignment_id")
+
+    # Action: 'created', 'accepted', 'declined', 'completed', 'reassigned', 'escalated'
+    action: str = Field(max_length=30)
+
+    from_user_id: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+    to_user_id: Optional[UUID] = Field(default=None, foreign_key="profiles.id")
+
+    notes: Optional[str] = None
+
+    performed_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
+    performed_at: datetime = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=text("NOW()")))

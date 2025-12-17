@@ -53,29 +53,91 @@ def determine_status_after_step(
         return ReviewStatus.DRAFT.value
 
     elif step == ReviewStepEnum.CHECKLIST:
-        # Step 2: Checklist complete, promote to pending_sme
+        # Step 2: Checklist complete, promote to pending_assignment
+        return ReviewStatus.PENDING_ASSIGNMENT.value
+
+    elif step == ReviewStepEnum.ASSIGNMENT:
+        # Step 3: Assignment complete, promote to pending_sme
+        # Note: The actual status update is done in assignments.py when assignments are created
         return ReviewStatus.PENDING_SME.value
 
     elif step == ReviewStepEnum.SME_INVESTIGATION:
-        # Step 3: SME investigation - check progression
+        # Step 4: SME investigation - check progression
         # If SME responded with recommendation, move to pending_decision
         if update_data.get("sme_responded_date") and update_data.get("sme_recommendation"):
             return ReviewStatus.PENDING_DECISION.value
-        # If SME contacted (but not yet responded), move to pending_sme
+        # If SME contacted (but not yet responded), keep pending_sme
         elif update_data.get("sme_contacted_date"):
             return ReviewStatus.PENDING_SME.value
         # Otherwise, keep current status
         return review_db.status
 
     elif step == ReviewStepEnum.FOLLOW_UP:
-        # Step 4: Follow-up is optional, no status change
+        # Step 5: Follow-up is optional, no status change
         return review_db.status
 
     elif step == ReviewStepEnum.FINAL_DECISION:
-        # Step 5: Final decision - if decision is made, mark completed
-        if update_data.get("final_decision"):
-            return ReviewStatus.COMPLETED.value
+        # Step 6: Final decision - if decision is made, mark approved or rejected
+        final_decision = update_data.get("final_decision")
+        if final_decision:
+            if final_decision == "reject":
+                return ReviewStatus.REJECTED.value
+            else:
+                # approve, approve_initiator, approve_sme all lead to APPROVED
+                return ReviewStatus.APPROVED.value
         return review_db.status
 
     # Default: no change
     return review_db.status
+
+
+def calculate_workflow_state(
+    review_db: MaterialReviewDB,
+    has_assignments: bool,
+) -> tuple[int, bool]:
+    """Calculate current step index and SME requirement from review state.
+
+    This is the single source of truth for workflow positioning.
+    The frontend uses this to initialize step navigation.
+
+    Args:
+        review_db: The review database record
+        has_assignments: Whether SME and approver are both assigned
+
+    Returns:
+        (current_step, sme_required) where:
+        - current_step: 0-5 index of the step the review is currently on (6 if completed)
+        - sme_required: True if SME review is required based on proposed_action
+    """
+    # Check if SME review is required based on proposed action
+    sme_required = is_sme_required(review_db.proposed_action)
+
+    status = review_db.status
+
+    # Map status to current step
+    if status in (ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value):
+        return (6, sme_required)  # All steps complete (terminal states)
+
+    if status == ReviewStatus.CANCELLED.value:
+        return (0, sme_required)  # Cancelled, show at start
+
+    if status == ReviewStatus.PENDING_DECISION.value:
+        return (5, sme_required)  # On final decision step
+
+    if status == ReviewStatus.PENDING_SME.value:
+        return (3, sme_required)  # On SME review step
+
+    if status == ReviewStatus.PENDING_ASSIGNMENT.value:
+        return (2, sme_required)  # On assignment step
+
+    # Status is DRAFT - determine step from data presence
+    if review_db.completed_checklist:
+        # Checklist done but not yet moved to pending_assignment (edge case)
+        return (2, sme_required)
+
+    if review_db.review_reason:
+        # Step 0 (general info) has data, so user is on step 1 (checklist)
+        return (1, sme_required)
+
+    # No data saved yet, user is on step 0
+    return (0, sme_required)

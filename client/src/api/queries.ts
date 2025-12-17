@@ -18,6 +18,10 @@ import {
   ReviewComment,
   ReviewCommentCreate,
   UserResponse,
+  ReviewAssignmentResponse,
+  UserWithPermission,
+  MyAssignmentResponse,
+  MyAssignmentsQueryParams,
 } from "./client";
 import {
   queryKeys,
@@ -33,6 +37,7 @@ type PaginatedMaterialsResponse =
   components["schemas"]["PaginatedMaterialsResponse"];
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReview = components["schemas"]["MaterialReview"];
+type ReviewSummary = components["schemas"]["ReviewSummary"];
 type PaginatedAuditLogsResponse =
   components["schemas"]["PaginatedAuditLogsResponse"];
 type PaginatedMaterialAuditLogsResponse =
@@ -71,6 +76,23 @@ export function useMaterialDetails(
 }
 
 /**
+ * Hook to fetch a single review with full details
+ * @param materialNumber The material number
+ * @param reviewId The review ID to fetch
+ */
+export function useReviewDetails(
+  materialNumber: number | null,
+  reviewId: number | null
+): UseQueryResult<MaterialReview, Error> {
+  return useQuery({
+    queryKey: queryKeys.reviews.detail(materialNumber!, reviewId!),
+    queryFn: () => apiClient.getReview(materialNumber!, reviewId!),
+    enabled: materialNumber !== null && reviewId !== null,
+    staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+/**
  * Hook to update a review with optimistic updates
  */
 export function useUpdateReview(): UseMutationResult<
@@ -99,16 +121,15 @@ export function useUpdateReview(): UseMutationResult<
         queryKeys.materials.detail(materialNumber)
       );
 
-      // Optimistically update the cache
+      // Optimistically update the cache (reviews are ReviewSummary, not full MaterialReview)
       if (previousMaterial) {
-        const extendedReviews = previousMaterial.reviews as MaterialReview[];
         queryClient.setQueryData<MaterialWithReviews>(
           queryKeys.materials.detail(materialNumber),
           {
             ...previousMaterial,
-            reviews: extendedReviews.map((review) =>
+            reviews: previousMaterial.reviews.map((review) =>
               review.review_id === reviewId
-                ? ({ ...review, ...data } as MaterialReview)
+                ? ({ ...review, status: data.status ?? review.status } as ReviewSummary)
                 : review
             ),
           }
@@ -170,12 +191,11 @@ export function useCancelReview(): UseMutationResult<
 
       // Optimistically update the cache
       if (previousMaterial) {
-        const extendedReviews = previousMaterial.reviews as MaterialReview[];
         queryClient.setQueryData<MaterialWithReviews>(
           queryKeys.materials.detail(materialNumber),
           {
             ...previousMaterial,
-            reviews: extendedReviews.filter(
+            reviews: previousMaterial.reviews.filter(
               (review) => review.review_id !== reviewId
             ),
             reviews_count: Math.max(
@@ -1049,5 +1069,47 @@ export function useCreateDebugNotification(): UseMutationResult<
     onError: (error) => {
       console.error("Failed to create debug notification:", error);
     },
+  });
+}
+
+/**
+ * Hook to fetch users with a specific permission, optionally grouped by SME type
+ */
+export function useUsersByPermission(
+  permission: string
+): UseQueryResult<UserWithPermission[], Error> {
+  return useQuery({
+    queryKey: ["users", "byPermission", permission],
+    queryFn: () => apiClient.getUsersByPermission(permission),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!permission,
+  });
+}
+
+/**
+ * Hook to fetch assignments for a review
+ */
+export function useReviewAssignments(
+  materialNumber: number | undefined,
+  reviewId: number | undefined | null
+): UseQueryResult<ReviewAssignmentResponse[], Error> {
+  return useQuery({
+    queryKey: ["reviewAssignments", materialNumber, reviewId],
+    queryFn: () => apiClient.getReviewAssignments(materialNumber!, reviewId!),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    enabled: !!materialNumber && !!reviewId,
+  });
+}
+
+/**
+ * Hook to fetch the current user's assignments (for My Reviews page)
+ */
+export function useMyAssignments(
+  params?: MyAssignmentsQueryParams
+): UseQueryResult<MyAssignmentResponse[], Error> {
+  return useQuery({
+    queryKey: ["myAssignments", params],
+    queryFn: () => apiClient.getMyAssignments(params),
+    staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }

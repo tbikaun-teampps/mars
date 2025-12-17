@@ -76,6 +76,20 @@ export type {
   UploadJobsQueryParams,
 } from "@/types/materials";
 
+// Assignment types
+export type ReviewAssignmentResponse =
+  components["schemas"]["ReviewAssignmentResponse"];
+export type UserWithPermission = components["schemas"]["UserWithPermission"];
+export type MyAssignmentResponse =
+  components["schemas"]["MyAssignmentResponse"];
+
+export interface MyAssignmentsQueryParams {
+  status?: string;
+  assignment_type?: string;
+  skip?: number;
+  limit?: number;
+}
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -211,6 +225,15 @@ export class ApiClient {
     return this.get<MaterialWithReviews | null>(`/materials/${materialNumber}`);
   }
 
+  async getReview(
+    materialNumber: number,
+    reviewId: number
+  ): Promise<MaterialReview> {
+    return this.get<MaterialReview>(
+      `/materials/${materialNumber}/reviews/${reviewId}`
+    );
+  }
+
   async createReview(
     materialNumber: number,
     data: MaterialReviewCreate
@@ -227,10 +250,12 @@ export class ApiClient {
     step: number,
     data: MaterialReviewUpdate
   ): Promise<MaterialReview> {
-    // Map step number (0-4) to step enum string
+    // Map step number (0-5) to step enum string
+    // Step indices: 0=General, 1=Checklist, 2=Assignment, 3=SME, 4=FollowUp, 5=FinalDecision
     const stepNames = [
       "general_info",
       "checklist",
+      "assignment",
       "sme_investigation",
       "follow_up",
       "final_decision",
@@ -249,6 +274,53 @@ export class ApiClient {
   ): Promise<{ message: string }> {
     return this.put<{ message: string }>(
       `/materials/${materialNumber}/review/${reviewId}/cancel`
+    );
+  }
+
+  // Assignment API methods
+  async getReviewAssignments(
+    materialNumber: number,
+    reviewId: number
+  ): Promise<ReviewAssignmentResponse[]> {
+    return this.get<ReviewAssignmentResponse[]>(
+      `/materials/${materialNumber}/reviews/${reviewId}/assignments`
+    );
+  }
+
+  async createReviewAssignments(
+    materialNumber: number,
+    reviewId: number,
+    data: { sme_user_id: string; approver_user_id: string }
+  ): Promise<{ message: string; review_id: number }> {
+    return this.post<{ message: string; review_id: number }>(
+      `/materials/${materialNumber}/reviews/${reviewId}/assignments`,
+      data
+    );
+  }
+
+  async getUsersByPermission(
+    permission: string
+  ): Promise<UserWithPermission[]> {
+    return this.get<UserWithPermission[]>(
+      `/users-by-permission?permission=${permission}`
+    );
+  }
+
+  async getMyAssignments(
+    params?: MyAssignmentsQueryParams
+  ): Promise<MyAssignmentResponse[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.assignment_type)
+      queryParams.append("assignment_type", params.assignment_type);
+    if (params?.skip !== undefined)
+      queryParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+
+    const queryString = queryParams.toString();
+    return this.get<MyAssignmentResponse[]>(
+      `/my-assignments${queryString ? `?${queryString}` : ""}`
     );
   }
 

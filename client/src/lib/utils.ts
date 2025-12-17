@@ -16,8 +16,10 @@ export function getMaterialReviewStatusBadgeColor(
       return "bg-blue-500/10 border-blue-500 text-blue-500";
     case "pending_decision":
       return "bg-purple-500/10 border-purple-500 text-purple-500";
-    case "completed":
+    case "approved":
       return "bg-green-500/10 border-green-500 text-green-500";
+    case "rejected":
+      return "bg-red-500/10 border-red-500 text-red-500";
     case "cancelled":
       return "bg-red-500/10 border-red-500 text-red-500";
     default:

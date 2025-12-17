@@ -25,7 +25,7 @@ from sqlalchemy.orm import aliased
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.utils import transform_db_record_to_material
+from app.api.utils import calculate_workflow_state, transform_db_record_to_material
 from app.core.auth import User, get_current_user
 from app.core.config import settings
 from app.core.database import async_session_maker, get_db
@@ -34,6 +34,7 @@ from app.models.db_models import (
     MaterialInsightDB,
     MaterialReviewDB,
     ProfileDB,
+    ReviewAssignmentDB,
     ReviewChecklistDB,
     ReviewCommentDB,
     SAPMaterialData,
@@ -41,7 +42,7 @@ from app.models.db_models import (
     UploadSnapshot,
 )
 from app.models.material import Insight, Material, MaterialWithReviews, PaginatedMaterialsResponse
-from app.models.review import MaterialReview, ReviewChecklist, ReviewStatus
+from app.models.review import ReviewStatus, ReviewSummary
 from app.models.upload import (
     UploadJobListResponse,
     UploadJobProgress,
@@ -110,7 +111,7 @@ async def list_materials(
             MaterialReviewDB.next_review_date,
             # MaterialReviewDB.notes,
         )
-        .where(MaterialReviewDB.status == ReviewStatus.COMPLETED.value)
+        .where(MaterialReviewDB.status == ReviewStatus.APPROVED.value)
         .distinct(MaterialReviewDB.material_number)
         .order_by(MaterialReviewDB.material_number, MaterialReviewDB.review_date.desc())
         .subquery()
@@ -122,7 +123,7 @@ async def list_materials(
             MaterialReviewDB.material_number,
             sa_func.count(MaterialReviewDB.review_id).label("active_count"),
         )
-        .where(MaterialReviewDB.status.notin_([ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value]))
+        .where(MaterialReviewDB.status.notin_([ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value]))
         .group_by(MaterialReviewDB.material_number)
         .subquery()
     )
@@ -552,27 +553,45 @@ async def get_material(
     reviews_result = await db.exec(reviews_query)
     reviews_data = reviews_result.all()
 
+    # Batch query assignments for all reviews (for workflow state and display)
+    review_ids = [r.review_id for r, _, _, _, _ in reviews_data]
+    AssigneeProfile = aliased(ProfileDB)
+    assignments_map: dict[int, dict] = {}
+    if review_ids:
+        assignments_query = (
+            select(ReviewAssignmentDB, AssigneeProfile)
+            .where(
+                ReviewAssignmentDB.review_id.in_(review_ids),
+                ReviewAssignmentDB.status.notin_(["declined", "reassigned"]),
+            )
+            .outerjoin(AssigneeProfile, ReviewAssignmentDB.user_id == AssigneeProfile.id)
+        )
+        assignments_result = await db.exec(assignments_query)
+        all_assignments = assignments_result.all()
+        # Build map of review_id -> {has_sme, has_approver, sme_user_id, sme_name, approver_user_id, approver_name}
+        for a, profile in all_assignments:
+            if a.review_id not in assignments_map:
+                assignments_map[a.review_id] = {
+                    "has_sme": False,
+                    "has_approver": False,
+                    "sme_user_id": None,
+                    "sme_name": None,
+                    "approver_user_id": None,
+                    "approver_name": None,
+                }
+            if a.assignment_type == "sme":
+                assignments_map[a.review_id]["has_sme"] = True
+                assignments_map[a.review_id]["sme_user_id"] = a.user_id
+                assignments_map[a.review_id]["sme_name"] = profile.full_name if profile else None
+            elif a.assignment_type == "approver":
+                assignments_map[a.review_id]["has_approver"] = True
+                assignments_map[a.review_id]["approver_user_id"] = a.user_id
+                assignments_map[a.review_id]["approver_name"] = profile.full_name if profile else None
+
     # Transform to response models
     material = transform_db_record_to_material(material_data.model_dump())
     reviews = []
     for r, checklist_db, initiator_profile, decider_profile, comments_count in reviews_data:
-        # Create checklist object if checklist data exists
-        checklist = None
-        if checklist_db:
-            checklist = ReviewChecklist(
-                has_open_orders=checklist_db.has_open_orders,
-                has_forecast_demand=checklist_db.has_forecast_demand,
-                checked_alternate_plants=checklist_db.checked_alternate_plants,
-                contacted_procurement=checklist_db.contacted_procurement,
-                reviewed_bom_usage=checklist_db.reviewed_bom_usage,
-                checked_supersession=checklist_db.checked_supersession,
-                checked_historical_usage=checklist_db.checked_historical_usage,
-                open_order_numbers=checklist_db.open_order_numbers,
-                forecast_next_12m=checklist_db.forecast_next_12m,
-                alternate_plant_qty=checklist_db.alternate_plant_qty,
-                procurement_feedback=checklist_db.procurement_feedback,
-            )
-
         # Create user profile objects if profile data exists
         initiated_by_user = None
         if initiator_profile:
@@ -582,72 +601,58 @@ async def get_material(
         if decider_profile:
             decided_by_user = UserProfile(id=decider_profile.id, full_name=decider_profile.full_name)
 
-        review = MaterialReview(
+        # Get assignment info for workflow state and display
+        assignment_info = assignments_map.get(r.review_id, {"has_sme": False, "has_approver": False})
+        has_assignments = assignment_info["has_sme"] and assignment_info["has_approver"]
+        current_step, _ = calculate_workflow_state(r, has_assignments)
+
+        # Get assigned user info from the detailed map
+        assigned_sme_id = assignment_info.get("sme_user_id")
+        assigned_sme_name = assignment_info.get("sme_name")
+        assigned_approver_id = assignment_info.get("approver_user_id")
+        assigned_approver_name = assignment_info.get("approver_name")
+
+        # Build ReviewSummary (lightweight model for history display)
+        review = ReviewSummary(
             review_id=r.review_id,
-            material_number=r.material_number,
+            status=r.status,
+            review_date=r.review_date,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
             initiated_by=r.initiated_by,
             initiated_by_user=initiated_by_user,
-            review_date=r.review_date,
-            review_reason=r.review_reason,
-            current_stock_qty=r.current_stock_qty,
-            current_stock_value=r.current_stock_value,
-            months_no_movement=r.months_no_movement,
-            proposed_action=r.proposed_action,
-            proposed_safety_stock_qty=r.proposed_safety_stock_qty,
-            proposed_unrestricted_qty=r.proposed_unrestricted_qty,
-            business_justification=r.business_justification,
-            sme_name=r.sme_name,
-            sme_email=r.sme_email,
-            sme_department=r.sme_department,
-            sme_feedback_method=r.sme_feedback_method,
-            sme_contacted_date=r.sme_contacted_date,
-            sme_responded_date=r.sme_responded_date,
-            sme_recommendation=r.sme_recommendation,
-            sme_recommended_safety_stock_qty=r.sme_recommended_safety_stock_qty,
-            sme_recommended_unrestricted_qty=r.sme_recommended_unrestricted_qty,
-            sme_analysis=r.sme_analysis,
-            alternative_applications=r.alternative_applications,
-            risk_assessment=r.risk_assessment,
+            current_step=current_step,
+            assigned_sme_id=assigned_sme_id,
+            assigned_sme_name=assigned_sme_name,
+            assigned_approver_id=assigned_approver_id,
+            assigned_approver_name=assigned_approver_name,
+            decided_by=r.decided_by,
+            decided_by_user=decided_by_user,
             final_decision=r.final_decision,
             final_safety_stock_qty=r.final_safety_stock_qty,
             final_unrestricted_qty=r.final_unrestricted_qty,
-            # final_notes=r.final_notes,
-            decided_by=r.decided_by,
-            decided_by_user=decided_by_user,
-            decided_at=r.decided_at,
-            requires_follow_up=r.requires_follow_up,
-            next_review_date=r.next_review_date,
-            follow_up_reason=r.follow_up_reason,
-            review_frequency_weeks=r.review_frequency_weeks,
-            previous_review_id=r.previous_review_id,
-            estimated_savings=r.estimated_savings,
-            implementation_date=r.implementation_date,
-            status=r.status,
-            completed_checklist=r.completed_checklist,
-            checklist=checklist,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-            is_read_only=r.status in [ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value],
+            final_notes=r.final_notes,
             comments_count=comments_count or 0,
+            is_read_only=r.status in [ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value],
         )
         reviews.append(review)
 
-    # Get the most recent COMPLETED review data for last_reviewed/next_review
+    # Get the most recent APPROVED review data for last_reviewed/next_review
     material_dict = material.model_dump()
     if reviews_data:
-        # Find the first completed review (reviews are ordered by date desc)
-        most_recent_completed_review = None
+        # Find the first approved review (reviews are ordered by date desc)
+        most_recent_approved_review = None
         for r, _, _, _, _ in reviews_data:
-            if r.status == ReviewStatus.COMPLETED.value:
-                most_recent_completed_review = r
+            if r.status == ReviewStatus.APPROVED.value:
+                most_recent_approved_review = r
                 break
 
-        if most_recent_completed_review:
-            material_dict["last_reviewed"] = most_recent_completed_review.review_date
-            material_dict["next_review"] = most_recent_completed_review.next_review_date
-            # material_dict["review_notes"] = most_recent_completed_review.notes
+        if most_recent_approved_review:
+            material_dict["last_reviewed"] = most_recent_approved_review.review_date
+            material_dict["next_review"] = most_recent_approved_review.next_review_date
+            # material_dict["review_notes"] = most_recent_approved_review.notes
         else:
-            # No completed reviews, set to None
+            # No approved reviews, set to None
             material_dict["last_reviewed"] = None
             material_dict["next_review"] = None
             material_dict["review_notes"] = None
@@ -1024,13 +1029,13 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
     overdue_reviews_query = select(func.count()).where(
         MaterialReviewDB.next_review_date.isnot(None),
         MaterialReviewDB.next_review_date < datetime.utcnow().date(),
-        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.status == ReviewStatus.APPROVED.value,
         MaterialReviewDB.is_superseded.is_(False),
     )
     overdue_reviews_result = await db.exec(overdue_reviews_query)
     total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
 
-    # Get acceptance rate: % of SME reviews that didn't reject planner's proposed changes
+    # Get agreement rate: % of SME reviews that didn't reject planner's proposed changes
     # Rejection = Planner proposed a change, but SME said 'keep_no_change'
 
     # Total: reviews where planner proposed change AND SME gave feedback
@@ -1038,31 +1043,31 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
         MaterialReviewDB.proposed_action.isnot(None),
         MaterialReviewDB.proposed_action != "keep_no_change",
         MaterialReviewDB.sme_recommendation.isnot(None),
-        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.status == ReviewStatus.APPROVED.value,
         MaterialReviewDB.is_superseded.is_(False),
     )
     total_with_sme_result = await db.exec(total_with_sme_query)
     total_with_sme = total_with_sme_result.one_or_none() or 0
 
-    # Accepted: of those, SME didn't say "keep_no_change"
-    accepted_query = select(func.count()).where(
+    # Agreement: of those, SME didn't say "keep_no_change"
+    agreement_query = select(func.count()).where(
         MaterialReviewDB.proposed_action.isnot(None),
         MaterialReviewDB.proposed_action != "keep_no_change",
         MaterialReviewDB.sme_recommendation.isnot(None),
         MaterialReviewDB.sme_recommendation != "keep_no_change",
-        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.status == ReviewStatus.APPROVED.value,
         MaterialReviewDB.is_superseded.is_(False),
     )
-    accepted_result = await db.exec(accepted_query)
-    accepted_count = accepted_result.one_or_none() or 0
+    agreement_result = await db.exec(agreement_query)
+    agreement_count = agreement_result.one_or_none() or 0
 
-    acceptance_rate = accepted_count / total_with_sme if total_with_sme > 0 else 0.0
+    agreement_rate = agreement_count / total_with_sme if total_with_sme > 0 else 0.0
 
     return {
         "total_inventory_value": total_inventory_value,
         "total_opportunity_value": total_opportunity_value,
         "total_overdue_reviews": total_overdue_reviews,
-        "acceptance_rate": acceptance_rate,
+        "agreement_rate": agreement_rate,
     }
 
 
@@ -1089,7 +1094,7 @@ async def create_upload_snapshot(upload_job_id: UUID) -> None:
             total_inventory_value=snapshot_metrics["total_inventory_value"],
             total_opportunity_value=snapshot_metrics["total_opportunity_value"],
             total_overdue_reviews=snapshot_metrics["total_overdue_reviews"],
-            acceptance_rate=snapshot_metrics["acceptance_rate"],
+            agreement_rate=snapshot_metrics["agreement_rate"],
         )
 
         db.add(snapshot)
@@ -1288,13 +1293,13 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                     await db.execute(stmt)
             await db.commit()
 
-            # Mark stale reviews for updated materials
+            # Mark stale reviews for updated materials (only active reviews, not terminal states)
             if updated_material_numbers:
                 stale_stmt = (
                     update(MaterialReviewDB)
                     .where(
                         MaterialReviewDB.material_number.in_(updated_material_numbers),
-                        MaterialReviewDB.status.notin_(["completed", "cancelled"]),
+                        MaterialReviewDB.status.notin_(["approved", "rejected", "cancelled"]),
                         MaterialReviewDB.is_data_stale.is_(False),
                     )
                     .values(
@@ -1363,10 +1368,10 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             # Get material numbers that have last_reviewed in the upload
             materials_with_reviews = [r["material_number"] for r in records if r.get("last_reviewed")]
 
-            # Fetch existing most recent completed reviews for these materials
+            # Fetch existing most recent approved reviews for these materials
             existing_reviews: dict[int, tuple] = {}
             if materials_with_reviews:
-                # Subquery to get most recent completed review per material
+                # Subquery to get most recent approved review per material
                 latest_review_subq = (
                     select(
                         MaterialReviewDB.material_number,
@@ -1376,7 +1381,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                     )
                     .where(
                         MaterialReviewDB.material_number.in_(materials_with_reviews),
-                        MaterialReviewDB.status == "completed",
+                        MaterialReviewDB.status == "approved",
                     )
                     .distinct(MaterialReviewDB.material_number)
                     .order_by(MaterialReviewDB.material_number, MaterialReviewDB.review_date.desc())
@@ -1448,7 +1453,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                             "next_review_date": record.get("next_review"),
                             "follow_up_reason": "Scheduled review from initial OBS data import" if record.get("next_review") else None,
                             "review_frequency_weeks": 0,
-                            "status": "completed",
+                            "status": "approved",  # Historical imports are treated as approved
                             "completed_checklist": True,
                         }
                     )

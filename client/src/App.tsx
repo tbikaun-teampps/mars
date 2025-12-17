@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { MainPage } from "./pages/MainPage";
+import { MyReviewsPage } from "./pages/MyReviewsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AccountPage } from "./pages/AccountPage";
 import { MaterialDetailPage } from "./pages/MaterialDetailPage";
@@ -9,6 +10,7 @@ function App() {
   return (
     <Routes>
       <Route path="/app/dashboard" element={<MainPage view="dashboard" />} />
+      <Route path="/app/my-reviews" element={<MyReviewsPage />} />
       <Route path="/app/audit-logs" element={<MainPage view="audit-log" />} />
       <Route path="/app/uploads" element={<MainPage view="uploads" />} />
       <Route path="/app/materials/:materialNumber/review/:reviewId" element={<MaterialReviewPage />} />

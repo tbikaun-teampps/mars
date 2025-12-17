@@ -37,8 +37,8 @@ class DashboardSummary(BaseModel):
     opportunity_value_change: float
     total_overdue_reviews: int
     total_overdue_reviews_change: float
-    acceptance_rate: float
-    acceptance_rate_change: float
+    agreement_rate: float
+    agreement_rate_change: float
 
     # chart data
     outstanding_opportunities_chart_data: Optional[list[dict]] = None
@@ -98,8 +98,8 @@ async def get_opportunities_by_material_type(db: AsyncSession) -> list[dict]:
 async def get_rejection_rates_by_material_type(db: AsyncSession) -> list[dict]:
     """Get rejection rates aggregated by material type.
 
-    Rejection = SME said 'keep_no_change' when planner proposed a change.
-    This aligns with the acceptance rate logic in get_metrics_for_snapshot.
+    Agreement = SME said 'keep_no_change' when planner proposed a change.
+    This aligns with the agreement rate logic in get_metrics_for_snapshot.
     """
 
     query = (
@@ -192,9 +192,9 @@ async def get_dashboard_summary(
         else 0.0
     )
 
-    acceptance_rate_change = (
-        round((current_metrics["acceptance_rate"] - last_upload_snapshot.acceptance_rate) / last_upload_snapshot.acceptance_rate, 6)
-        if last_upload_snapshot and last_upload_snapshot.acceptance_rate > 0
+    agreement_rate_change = (
+        round((current_metrics["agreement_rate"] - last_upload_snapshot.agreement_rate) / last_upload_snapshot.agreement_rate, 6)
+        if last_upload_snapshot and last_upload_snapshot.agreement_rate > 0
         else 0.0
     )
 
@@ -205,8 +205,8 @@ async def get_dashboard_summary(
         opportunity_value_change=opportunity_value_change,
         total_overdue_reviews=current_metrics["total_overdue_reviews"],
         total_overdue_reviews_change=total_overdue_reviews_change,
-        acceptance_rate=current_metrics["acceptance_rate"],
-        acceptance_rate_change=acceptance_rate_change,
+        agreement_rate=current_metrics["agreement_rate"],
+        agreement_rate_change=agreement_rate_change,
         outstanding_opportunities_chart_data=opportunities_chart_data,
         review_status_chart_data=rejections_chart_data,
         last_upload_date=last_upload_date,

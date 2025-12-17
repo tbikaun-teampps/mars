@@ -9,7 +9,7 @@ import {
 import { Stepheader } from "./step-header";
 import { useLookupOptions } from "@/api/queries";
 
-export function Step4FollowUp() {
+export function Step5FollowUp() {
   const { watch } = useFormContext();
   const scheduleFollowUp = watch("scheduleFollowUp");
   const scheduleFollowUpReason = watch("scheduleFollowUpReason");

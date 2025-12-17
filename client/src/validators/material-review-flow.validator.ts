@@ -224,6 +224,12 @@ export const step3RequiredSchema = z
     }
   );
 
+// Assignment step schema - required fields for SME and approver assignment
+export const stepAssignmentSchema = z.object({
+  smeUserId: z.string().uuid("SME assignment is required"),
+  approverUserId: z.string().uuid("Approver assignment is required"),
+});
+
 // Follow-up Review Scheduling
 export const step4Schema = z
   .object({
@@ -291,12 +297,14 @@ export const step5Schema = z
 // Individual step schemas remain strict for validation
 const step1SchemaOptional = step1Schema.partial();
 const step2SchemaOptional = step2Schema.partial();
+const stepAssignmentSchemaOptional = stepAssignmentSchema.partial();
 const step3SchemaOptional = step3Schema.partial();
 const step4SchemaOptional = step4Schema.partial();
 const step5SchemaOptional = step5Schema.partial();
 
 export const CombinedMaterialReviewSchema = step1SchemaOptional
   .merge(step2SchemaOptional)
+  .merge(stepAssignmentSchemaOptional)
   .merge(step3SchemaOptional)
   .merge(step4SchemaOptional)
   .merge(step5SchemaOptional);
