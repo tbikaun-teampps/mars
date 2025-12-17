@@ -236,7 +236,7 @@ async def get_review(
         checklist=checklist,
         created_at=review_db.created_at,
         updated_at=review_db.updated_at,
-        is_read_only=review_db.status in [ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value],
+        is_read_only=review_db.status in [ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value],
         comments_count=comments_count,
         assigned_sme_id=assigned_sme_id,
         assigned_sme_name=assigned_sme_name,
@@ -271,11 +271,11 @@ async def create_material_review(
             detail=f"Material {material_number} not found",
         )
 
-    # Block a new review if there are any that exist which are not either
-    # completed or cancelled
+    # Block a new review if there are any that exist which are not in a terminal state
+    # Terminal states: approved, rejected, cancelled
     existing_review_query = select(MaterialReviewDB).where(
         MaterialReviewDB.material_number == material_number,
-        MaterialReviewDB.status.notin_(["completed", "cancelled"]),
+        MaterialReviewDB.status.notin_(["approved", "rejected", "cancelled"]),
     )
     existing_review_result = await db.exec(existing_review_query)
     existing_review = existing_review_result.first()
@@ -457,8 +457,8 @@ async def update_material_review(
             detail=f"Review {review_id} not found for material {material_number}",
         )
 
-    # Block edits if status is completed or cancelled
-    if review_db.status in ["completed", "cancelled"]:
+    # Block edits if status is in a terminal state (approved, rejected, cancelled)
+    if review_db.status in ["approved", "rejected", "cancelled"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Cannot edit review with status '{review_db.status}'. Review is locked.",
@@ -549,8 +549,8 @@ async def update_material_review(
     new_status = determine_status_after_step(step, review_db, update_data)
     review_db.status = new_status
 
-    # Auto-set decided_by and decided_at when status becomes completed
-    if new_status == ReviewStatus.COMPLETED.value and not review_db.decided_at:
+    # Auto-set decided_by and decided_at when status becomes a terminal decision state
+    if new_status in (ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value) and not review_db.decided_at:
         review_db.decided_at = datetime.now()
         if not review_db.decided_by:
             review_db.decided_by = current_user.id
@@ -646,19 +646,19 @@ async def update_material_review(
     # Calculate workflow state
     current_step, sme_required = calculate_workflow_state(review_db, has_assignments)
 
-    # If the review is marked as completed, ensure all OTHER reviews are marked as superseded
-    if review_db.status == ReviewStatus.COMPLETED.value:
+    # If the review is marked as approved, ensure all OTHER approved reviews are marked as superseded
+    if review_db.status == ReviewStatus.APPROVED.value:
         print("Marking other reviews as superseded")
-        completed_reviews_query = select(MaterialReviewDB).where(
+        approved_reviews_query = select(MaterialReviewDB).where(
             MaterialReviewDB.material_number == material_number,
             MaterialReviewDB.review_id != review_db.review_id,  # Exclude current review
-            MaterialReviewDB.status == "completed",
+            MaterialReviewDB.status == "approved",
             MaterialReviewDB.is_superseded.is_(False),
         )
-        completed_reviews_result = await db.exec(completed_reviews_query)
-        completed_reviews = completed_reviews_result.all()
+        approved_reviews_result = await db.exec(approved_reviews_query)
+        approved_reviews = approved_reviews_result.all()
 
-        for review in completed_reviews:
+        for review in approved_reviews:
             review.is_superseded = True
             db.add(review)
         await db.commit()
@@ -711,7 +711,7 @@ async def update_material_review(
         checklist=checklist,
         created_at=review_db.created_at,
         updated_at=review_db.updated_at,
-        is_read_only=review_db.status in [ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value],
+        is_read_only=review_db.status in [ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value],
         comments_count=comments_count,
         # Workflow state fields
         current_step=current_step,

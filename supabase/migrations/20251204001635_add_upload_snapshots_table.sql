@@ -16,5 +16,5 @@ CREATE TABLE IF NOT EXISTS upload_snapshots (
 
     -- Review metrics
     total_overdue_reviews BIGINT NOT NULL,
-    acceptance_rate NUMERIC(5, 4) NOT NULL
+    agreement_rate NUMERIC(5, 4) NOT NULL
 );
