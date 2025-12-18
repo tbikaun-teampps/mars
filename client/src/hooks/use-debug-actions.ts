@@ -14,10 +14,10 @@ import {
 } from "@/lib/debug-review-data";
 import type { MaterialReview } from "@/types/materials";
 
-export type ReviewStatus = "draft" | "pending_sme" | "pending_decision" | "completed";
+export type ReviewStatus = "draft" | "pending_sme" | "pending_decision" | "approved";
 
 // Order of statuses for progression
-const STATUS_ORDER: ReviewStatus[] = ["draft", "pending_sme", "pending_decision", "completed"];
+const STATUS_ORDER: ReviewStatus[] = ["draft", "pending_sme", "pending_decision", "approved"];
 
 /**
  * Get the index of a status in the progression order

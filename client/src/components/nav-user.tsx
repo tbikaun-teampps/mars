@@ -1,4 +1,4 @@
-import { Bell, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -99,10 +99,6 @@ export function NavUser() {
                   <User />
                   Account
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell />
-                Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

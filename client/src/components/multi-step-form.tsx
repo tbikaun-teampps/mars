@@ -37,6 +37,7 @@ interface MultiStepFormProviderProps {
   children: React.ReactNode;
   steps: Step[];
   initialStep?: number;
+  initialCompletedSteps?: number[];
   onStepChange?: (step: number) => void;
 }
 
@@ -44,11 +45,12 @@ export function MultiStepFormProvider({
   children,
   steps,
   initialStep = 0,
+  initialCompletedSteps = [],
   onStepChange,
 }: MultiStepFormProviderProps) {
   const [currentStep, setCurrentStep] = React.useState(initialStep);
   const [completedSteps, setCompletedSteps] = React.useState<Set<number>>(
-    new Set()
+    () => new Set(initialCompletedSteps)
   );
 
   const goToStep = React.useCallback(

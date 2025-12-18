@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Info,
   Loader2,
@@ -10,7 +11,7 @@ import {
   X,
   Eye,
   EyeOff,
-  History,
+  ExternalLink,
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { components } from "@/types/api";
@@ -34,7 +35,6 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { MaterialReviewForm } from "@/components/material-review-form";
 import { ReviewCommentsDialog } from "@/components/review-comments-dialog";
 import { formatDate, formatDistanceToNow } from "date-fns";
 import {
@@ -42,7 +42,6 @@ import {
   useCancelReview,
   useAcknowledgeInsight,
   useUnacknowledgeInsight,
-  useMaterialHistory,
 } from "@/api/queries";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -50,7 +49,7 @@ import { cn } from "@/lib/utils";
 import { RequirePermission } from "@/components/ui/require-permission";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
-type MaterialReview = components["schemas"]["MaterialReview"];
+type ReviewSummary = components["schemas"]["ReviewSummary"];
 type Insight = components["schemas"]["Insight"];
 
 // Insights Panel Component
@@ -272,11 +271,10 @@ interface MaterialDetailSheetProps {
 
 // Review History Timeline Component
 interface ReviewHistoryTimelineProps {
-  reviews: MaterialReview[] | undefined;
-  isReviewMode: boolean;
-  onPerformReview: () => void;
-  onEditReview: (review: MaterialReview) => void;
-  onCancelReview: (review: MaterialReview) => void;
+  reviews: ReviewSummary[] | undefined;
+  materialNumber: number;
+  onCancelReview: (review: ReviewSummary) => void;
+  onCloseSheet: () => void;
   disabled: boolean;
 }
 
@@ -298,10 +296,15 @@ function getStatusColors(status: string): { border: string; badge: string } {
         border: "border-l-purple-500",
         badge: "bg-purple-500/10 text-purple-600 border-purple-500",
       };
-    case "completed":
+    case "approved":
       return {
         border: "border-l-green-500",
         badge: "bg-green-500/10 text-green-600 border-green-500",
+      };
+    case "rejected":
+      return {
+        border: "border-l-red-500",
+        badge: "bg-red-500/10 text-red-600 border-red-500",
       };
     case "cancelled":
       return {
@@ -318,18 +321,18 @@ function getStatusColors(status: string): { border: string; badge: string } {
 
 function ReviewHistoryTimeline({
   reviews,
-  isReviewMode,
-  onPerformReview,
-  onEditReview,
+  materialNumber,
   onCancelReview,
+  onCloseSheet,
   disabled = false,
 }: ReviewHistoryTimelineProps) {
+  const navigate = useNavigate();
   const [cancelDialogOpen, setCancelDialogOpen] =
     React.useState<boolean>(false);
   const [reviewToCancel, setReviewToCancel] =
-    React.useState<MaterialReview | null>(null);
+    React.useState<ReviewSummary | null>(null);
 
-  const handleCancelClick = (review: MaterialReview) => {
+  const handleCancelClick = (review: ReviewSummary) => {
     setReviewToCancel(review);
     setCancelDialogOpen(true);
   };
@@ -342,24 +345,36 @@ function ReviewHistoryTimeline({
     setReviewToCancel(null);
   };
 
+  const handleStartReview = () => {
+    onCloseSheet();
+    navigate(`/app/materials/${materialNumber}/review`);
+  };
+
+  const handleEditReview = (review: ReviewSummary) => {
+    onCloseSheet();
+    navigate(`/app/materials/${materialNumber}/review/${review.review_id}`);
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex justify-between items-center mb-4">
-        <Button
-          className="w-full items-center"
-          size="sm"
-          onClick={onPerformReview}
-          disabled={disabled || isReviewMode}
-        >
-          <Plus />
-          {isReviewMode ? "Review In Progress..." : "Start Review"}
-        </Button>
+        <RequirePermission permission="can_create_reviews" fallback="disable">
+          <Button
+            className="w-full items-center"
+            size="sm"
+            onClick={handleStartReview}
+            disabled={disabled}
+          >
+            <Plus />
+            Start Review
+          </Button>
+        </RequirePermission>
       </div>
       {reviews && reviews.length > 0 ? (
         <div className="overflow-y-auto pr-2 flex-1 space-y-3">
           {[...reviews]
             .sort((a, b) => (a.created_at! < b.created_at! ? 1 : -1))
-            .map((review: MaterialReview, index: number) => {
+            .map((review: ReviewSummary, index: number) => {
               const statusColors = getStatusColors(review.status);
               return (
                 <div key={index} className="group">
@@ -411,15 +426,19 @@ function ReviewHistoryTimeline({
                           {review.initiated_by_user?.full_name ?? "Unknown"}
                         </span>
                       </span>
-                      <span className="text-muted-foreground">•</span>
-                      <span>
-                        <span className="text-muted-foreground">
-                          Decided by:
-                        </span>{" "}
-                        <span className="font-medium capitalize">
-                          {review.decided_by_user?.full_name ?? "—"}
-                        </span>
-                      </span>
+                      {review.final_decision != null && (
+                        <>
+                          <span className="text-muted-foreground">•</span>
+                          <span>
+                            <span className="text-muted-foreground">
+                              Approved by:
+                            </span>{" "}
+                            <span className="font-medium capitalize">
+                              {review.assigned_approver_name ?? "—"}
+                            </span>
+                          </span>
+                        </>
+                      )}
                       {review.comments_count != null &&
                         review.comments_count > 0 && (
                           <>
@@ -493,21 +512,43 @@ function ReviewHistoryTimeline({
                     {/* Row 4: Actions */}
                     <div className="flex justify-end items-center pt-1">
                       <div className="flex gap-3">
-                        <span
-                          className="text-xs text-primary hover:underline cursor-pointer"
-                          onClick={() => onEditReview(review)}
-                        >
-                          {review.is_read_only
-                            ? "Show Details"
-                            : "Continue Review"}
-                        </span>
-                        {!review.is_read_only && (
-                          <span
-                            className="text-xs text-destructive hover:underline cursor-pointer"
-                            onClick={() => handleCancelClick(review)}
+                        {review.is_read_only ? (
+                          <RequirePermission
+                            permission="can_view_all_reviews"
+                            fallback="hide"
                           >
-                            Cancel Review
-                          </span>
+                            <span
+                              className="text-xs text-primary hover:underline cursor-pointer"
+                              onClick={() => handleEditReview(review)}
+                            >
+                              Show Details
+                            </span>
+                          </RequirePermission>
+                        ) : (
+                          <RequirePermission
+                            permission="can_edit_reviews"
+                            fallback="hide"
+                          >
+                            <span
+                              className="text-xs text-primary hover:underline cursor-pointer"
+                              onClick={() => handleEditReview(review)}
+                            >
+                              Continue Review
+                            </span>
+                          </RequirePermission>
+                        )}
+                        {!review.is_read_only && (
+                          <RequirePermission
+                            permission="can_delete_reviews"
+                            fallback="hide"
+                          >
+                            <span
+                              className="text-xs text-destructive hover:underline cursor-pointer"
+                              onClick={() => handleCancelClick(review)}
+                            >
+                              Cancel Review
+                            </span>
+                          </RequirePermission>
                         )}
                       </div>
                     </div>
@@ -549,63 +590,6 @@ function ReviewHistoryTimeline({
   );
 }
 
-function ChangeHistory({ materialNumber }: { materialNumber: number }) {
-  const { data, isLoading } = useMaterialHistory(materialNumber, true);
-
-  return (
-    <div className="mt-6">
-      <h4 className="font-medium mb-3 flex items-center gap-2">
-        <History className="h-4 w-4" />
-        Change History
-      </h4>
-      {isLoading ? (
-        <div className="flex items-center justify-center py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : !data || data.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No history available</p>
-      ) : (
-        <div className="overflow-y-auto max-h-64 space-y-3 pr-2">
-          {data.map((hist) => (
-            <div
-              key={hist.history_id}
-              className="border-l-4 border-l-blue-500 pl-3 py-2 rounded-l hover:bg-muted/50 transition-colors"
-            >
-              <span className="text-xs text-muted-foreground">
-                {formatDistanceToNow(new Date(hist.created_at), {
-                  addSuffix: true,
-                })}
-              </span>
-              {hist.fields_changed && hist.fields_changed.length > 0 && (
-                <div className="mt-1">
-                  <p className="text-xs font-medium mb-1">Changed:</p>
-                  <ul className="text-xs text-muted-foreground space-y-0.5">
-                    {hist.fields_changed.map((field) => (
-                      <li key={field}>
-                        - {field.replace(/_/g, " ")}
-                        {hist.old_values?.[field] !== undefined &&
-                          hist.new_values?.[field] !== undefined &&
-                          hist.old_values?.[field] != null &&
-                          hist.new_values?.[field] != null && (
-                            <span className="text-muted-foreground/70">
-                              {" "}
-                              ({String(hist.old_values[field])} to{" "}
-                              {String(hist.new_values[field])})
-                            </span>
-                          )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Internal component for rendering material details
 interface MaterialDetailsContentProps {
   materialNumber: number;
@@ -614,10 +598,8 @@ interface MaterialDetailsContentProps {
   loading: boolean;
   isError: boolean;
   error: Error | null;
-  isReviewMode: boolean;
-  onPerformReview: () => void;
-  onEditReview: (review: MaterialReview) => void;
-  onCancelReview: (review: MaterialReview) => void;
+  onCancelReview: (review: ReviewSummary) => void;
+  onCloseSheet: () => void;
 }
 
 function MaterialDetailsContent({
@@ -627,14 +609,11 @@ function MaterialDetailsContent({
   loading,
   isError,
   error,
-  isReviewMode,
-  onPerformReview,
-  onEditReview,
   onCancelReview,
+  onCloseSheet,
 }: MaterialDetailsContentProps) {
   const [commentsDialogOpen, setCommentsDialogOpen] =
     React.useState<boolean>(false);
-  const [showHistory, setShowHistory] = React.useState<boolean>(false);
 
   // Get the most recent review for comments
   const mostRecentReview = React.useMemo(() => {
@@ -763,7 +742,8 @@ function MaterialDetailsContent({
   const hasActiveReview =
     materialDetails?.reviews?.some(
       (review) =>
-        review.status && !["cancelled", "completed"].includes(review.status)
+        review.status &&
+        !["cancelled", "approved", "rejected"].includes(review.status)
     ) ?? false;
 
   return (
@@ -772,25 +752,18 @@ function MaterialDetailsContent({
         <SheetTitle>
           <div className="flex justify-between mr-6 gap-4">
             <div className="flex items-center gap-4">
-              {/* <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <ChevronUp />
-              </Button>
-              <Button variant="outline" size="sm">
-                <ChevronDown />
-              </Button>
-            </div> */}
               {materialDescription}{" "}
               <span className="text-muted-foreground">(#{materialNumber})</span>
             </div>
-            <Button
-              size="sm"
-              variant={showHistory ? "default" : "outline"}
-              onClick={() => setShowHistory(!showHistory)}
-            >
-              <History />
-              Change History
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/app/materials/${materialNumber}`}
+                className="flex items-center gap-1 text-sm text-primary hover:underline font-normal"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Full page
+              </Link>
+            </div>
           </div>
         </SheetTitle>
       </SheetHeader>
@@ -808,8 +781,6 @@ function MaterialDetailsContent({
             </p>
           </div>
         </div>
-      ) : showHistory ? (
-        <ChangeHistory materialNumber={materialNumber!} />
       ) : materialDetails ? (
         <>
           {/* Insights Panel - fixed at top, does not scroll */}
@@ -1010,10 +981,9 @@ function MaterialDetailsContent({
               </div>
               <ReviewHistoryTimeline
                 reviews={materialDetails.reviews}
-                isReviewMode={isReviewMode}
-                onPerformReview={onPerformReview}
-                onEditReview={onEditReview}
+                materialNumber={materialNumber}
                 onCancelReview={onCancelReview}
+                onCloseSheet={onCloseSheet}
                 disabled={hasActiveReview}
               />
             </div>
@@ -1041,10 +1011,6 @@ export function MaterialDetailSheet({
   isOpen,
   onOpenChange,
 }: MaterialDetailSheetProps) {
-  const [isReviewMode, setIsReviewMode] = React.useState<boolean>(false);
-  const [editingReview, setEditingReview] =
-    React.useState<MaterialReview | null>(null);
-
   // Fetch material details using React Query
   const {
     data: materialDetails,
@@ -1056,27 +1022,7 @@ export function MaterialDetailSheet({
   // Cancel review mutation
   const cancelReviewMutation = useCancelReview();
 
-  // Reset review mode when sheet closes
-  React.useEffect(() => {
-    if (!isOpen) {
-      setIsReviewMode(false);
-      setEditingReview(null);
-    }
-  }, [isOpen]);
-
-  const handlePerformReview = () => {
-    // Toggle review mode to show the form
-    setEditingReview(null);
-    setIsReviewMode(true);
-  };
-
-  const handleEditReview = (review: MaterialReview) => {
-    // Enter edit mode with the selected review
-    setEditingReview(review);
-    setIsReviewMode(true);
-  };
-
-  const handleCancelReview = async (review: MaterialReview) => {
+  const handleCancelReview = async (review: ReviewSummary) => {
     if (!materialNumber || !review.review_id) return;
 
     try {
@@ -1089,74 +1035,27 @@ export function MaterialDetailSheet({
     }
   };
 
-  const handleReviewSubmit = () => {
-    // Exit review mode (mutation in form will handle invalidation)
-    setIsReviewMode(false);
-    setEditingReview(null);
-  };
-
-  const handleReviewClose = () => {
-    // Exit review mode without submitting
-    setIsReviewMode(false);
-    setEditingReview(null);
+  const handleCloseSheet = () => {
+    onOpenChange(false);
   };
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent
         aria-describedby={undefined}
-        className={`${
-          isReviewMode
-            ? "min-w-[1200px] max-w-[1200px] p-0"
-            : "min-w-[600px] overflow-y-auto"
-        }`}
+        className="min-w-[600px] overflow-y-auto"
       >
         {materialNumber && (
-          <>
-            {isReviewMode ? (
-              /* Dual-panel layout */
-              <div className="flex h-full">
-                {/* Left panel - Review Form */}
-                <div className="w-1/2 overflow-y-auto p-6 border-r">
-                  <MaterialReviewForm
-                    materialData={materialDetails}
-                    existingReview={editingReview}
-                    onSubmit={handleReviewSubmit}
-                    onClose={handleReviewClose}
-                  />
-                </div>
-                {/* Right panel - Material Details */}
-                <div className="w-1/2 overflow-y-auto p-6">
-                  <MaterialDetailsContent
-                    materialNumber={materialNumber}
-                    materialDescription={materialDescription}
-                    materialDetails={materialDetails}
-                    loading={loading}
-                    isError={isError}
-                    error={error}
-                    isReviewMode={isReviewMode}
-                    onPerformReview={handlePerformReview}
-                    onEditReview={handleEditReview}
-                    onCancelReview={handleCancelReview}
-                  />
-                </div>
-              </div>
-            ) : (
-              /* Single-panel layout */
-              <MaterialDetailsContent
-                materialNumber={materialNumber}
-                materialDescription={materialDescription}
-                materialDetails={materialDetails}
-                loading={loading}
-                isError={isError}
-                error={error}
-                isReviewMode={isReviewMode}
-                onPerformReview={handlePerformReview}
-                onEditReview={handleEditReview}
-                onCancelReview={handleCancelReview}
-              />
-            )}
-          </>
+          <MaterialDetailsContent
+            materialNumber={materialNumber}
+            materialDescription={materialDescription}
+            materialDetails={materialDetails}
+            loading={loading}
+            isError={isError}
+            error={error}
+            onCancelReview={handleCancelReview}
+            onCloseSheet={handleCloseSheet}
+          />
         )}
       </SheetContent>
     </Sheet>

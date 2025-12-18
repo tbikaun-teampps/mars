@@ -1,10 +1,22 @@
 import { useMultiStepForm } from "./multi-step-form";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-export function StepProgressIndicator() {
+interface StepProgressIndicatorProps {
+  /** Array of step indices that are locked */
+  lockedSteps?: number[];
+}
+
+export function StepProgressIndicator({ lockedSteps = [] }: StepProgressIndicatorProps) {
   const { currentStep, steps, goToStep, canGoToStep, isStepComplete } =
     useMultiStepForm();
+
+  const isStepLocked = (index: number) => lockedSteps.includes(index);
 
   return (
     <nav aria-label="Progress">
@@ -60,16 +72,28 @@ export function StepProgressIndicator() {
 
               {/* Text labels below circle */}
               <div className="flex flex-col items-center mt-2">
-                {/* Step title */}
+                {/* Step title with optional lock icon */}
                 <span
                   className={cn(
-                    "text-xs text-center font-medium",
+                    "text-xs text-center font-medium flex items-center gap-1",
                     isActive && "text-blue-600",
                     isComplete && "text-green-600",
                     !isActive && !isComplete && "text-gray-500"
                   )}
                 >
                   {step.title}
+                  {isStepLocked(index) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Lock className="w-3 h-3 text-slate-400 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">
+                          This step is locked after workflow progression
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </span>
               </div>
             </li>

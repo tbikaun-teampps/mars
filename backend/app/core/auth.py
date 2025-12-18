@@ -119,21 +119,15 @@ async def get_current_user(
             )
 
         # Fetch the impersonated user's email from the database
-        impersonated_email = await _get_user_email_for_impersonation(
-            impersonate_user_id
-        )
+        impersonated_email = await _get_user_email_for_impersonation(impersonate_user_id)
         if not impersonated_email:
-            logger.warning(
-                f"Impersonation failed: user {impersonate_user_id} does not have an email address"
-            )
+            logger.warning(f"Impersonation failed: user {impersonate_user_id} does not have an email address")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Impersonated user not found or has no email address",
             )
 
-        logger.info(
-            f"User {user_id} ({email}) is impersonating user {impersonate_user_id}"
-        )
+        logger.info(f"User {user_id} ({email}) is impersonating user {impersonate_user_id}")
 
         # Return user with impersonated ID and email
         return User(

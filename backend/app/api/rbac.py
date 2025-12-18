@@ -40,18 +40,18 @@ router = APIRouter()
 
 # Permission field names for iteration
 PERMISSION_FIELDS = [
-    'can_create_reviews',
-    'can_edit_reviews',
-    'can_delete_reviews',
-    'can_approve_reviews',
-    'can_provide_sme_review',
-    'can_assign_reviews',
-    'can_manage_users',
-    'can_manage_settings',
-    'can_view_all_reviews',
-    'can_export_data',
-    'can_manage_acknowledgements',
-    'can_upload_data',
+    "can_create_reviews",
+    "can_edit_reviews",
+    "can_delete_reviews",
+    "can_approve_reviews",
+    "can_provide_sme_review",
+    "can_assign_reviews",
+    "can_manage_users",
+    "can_manage_settings",
+    "can_view_all_reviews",
+    "can_export_data",
+    "can_manage_acknowledgements",
+    "can_upload_data",
 ]
 
 
@@ -127,7 +127,7 @@ async def check_admin_self_demotion(
     if str(target_user_id) != current_user_id:
         return  # Not self-modification
 
-    if role.role_code in ('system_admin', 'user_admin'):
+    if role.role_code in ("system_admin", "user_admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot remove your own admin role. Ask another admin.",
@@ -142,7 +142,7 @@ async def check_last_system_admin(
     """
     SECURITY: Prevent orphaning the system by removing the last system_admin.
     """
-    if role.role_code != 'system_admin':
+    if role.role_code != "system_admin":
         return
 
     today = date.today()
@@ -152,7 +152,7 @@ async def check_last_system_admin(
         select(UserRoleDB)
         .join(RoleDB, RoleDB.role_id == UserRoleDB.role_id)
         .where(
-            RoleDB.role_code == 'system_admin',
+            RoleDB.role_code == "system_admin",
             UserRoleDB.is_active.is_(True),
             UserRoleDB.user_id != target_user_id,
             or_(UserRoleDB.valid_to.is_(None), UserRoleDB.valid_to >= today),
@@ -210,9 +210,67 @@ async def check_user_is_admin(
     roles = result.all()
 
     for role in roles:
-        if role.role_type == 'admin':
+        if role.role_type == "admin":
             return True
     return False
+
+
+async def has_permission(
+    user_id: str,
+    db: AsyncSession,
+    permission: str,
+) -> bool:
+    """
+    Check if user has a specific permission. Returns boolean.
+    Note: Does NOT check admin status - use check_user_is_admin separately if needed.
+    """
+    permissions = await get_user_permissions(user_id, db)
+    return permission in permissions
+
+
+async def require_permission(
+    user_id: str,
+    db: AsyncSession,
+    permission: str,
+) -> None:
+    """
+    Check if user has a specific permission. Admins bypass all checks.
+    Raises HTTPException 403 if permission is denied.
+    """
+    # Admins bypass all permission checks
+    is_admin = await check_user_is_admin(user_id, db)
+    if is_admin:
+        return
+
+    permissions = await get_user_permissions(user_id, db)
+    if permission not in permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {permission} required",
+        )
+
+
+async def require_any_permission(
+    user_id: str,
+    db: AsyncSession,
+    permissions_list: list[str],
+) -> None:
+    """
+    Check if user has at least one of the specified permissions. Admins bypass all checks.
+    Raises HTTPException 403 if none of the permissions are granted.
+    """
+    # Admins bypass all permission checks
+    is_admin = await check_user_is_admin(user_id, db)
+    if is_admin:
+        return
+
+    permissions = await get_user_permissions(user_id, db)
+    if not any(p in permissions for p in permissions_list):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: one of {permissions_list} required",
+        )
+
 
 # ============================================================================
 # ROLES ENDPOINTS (Read-only)
@@ -279,9 +337,7 @@ async def list_user_roles(
     await require_user_admin(current_user, db)
 
     query = (
-        select(UserRoleDB, RoleDB, ProfileDB)
-        .join(RoleDB, RoleDB.role_id == UserRoleDB.role_id)
-        .join(ProfileDB, ProfileDB.id == UserRoleDB.user_id)
+        select(UserRoleDB, RoleDB, ProfileDB).join(RoleDB, RoleDB.role_id == UserRoleDB.role_id).join(ProfileDB, ProfileDB.id == UserRoleDB.user_id)
     )
 
     if not include_inactive:
@@ -301,29 +357,30 @@ async def list_user_roles(
         # Get assigner name if available
         assigner_name = None
         if ur.assigned_by:
-            assigner_query = select(ProfileDB).where(
-                ProfileDB.id == ur.assigned_by)
+            assigner_query = select(ProfileDB).where(ProfileDB.id == ur.assigned_by)
             assigner_result = await db.exec(assigner_query)
             assigner = assigner_result.first()
             if assigner:
                 assigner_name = assigner.full_name
 
-        responses.append(UserRoleResponse(
-            user_role_id=ur.user_role_id,
-            user_id=ur.user_id,
-            user_name=profile.full_name,
-            user_email=getattr(profile, 'email', None),
-            role_id=role.role_id,
-            role_code=role.role_code,
-            role_name=role.role_name,
-            role_type=role.role_type,
-            valid_from=ur.valid_from,
-            valid_to=ur.valid_to,
-            assigned_by=ur.assigned_by,
-            assigned_by_name=assigner_name,
-            assigned_at=ur.assigned_at,
-            is_active=ur.is_active,
-        ))
+        responses.append(
+            UserRoleResponse(
+                user_role_id=ur.user_role_id,
+                user_id=ur.user_id,
+                user_name=profile.full_name,
+                user_email=getattr(profile, "email", None),
+                role_id=role.role_id,
+                role_code=role.role_code,
+                role_name=role.role_name,
+                role_type=role.role_type,
+                valid_from=ur.valid_from,
+                valid_to=ur.valid_to,
+                assigned_by=ur.assigned_by,
+                assigned_by_name=assigner_name,
+                assigned_at=ur.assigned_at,
+                is_active=ur.is_active,
+            )
+        )
 
     return responses
 
@@ -401,13 +458,13 @@ async def create_user_role(
         await record_user_role_history(
             db=db,
             user_role_id=user_role.user_role_id,
-            action='assigned',
+            action="assigned",
             old_values=None,
             new_values={
-                'role_id': data.role_id,
-                'role_code': role.role_code,
-                'valid_from': str(user_role.valid_from) if user_role.valid_from else None,
-                'valid_to': str(user_role.valid_to) if user_role.valid_to else None,
+                "role_id": data.role_id,
+                "role_code": role.role_code,
+                "valid_from": str(user_role.valid_from) if user_role.valid_from else None,
+                "valid_to": str(user_role.valid_to) if user_role.valid_to else None,
             },
             performed_by=current_user.id,
         )
@@ -424,7 +481,7 @@ async def create_user_role(
         user_role_id=user_role.user_role_id,
         user_id=user_role.user_id,
         user_name=user.full_name,
-        user_email=getattr(user, 'email', None),
+        user_email=getattr(user, "email", None),
         role_id=role.role_id,
         role_code=role.role_code,
         role_name=role.role_name,
@@ -467,8 +524,8 @@ async def update_user_role(
 
     # Capture old values
     old_values = {
-        'valid_from': str(user_role.valid_from) if user_role.valid_from else None,
-        'valid_to': str(user_role.valid_to) if user_role.valid_to else None,
+        "valid_from": str(user_role.valid_from) if user_role.valid_from else None,
+        "valid_to": str(user_role.valid_to) if user_role.valid_to else None,
     }
 
     # Apply updates
@@ -485,11 +542,11 @@ async def update_user_role(
         await record_user_role_history(
             db=db,
             user_role_id=user_role.user_role_id,
-            action='updated',
+            action="updated",
             old_values=old_values,
             new_values={
-                'valid_from': str(user_role.valid_from) if user_role.valid_from else None,
-                'valid_to': str(user_role.valid_to) if user_role.valid_to else None,
+                "valid_from": str(user_role.valid_from) if user_role.valid_from else None,
+                "valid_to": str(user_role.valid_to) if user_role.valid_to else None,
             },
             performed_by=current_user.id,
         )
@@ -506,7 +563,7 @@ async def update_user_role(
         user_role_id=user_role.user_role_id,
         user_id=user_role.user_id,
         user_name=user.full_name,
-        user_email=getattr(user, 'email', None),
+        user_email=getattr(user, "email", None),
         role_id=role.role_id,
         role_code=role.role_code,
         role_name=role.role_name,
@@ -529,11 +586,7 @@ async def revoke_user_role(
     assigner_perms = await require_user_admin(current_user, db)
 
     # Get existing assignment
-    query = (
-        select(UserRoleDB, RoleDB)
-        .join(RoleDB, RoleDB.role_id == UserRoleDB.role_id)
-        .where(UserRoleDB.user_role_id == user_role_id)
-    )
+    query = select(UserRoleDB, RoleDB).join(RoleDB, RoleDB.role_id == UserRoleDB.role_id).where(UserRoleDB.user_role_id == user_role_id)
     result = await db.exec(query)
     row = result.first()
 
@@ -569,9 +622,9 @@ async def revoke_user_role(
         await record_user_role_history(
             db=db,
             user_role_id=user_role.user_role_id,
-            action='revoked',
-            old_values={'is_active': True},
-            new_values={'is_active': False},
+            action="revoked",
+            old_values={"is_active": True},
+            new_values={"is_active": False},
             performed_by=current_user.id,
         )
         await db.commit()
@@ -600,10 +653,7 @@ async def list_sme_expertise(
     """List SME expertise records. Requires can_manage_users."""
     await require_user_admin(current_user, db)
 
-    query = (
-        select(SMEExpertiseDB, ProfileDB)
-        .join(ProfileDB, ProfileDB.id == SMEExpertiseDB.user_id)
-    )
+    query = select(SMEExpertiseDB, ProfileDB).join(ProfileDB, ProfileDB.id == SMEExpertiseDB.user_id)
 
     if user_id:
         query = query.where(SMEExpertiseDB.user_id == user_id)
@@ -622,7 +672,7 @@ async def list_sme_expertise(
         # Get SME type label from lookup_options
         sme_type_label = None
         lookup_query = select(LookupOptionDB).where(
-            LookupOptionDB.category == 'sme_type',
+            LookupOptionDB.category == "sme_type",
             LookupOptionDB.value == expertise.sme_type,
         )
         lookup_result = await db.exec(lookup_query)
@@ -633,32 +683,33 @@ async def list_sme_expertise(
         # Get backup user name if set
         backup_user_name = None
         if expertise.backup_user_id:
-            backup_query = select(ProfileDB).where(
-                ProfileDB.id == expertise.backup_user_id)
+            backup_query = select(ProfileDB).where(ProfileDB.id == expertise.backup_user_id)
             backup_result = await db.exec(backup_query)
             backup_user = backup_result.first()
             if backup_user:
                 backup_user_name = backup_user.full_name
 
-        responses.append(SMEExpertiseResponse(
-            expertise_id=expertise.expertise_id,
-            user_id=expertise.user_id,
-            user_name=profile.full_name,
-            user_email=getattr(profile, 'email', None),
-            sme_type=expertise.sme_type,
-            sme_type_label=sme_type_label,
-            material_group=expertise.material_group,
-            plant=expertise.plant,
-            max_concurrent_reviews=expertise.max_concurrent_reviews,
-            current_review_count=expertise.current_review_count,
-            is_available=expertise.is_available,
-            unavailable_until=expertise.unavailable_until,
-            unavailable_reason=expertise.unavailable_reason,
-            backup_user_id=expertise.backup_user_id,
-            backup_user_name=backup_user_name,
-            created_at=expertise.created_at,
-            updated_at=expertise.updated_at,
-        ))
+        responses.append(
+            SMEExpertiseResponse(
+                expertise_id=expertise.expertise_id,
+                user_id=expertise.user_id,
+                user_name=profile.full_name,
+                user_email=getattr(profile, "email", None),
+                sme_type=expertise.sme_type,
+                sme_type_label=sme_type_label,
+                material_group=expertise.material_group,
+                plant=expertise.plant,
+                max_concurrent_reviews=expertise.max_concurrent_reviews,
+                current_review_count=expertise.current_review_count,
+                is_available=expertise.is_available,
+                unavailable_until=expertise.unavailable_until,
+                unavailable_reason=expertise.unavailable_reason,
+                backup_user_id=expertise.backup_user_id,
+                backup_user_name=backup_user_name,
+                created_at=expertise.created_at,
+                updated_at=expertise.updated_at,
+            )
+        )
 
     return responses
 
@@ -674,7 +725,7 @@ async def create_sme_expertise(
 
     # VALIDATION: Check sme_type exists in lookup_options
     lookup_query = select(LookupOptionDB).where(
-        LookupOptionDB.category == 'sme_type',
+        LookupOptionDB.category == "sme_type",
         LookupOptionDB.value == data.sme_type,
         LookupOptionDB.is_active.is_(True),
     )
@@ -715,8 +766,7 @@ async def create_sme_expertise(
 
     # Validate backup user if provided
     if data.backup_user_id:
-        backup_query = select(ProfileDB).where(
-            ProfileDB.id == data.backup_user_id)
+        backup_query = select(ProfileDB).where(ProfileDB.id == data.backup_user_id)
         backup_result = await db.exec(backup_query)
         if not backup_result.first():
             raise HTTPException(
@@ -752,7 +802,7 @@ async def create_sme_expertise(
         expertise_id=expertise.expertise_id,
         user_id=expertise.user_id,
         user_name=user.full_name,
-        user_email=getattr(user, 'email', None),
+        user_email=getattr(user, "email", None),
         sme_type=expertise.sme_type,
         sme_type_label=lookup.label,
         material_group=expertise.material_group,
@@ -779,9 +829,7 @@ async def update_sme_expertise(
     await require_user_admin(current_user, db)
 
     query = (
-        select(SMEExpertiseDB, ProfileDB)
-        .join(ProfileDB, ProfileDB.id == SMEExpertiseDB.user_id)
-        .where(SMEExpertiseDB.expertise_id == expertise_id)
+        select(SMEExpertiseDB, ProfileDB).join(ProfileDB, ProfileDB.id == SMEExpertiseDB.user_id).where(SMEExpertiseDB.expertise_id == expertise_id)
     )
     result = await db.exec(query)
     row = result.first()
@@ -797,7 +845,7 @@ async def update_sme_expertise(
     # If sme_type is being changed, validate it
     if data.sme_type is not None:
         lookup_query = select(LookupOptionDB).where(
-            LookupOptionDB.category == 'sme_type',
+            LookupOptionDB.category == "sme_type",
             LookupOptionDB.value == data.sme_type,
             LookupOptionDB.is_active.is_(True),
         )
@@ -810,8 +858,7 @@ async def update_sme_expertise(
 
     # Validate backup user if being changed
     if data.backup_user_id is not None:
-        backup_query = select(ProfileDB).where(
-            ProfileDB.id == data.backup_user_id)
+        backup_query = select(ProfileDB).where(ProfileDB.id == data.backup_user_id)
         backup_result = await db.exec(backup_query)
         if not backup_result.first():
             raise HTTPException(
@@ -839,7 +886,7 @@ async def update_sme_expertise(
     # Get SME type label
     sme_type_label = None
     lookup_query = select(LookupOptionDB).where(
-        LookupOptionDB.category == 'sme_type',
+        LookupOptionDB.category == "sme_type",
         LookupOptionDB.value == expertise.sme_type,
     )
     lookup_result = await db.exec(lookup_query)
@@ -850,8 +897,7 @@ async def update_sme_expertise(
     # Get backup user name
     backup_user_name = None
     if expertise.backup_user_id:
-        backup_query = select(ProfileDB).where(
-            ProfileDB.id == expertise.backup_user_id)
+        backup_query = select(ProfileDB).where(ProfileDB.id == expertise.backup_user_id)
         backup_result = await db.exec(backup_query)
         backup_user = backup_result.first()
         if backup_user:
@@ -861,7 +907,7 @@ async def update_sme_expertise(
         expertise_id=expertise.expertise_id,
         user_id=expertise.user_id,
         user_name=user.full_name,
-        user_email=getattr(user, 'email', None),
+        user_email=getattr(user, "email", None),
         sme_type=expertise.sme_type,
         sme_type_label=sme_type_label,
         material_group=expertise.material_group,
@@ -887,8 +933,7 @@ async def delete_sme_expertise(
     """Delete SME expertise record (hard delete)."""
     await require_user_admin(current_user, db)
 
-    query = select(SMEExpertiseDB).where(
-        SMEExpertiseDB.expertise_id == expertise_id)
+    query = select(SMEExpertiseDB).where(SMEExpertiseDB.expertise_id == expertise_id)
     result = await db.exec(query)
     expertise = result.first()
 
@@ -929,12 +974,12 @@ async def list_users(
 
     if is_active is not None:
         # Check if is_active column exists on profile
-        if hasattr(ProfileDB, 'is_active'):
+        if hasattr(ProfileDB, "is_active"):
             query = query.where(ProfileDB.is_active == is_active)
 
     if search:
         search_pattern = f"%{search}%"
-        if hasattr(ProfileDB, 'email'):
+        if hasattr(ProfileDB, "email"):
             query = query.where(
                 or_(
                     ProfileDB.full_name.ilike(search_pattern),
@@ -953,8 +998,8 @@ async def list_users(
         UserListItem(
             user_id=p.id,
             full_name=p.full_name,
-            email=getattr(p, 'email', None),
-            is_active=getattr(p, 'is_active', True),
+            email=getattr(p, "email", None),
+            is_active=getattr(p, "is_active", True),
         )
         for p in profiles
     ]

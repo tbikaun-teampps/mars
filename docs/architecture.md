@@ -18,7 +18,7 @@ Material Analysis and Review System - technical architecture documentation.
 │  │   Pages     │  │ Components  │  │  Contexts   │  │  React Query Cache  │ │
 │  │  - Main     │  │  - Tables   │  │  - Auth     │  │  - Materials        │ │
 │  │  - Settings │  │  - Forms    │  │  - Imperson │  │  - Reviews          │ │
-│  │  - Account  │  │  - Charts   │  │             │  │  - Users/Roles      │ │
+│  │  - Account  │  │  - Charts   │  │             │  │  - Notifications    │ │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘ │
 │                                      │                                       │
 │                              ApiClient (fetch)                               │
@@ -29,7 +29,8 @@ Material Analysis and Review System - technical architecture documentation.
 │                         FastAPI Backend (Python)                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                          API Routers                                 │    │
-│  │  materials │ reviews │ rbac │ users │ audit │ dashboard │ lookups   │    │
+│  │  materials │ reviews │ rbac │ users │ audit │ dashboard │ lookups │     │    │
+│  │  comments │ insights │ health │ notifications                       │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                      │                                       │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────────────┐  │
@@ -46,7 +47,7 @@ Material Analysis and Review System - technical architecture documentation.
 │  │  Auth       │  │  Core Data  │  │  Workflow   │  │  Configuration      │ │
 │  │  - Users    │  │  - Materials│  │  - Reviews  │  │  - Roles            │ │
 │  │  - Sessions │  │  - Insights │  │  - Comments │  │  - Lookups          │ │
-│  │  - JWT      │  │  - History  │  │  - Assign   │  │  - Audit Logs       │ │
+│  │  - JWT      │  │  - History  │  │  - Notifs   │  │  - Audit Logs       │ │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -164,11 +165,14 @@ backend/app/
 │   ├── users.py           # User profiles (109 LOC)
 │   ├── comments.py        # Review comments (168 LOC)
 │   ├── insights.py        # Material insights (93 LOC)
+│   ├── notifications.py   # User notifications (228 LOC)
 │   └── health.py          # Health checks (70 LOC)
 ├── core/
 │   ├── config.py          # Environment settings
 │   ├── auth.py            # JWT verification, impersonation
 │   └── database.py        # Async SQLModel session
+├── services/
+│   └── notification_service.py  # Notification creation logic
 └── models/
     ├── db_models.py       # SQLModel ORM models (table=True)
     ├── rbac.py            # Role/permission schemas
@@ -177,6 +181,7 @@ backend/app/
     ├── upload.py          # Upload job schemas
     ├── audit.py           # Audit log schemas
     ├── lookup.py          # Lookup option schemas
+    ├── notification.py    # Notification schemas
     └── user.py            # User profile schemas
 ```
 
@@ -286,6 +291,7 @@ Security Functions:
 | `material_reviews`    | Multi-step review workflow records           |
 | `review_checklist`    | Mandatory verification checklist per review  |
 | `review_comments`     | Discussion thread on reviews                 |
+| `notifications`       | In-app user notifications                    |
 | `review_assignments`  | Task assignments (owner, SME, approver)      |
 | `upload_jobs`         | Async CSV/Excel upload tracking              |
 | `material_data_history`| Change snapshots per upload                 |
@@ -386,18 +392,19 @@ Security Functions:
 
 ### Router prefixes
 
-| Router       | Prefix              | Tag          |
-| ------------ | ------------------- | ------------ |
-| health       | `/api/health`       | Health       |
-| materials    | `/api/materials`    | Materials    |
-| reviews      | `/api/reviews`      | Reviews      |
-| comments     | `/api/comments`     | Comments     |
-| audit        | `/api/audit`        | Audit        |
-| users        | `/api/users`        | Users        |
-| insights     | `/api/insights`     | Insights     |
-| dashboard    | `/api/dashboard`    | Dashboard    |
-| lookups      | `/api/lookups`      | Lookups      |
-| rbac         | `/api/rbac`         | RBAC         |
+| Router        | Prefix               | Tag           |
+| ------------- | -------------------- | ------------- |
+| health        | `/api/health`        | Health        |
+| materials     | `/api/materials`     | Materials     |
+| reviews       | `/api/reviews`       | Reviews       |
+| comments      | `/api/comments`      | Comments      |
+| notifications | `/api/notifications` | Notifications |
+| audit         | `/api/audit`         | Audit         |
+| users         | `/api/users`         | Users         |
+| insights      | `/api/insights`      | Insights      |
+| dashboard     | `/api/dashboard`     | Dashboard     |
+| lookups       | `/api/lookups`       | Lookups       |
+| rbac          | `/api/rbac`          | RBAC          |
 
 ### Key endpoints
 
@@ -420,6 +427,14 @@ RBAC
   GET    /api/rbac/user-roles        # List user assignments
   POST   /api/rbac/user-roles        # Assign role to user
   GET    /api/rbac/sme-expertise     # List SME capabilities
+
+Notifications
+  GET    /api/notifications              # Paginated user notifications
+  GET    /api/notifications/unread-count # Badge count
+  PUT    /api/notifications/{id}/read    # Mark single as read
+  PUT    /api/notifications/mark-all-read # Mark all as read
+  GET    /api/notifications/preferences  # Get user preferences
+  PUT    /api/notifications/preferences  # Update preferences
 
 Users
   GET    /api/users/me               # Current user with permissions
@@ -589,5 +604,5 @@ Areas identified for potential enhancement:
 - **Row-Level Security**: Currently enforced at application layer; RLS policies could provide defense-in-depth
 - **Real-time updates**: Supabase Realtime could push review status changes to connected clients
 - **File storage**: Review attachments could use Supabase Storage for managed file handling
-- **Notification system**: Email/push notifications for review assignments and due dates
+- **Email notifications**: Add email delivery channel to the existing in-app notification system
 - **Bulk operations**: Batch review creation and approval for high-volume scenarios

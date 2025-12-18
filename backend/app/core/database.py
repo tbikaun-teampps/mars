@@ -10,9 +10,7 @@ from app.core.config import settings
 
 # Create async engine
 # Convert postgresql:// to postgresql+asyncpg:// for async support
-database_url = settings.database_url.replace(
-    "postgresql://", "postgresql+asyncpg://"
-)
+database_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
 
 engine = create_async_engine(
     database_url,
@@ -21,9 +19,7 @@ engine = create_async_engine(
 )
 
 # Create async session factory
-async_session_maker = sessionmaker(
-    engine, class_=SQLModelAsyncSession, expire_on_commit=False
-)
+async_session_maker = sessionmaker(engine, class_=SQLModelAsyncSession, expire_on_commit=False)
 
 
 async def get_db() -> AsyncGenerator[SQLModelAsyncSession, None]:

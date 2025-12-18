@@ -5,7 +5,11 @@ import {
 } from "@/components/ui/form";
 import { Stepheader } from "./step-header";
 
-export function Step2Checklist() {
+interface Step2ChecklistProps {
+  isStatusLocked?: boolean;
+}
+
+export function Step2Checklist({ isStatusLocked = false }: Step2ChecklistProps) {
   return (
     <div className="space-y-4">
       <Stepheader title="Checklist" />
@@ -17,35 +21,38 @@ export function Step2Checklist() {
         <FormToggleGroupField
           name="hasOpenOrders"
           label="Are there any open orders (POs, reservations, work orders)?"
+          disabled={isStatusLocked}
         />
         <FormToggleGroupField
           name="hasForecastDemand"
           label="Does MRP/planning show any future demand in the system?"
+          disabled={isStatusLocked}
         />
         <FormToggleGroupField
           name="checkedAlternativePlants"
           label="Have alternative plants been checked for availability?"
+          disabled={isStatusLocked}
         />
         <FormToggleGroupField
           name="contactedProcurement"
           label="Have you contacted procurement for supplier feedback?"
+          disabled={isStatusLocked}
         />
         <FormToggleGroupField
           name="reviewedBomUsage"
           label="Have you reviewed the BOM usage for this material?"
+          disabled={isStatusLocked}
         />
         <FormToggleGroupField
           name="checkedHistoricalUsage"
           label="Have you checked historical usage trends beyond the last 12 months?"
+          disabled={isStatusLocked}
         />
         <FormToggleGroupField
           name="checkedSupersession"
           label="Have you checked for any material supersession or replacements?"
+          disabled={isStatusLocked}
         />
-        {/* <FormToggleGroupField
-          name="assessedDisposalOptions"
-          label="Have disposal or redistribution options been assessed?"
-        /> */}
       </div>
 
       <p className="text-sm text-gray-600">
@@ -56,23 +63,27 @@ export function Step2Checklist() {
           name="openOrderNumbers"
           label="If there are open orders, please provide the order numbers:"
           placeholder="Enter order numbers separated by commas (e.g., PO12345, WO67890)"
+          disabled={isStatusLocked}
         />
         <FormInputField
           name="forecastNext12m"
           label="If there is forecast demand, please provide the forecast quantity for the next 12 months:"
           type="number"
           placeholder="Enter forecast quantity"
+          disabled={isStatusLocked}
         />
         <FormInputField
-          name="alternativePlantQty"
+          name="alternatePlantQty"
           label="If alternative plants were checked, please provide the available quantity:"
           type="number"
           placeholder="Enter available quantity"
+          disabled={isStatusLocked}
         />
         <FormTextareaField
           name="procurementFeedback"
           label="If procurement was contacted, please summarise their feedback:"
           placeholder="Enter procurement feedback"
+          disabled={isStatusLocked}
         />
       </div>
     </div>

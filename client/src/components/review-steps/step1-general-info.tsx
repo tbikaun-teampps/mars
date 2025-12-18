@@ -9,8 +9,15 @@ import { Stepheader } from "./step-header";
 import { useLookupOptions } from "@/api/queries";
 import { useMemo } from "react";
 import { useProposedActionOptions } from "./use-proposed-action-options";
+import { cn } from "@/lib/utils";
 
-export function Step1GeneralInfo() {
+interface Step1GeneralInfoProps {
+  isStatusLocked?: boolean;
+}
+
+export function Step1GeneralInfo({
+  isStatusLocked = false,
+}: Step1GeneralInfoProps) {
   const { watch } = useFormContext();
   const reviewReason = watch("reviewReason");
   const proposedAction = watch("proposedAction");
@@ -32,25 +39,43 @@ export function Step1GeneralInfo() {
           group_name: null,
           group_order: 0,
           options: [
-            { label: "Annual Review", value: "annual_review", description: "Scheduled yearly review" },
-            { label: "Usage Spike", value: "usage_spike", description: "Unexpected increase in consumption" },
-            { label: "Supplier Change", value: "supplier_change", description: "Vendor or supply chain change" },
-            { label: "Other", value: "other", description: "Specify a custom reason" },
+            {
+              label: "Annual Review",
+              value: "annual_review",
+              description: "Scheduled yearly review",
+            },
+            {
+              label: "Usage Spike",
+              value: "usage_spike",
+              description: "Unexpected increase in consumption",
+            },
+            {
+              label: "Supplier Change",
+              value: "supplier_change",
+              description: "Vendor or supply chain change",
+            },
+            {
+              label: "Other",
+              value: "other",
+              description: "Specify a custom reason",
+            },
           ],
         },
       ];
     }
 
     // Map the API response to grouped select format
-    const groups: GroupedSelectGroup[] = reviewReasonOptions.groups.map((group) => ({
-      group_name: group.group_name ?? null,
-      group_order: group.group_order,
-      options: group.options.map((opt) => ({
-        value: opt.value,
-        label: opt.label,
-        description: opt.description ?? null,
-      })),
-    }));
+    const groups: GroupedSelectGroup[] = reviewReasonOptions.groups.map(
+      (group) => ({
+        group_name: group.group_name ?? null,
+        group_order: group.group_order,
+        options: group.options.map((opt) => ({
+          value: opt.value,
+          label: opt.label,
+          description: opt.description ?? null,
+        })),
+      })
+    );
 
     // Ensure "Other" option exists (add to last group or create new ungrouped)
     const hasOther = groups.some((g) =>
@@ -71,7 +96,11 @@ export function Step1GeneralInfo() {
           group_name: null,
           group_order: 999,
           options: [
-            { label: "Other", value: "other", description: "Specify a custom reason" },
+            {
+              label: "Other",
+              value: "other",
+              description: "Specify a custom reason",
+            },
           ],
         });
       }
@@ -84,66 +113,82 @@ export function Step1GeneralInfo() {
     <div className="space-y-4">
       <Stepheader title="General Information" />
 
-      <FormGroupedSelectField
-        name="reviewReason"
-        label="What is the reason for this review? *"
-        placeholder="Select a reason for this review"
-        groups={reviewReasonGroups}
-        disabled={optionsLoading}
-      />
-
-      {reviewReason === "other" && (
-        <FormInputField
-          name="reviewReasonOther"
-          label="Please specify the reason for this review *"
-          placeholder="Enter custom review reason"
+      <div
+        className={cn(
+          "grid gap-4",
+          reviewReason === "other" ? "grid-cols-3" : "grid-cols-2"
+        )}
+      >
+        <FormGroupedSelectField
+          name="reviewReason"
+          label="What is the reason for this review?"
+          placeholder="Select a reason for this review"
+          groups={reviewReasonGroups}
+          disabled={optionsLoading || isStatusLocked}
+          required
         />
-      )}
 
-      <FormInputField
-        name="monthsNoMovement"
-        label="How many months have there been no movements? *"
-        placeholder="Enter number of months with no movement"
-        type="number"
-        min="0"
-      />
-
-      <FormGroupedSelectField
-        name="proposedAction"
-        label="What is the proposed action? *"
-        placeholder="Select a proposed action"
-        groups={proposedActionGroups}
-        disabled={actionsLoading}
-      />
-
-      {proposedAction === "other" && (
-        <FormInputField
-          name="proposedActionOther"
-          label="Please specify the proposed action *"
-          placeholder="Enter custom proposed action"
+        {reviewReason === "other" && (
+          <FormInputField
+            name="reviewReasonOther"
+            label="Please specify the reason for this review"
+            placeholder="Enter custom review reason"
+            disabled={isStatusLocked}
+            required
+          />
+        )}
+        <FormGroupedSelectField
+          name="proposedAction"
+          label="What is the proposed action?"
+          placeholder="Select a proposed action"
+          groups={proposedActionGroups}
+          disabled={actionsLoading || isStatusLocked}
+          required
         />
-      )}
+        {proposedAction === "other" && (
+          <FormInputField
+            name="proposedActionOther"
+            label="Please specify the proposed action"
+            placeholder="Enter custom proposed action"
+            disabled={isStatusLocked}
+            required
+          />
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <FormInputField
+          name="monthsNoMovement"
+          label="How many months have there been no movements?"
+          placeholder="Enter number of months with no movement"
+          type="number"
+          min="0"
+          disabled={isStatusLocked}
+          required
+        />
 
-      <div className="grid grid-cols-2 gap-4">
         <FormInputField
           name="proposedSafetyStockQty"
           label="Target Safety Stock Quantity"
           placeholder="Enter target safety stock"
           type="number"
+          disabled={isStatusLocked}
         />
         <FormInputField
           name="proposedUnrestrictedQty"
           label="Target Unrestricted Quantity"
           placeholder="Enter target unrestricted"
           type="number"
+          disabled={isStatusLocked}
         />
       </div>
 
       <FormTextareaField
         name="businessJustification"
-        label="What is the business justification for the proposed action? *"
+        label="What is the business justification for the proposed action?"
         placeholder="Enter business justification for the proposed action"
-        rows={4}
+        rows={1}
+        disabled={isStatusLocked}
+        required
       />
     </div>
   );

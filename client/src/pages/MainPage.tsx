@@ -217,12 +217,12 @@ export function MainPage({ view }: MainPageProps) {
                 isLoading={isDashboardSummaryLoading}
               />
               <SectionCard
-                title="SME Acceptance Rate"
+                title="SME Agreement Rate"
                 value={numeral(
-                  dashboardSummary?.acceptance_rate
+                  dashboardSummary?.agreement_rate
                 ).format("0.0%")}
-                change={dashboardSummary?.acceptance_rate_change}
-                description="Rate at which SMEs accept proposed changes"
+                change={dashboardSummary?.agreement_rate_change}
+                description="Rate at which SMEs agree with proposed changes"
                 isLoading={isDashboardSummaryLoading}
               />
 

@@ -35,23 +35,13 @@ async def list_audit_logs(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        50, ge=1, le=500, description="Maximum number of items to return"
-    ),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of items to return"),
     table_name: Optional[str] = Query(None, description="Filter by table name"),
     record_id: Optional[int] = Query(None, description="Filter by record ID"),
-    operation: Optional[str] = Query(
-        None, description="Filter by operation (INSERT, UPDATE, DELETE)"
-    ),
-    changed_by: Optional[str] = Query(
-        None, description="Filter by user who made the change"
-    ),
-    date_from: Optional[datetime] = Query(
-        None, description="Filter by date from (inclusive)"
-    ),
-    date_to: Optional[datetime] = Query(
-        None, description="Filter by date to (inclusive)"
-    ),
+    operation: Optional[str] = Query(None, description="Filter by operation (INSERT, UPDATE, DELETE)"),
+    changed_by: Optional[str] = Query(None, description="Filter by user who made the change"),
+    date_from: Optional[datetime] = Query(None, description="Filter by date from (inclusive)"),
+    date_to: Optional[datetime] = Query(None, description="Filter by date to (inclusive)"),
 ) -> PaginatedAuditLogsResponse:
     """List audit logs with pagination and filtering."""
 
@@ -177,14 +167,11 @@ def generate_change_summary(
         "proposed_action": "proposed action",
         "proposed_qty_adjustment": "proposed quantity adjustment",
         "business_justification": "business justification",
-        "sme_name": "SME name",
-        "sme_email": "SME email",
         "sme_recommendation": "SME recommendation",
         "sme_analysis": "SME analysis",
         "final_decision": "final decision",
         "final_qty_adjustment": "final quantity adjustment",
         "final_notes": "final notes",
-        # "decided_by": "decided by",
         "next_review_date": "next review date",
         "requires_follow_up": "requires follow-up",
         "follow_up_reason": "follow-up reason",
@@ -218,19 +205,14 @@ def generate_change_summary(
 
     readable_fields = [field_map[f] for f in mapped_fields]
 
-    readable_value_changes = [
-        f'({old_values.get(f, "N/A")} to {new_values.get(f, "N/A")})'
-        for f in mapped_fields
-    ]
+    readable_value_changes = [f"({old_values.get(f, 'N/A')} to {new_values.get(f, 'N/A')})" for f in mapped_fields]
 
     if len(readable_fields) == 1:
         return f"Updated {readable_fields[0]} {readable_value_changes[0]}"
     elif len(readable_fields) == 2:
         return f"Updated {readable_fields[0]} {readable_value_changes[0]} and {readable_fields[1]} {readable_value_changes[1]}"
     else:
-        changes = ', '.join(
-            [f'{readable_fields[i]} {readable_value_changes[i]}' for i in range(len(readable_fields) - 1)]
-        )
+        changes = ", ".join([f"{readable_fields[i]} {readable_value_changes[i]}" for i in range(len(readable_fields) - 1)])
         return f"Updated {changes}, and {readable_fields[-1]} {readable_value_changes[-1]}"
 
 
@@ -239,30 +221,14 @@ async def list_material_audit_logs(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        50, ge=1, le=500, description="Maximum number of items to return"
-    ),
-    material_number: Optional[int] = Query(
-        None, description="Filter by material number"
-    ),
-    date_from: Optional[datetime] = Query(
-        None, description="Filter by date from (inclusive)"
-    ),
-    date_to: Optional[datetime] = Query(
-        None, description="Filter by date to (inclusive)"
-    ),
-    search: Optional[str] = Query(
-        None, description="Search material number or description"
-    ),
-    sort_by: Optional[str] = Query(
-        None, description="Field to sort by (timestamp, material_number)"
-    ),
-    sort_order: Optional[str] = Query(
-        "desc", description="Sort order: asc or desc"
-    ),
-    changed_by_user_id: Optional[UUID] = Query(
-        None, description="Filter by user who made the change"
-    ),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of items to return"),
+    material_number: Optional[int] = Query(None, description="Filter by material number"),
+    date_from: Optional[datetime] = Query(None, description="Filter by date from (inclusive)"),
+    date_to: Optional[datetime] = Query(None, description="Filter by date to (inclusive)"),
+    search: Optional[str] = Query(None, description="Search material number or description"),
+    sort_by: Optional[str] = Query(None, description="Field to sort by (timestamp, material_number)"),
+    sort_order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
+    changed_by_user_id: Optional[UUID] = Query(None, description="Filter by user who made the change"),
 ) -> PaginatedMaterialAuditLogsResponse:
     """List material-related audit logs in a human-readable format."""
 
@@ -291,8 +257,7 @@ async def list_material_audit_logs(
         # Also search on user name if profile exists
         query = query.where(
             or_(
-                (AuditLogDB.table_name == "sap_material_data")
-                & (cast(AuditLogDB.record_id, String).ilike(search_pattern)),
+                (AuditLogDB.table_name == "sap_material_data") & (cast(AuditLogDB.record_id, String).ilike(search_pattern)),
                 ProfileDB.full_name.ilike(search_pattern),
             )
         )
@@ -303,63 +268,44 @@ async def list_material_audit_logs(
         # For material_reviews, we need to get review_ids for the material
         # For review_checklist, we need to get checklist_ids for those review_ids
         # For material_insights, we need to get insight_ids for the material
-        material_review_ids_query = select(MaterialReviewDB.review_id).where(
-            MaterialReviewDB.material_number == material_number
-        )
+        material_review_ids_query = select(MaterialReviewDB.review_id).where(MaterialReviewDB.material_number == material_number)
         material_review_ids_result = await db.exec(material_review_ids_query)
         material_review_ids = [row for row in material_review_ids_result.all()]
 
         # Get checklist_ids for the review_ids
         checklist_ids = []
         if material_review_ids:
-            checklist_ids_query = select(ReviewChecklistDB.checklist_id).where(
-                ReviewChecklistDB.review_id.in_(material_review_ids)
-            )
+            checklist_ids_query = select(ReviewChecklistDB.checklist_id).where(ReviewChecklistDB.review_id.in_(material_review_ids))
             checklist_ids_result = await db.exec(checklist_ids_query)
             checklist_ids = [row for row in checklist_ids_result.all()]
 
         # Get insight_ids for the material
-        insight_ids_query = select(MaterialInsightDB.insight_id).where(
-            MaterialInsightDB.material_number == material_number
-        )
+        insight_ids_query = select(MaterialInsightDB.insight_id).where(MaterialInsightDB.material_number == material_number)
         insight_ids_result = await db.exec(insight_ids_query)
         insight_ids = [row for row in insight_ids_result.all()]
 
         if material_review_ids or checklist_ids or insight_ids:
             conditions = [
                 # Material table changes
-                (AuditLogDB.table_name == "sap_material_data")
-                & (AuditLogDB.record_id == material_number),
+                (AuditLogDB.table_name == "sap_material_data") & (AuditLogDB.record_id == material_number),
             ]
 
             if material_review_ids:
                 # Review table changes
-                conditions.append(
-                    (AuditLogDB.table_name == "material_reviews")
-                    & (AuditLogDB.record_id.in_(material_review_ids))
-                )
+                conditions.append((AuditLogDB.table_name == "material_reviews") & (AuditLogDB.record_id.in_(material_review_ids)))
 
             if checklist_ids:
                 # Checklist table changes
-                conditions.append(
-                    (AuditLogDB.table_name == "review_checklist")
-                    & (AuditLogDB.record_id.in_(checklist_ids))
-                )
+                conditions.append((AuditLogDB.table_name == "review_checklist") & (AuditLogDB.record_id.in_(checklist_ids)))
 
             if insight_ids:
                 # Insight table changes
-                conditions.append(
-                    (AuditLogDB.table_name == "material_insights")
-                    & (AuditLogDB.record_id.in_(insight_ids))
-                )
+                conditions.append((AuditLogDB.table_name == "material_insights") & (AuditLogDB.record_id.in_(insight_ids)))
 
             query = query.where(or_(*conditions))
         else:
             # Only material table changes
-            query = query.where(
-                (AuditLogDB.table_name == "sap_material_data")
-                & (AuditLogDB.record_id == material_number)
-            )
+            query = query.where((AuditLogDB.table_name == "sap_material_data") & (AuditLogDB.record_id == material_number))
 
     # Get total count before pagination
     count_query = (
@@ -376,15 +322,10 @@ async def list_material_audit_logs(
     if search:
         search_pattern = f"%{search}%"
         # For count, we need to join ProfileDB to search on user name
-        count_query = (
-            count_query
-            .outerjoin(ProfileDB, AuditLogDB.changed_by == ProfileDB.id)
-            .where(
-                or_(
-                    (AuditLogDB.table_name == "sap_material_data")
-                    & (cast(AuditLogDB.record_id, String).ilike(search_pattern)),
-                    ProfileDB.full_name.ilike(search_pattern),
-                )
+        count_query = count_query.outerjoin(ProfileDB, AuditLogDB.changed_by == ProfileDB.id).where(
+            or_(
+                (AuditLogDB.table_name == "sap_material_data") & (cast(AuditLogDB.record_id, String).ilike(search_pattern)),
+                ProfileDB.full_name.ilike(search_pattern),
             )
         )
     # Apply same material_number filter logic to count
@@ -392,37 +333,24 @@ async def list_material_audit_logs(
         if material_review_ids or checklist_ids or insight_ids:
             count_conditions = [
                 # Material table changes
-                (AuditLogDB.table_name == "sap_material_data")
-                & (AuditLogDB.record_id == material_number),
+                (AuditLogDB.table_name == "sap_material_data") & (AuditLogDB.record_id == material_number),
             ]
 
             if material_review_ids:
                 # Review table changes
-                count_conditions.append(
-                    (AuditLogDB.table_name == "material_reviews")
-                    & (AuditLogDB.record_id.in_(material_review_ids))
-                )
+                count_conditions.append((AuditLogDB.table_name == "material_reviews") & (AuditLogDB.record_id.in_(material_review_ids)))
 
             if checklist_ids:
                 # Checklist table changes
-                count_conditions.append(
-                    (AuditLogDB.table_name == "review_checklist")
-                    & (AuditLogDB.record_id.in_(checklist_ids))
-                )
+                count_conditions.append((AuditLogDB.table_name == "review_checklist") & (AuditLogDB.record_id.in_(checklist_ids)))
 
             if insight_ids:
                 # Insight table changes
-                count_conditions.append(
-                    (AuditLogDB.table_name == "material_insights")
-                    & (AuditLogDB.record_id.in_(insight_ids))
-                )
+                count_conditions.append((AuditLogDB.table_name == "material_insights") & (AuditLogDB.record_id.in_(insight_ids)))
 
             count_query = count_query.where(or_(*count_conditions))
         else:
-            count_query = count_query.where(
-                (AuditLogDB.table_name == "sap_material_data")
-                & (AuditLogDB.record_id == material_number)
-            )
+            count_query = count_query.where((AuditLogDB.table_name == "sap_material_data") & (AuditLogDB.record_id == material_number))
 
     total_result = await db.exec(count_query)
     total = total_result.one()
@@ -448,39 +376,31 @@ async def list_material_audit_logs(
     # Transform to human-readable format
     material_audit_logs = []
     for log, profile in audit_logs_data:
-        print(f'Profile: {profile}')
+        print(f"Profile: {profile}")
         # Determine material_number based on table
         if log.table_name == "sap_material_data":
             mat_number = log.record_id
         elif log.table_name == "material_reviews":
             # Look up the material_number from the review
-            review_query = select(MaterialReviewDB.material_number).where(
-                MaterialReviewDB.review_id == log.record_id
-            )
+            review_query = select(MaterialReviewDB.material_number).where(MaterialReviewDB.review_id == log.record_id)
             review_result = await db.exec(review_query)
             mat_number_result = review_result.first()
             mat_number = mat_number_result if mat_number_result else None
         elif log.table_name == "review_checklist":
             # Two-hop lookup: checklist_id -> review_id -> material_number
-            checklist_query = select(ReviewChecklistDB.review_id).where(
-                ReviewChecklistDB.checklist_id == log.record_id
-            )
+            checklist_query = select(ReviewChecklistDB.review_id).where(ReviewChecklistDB.checklist_id == log.record_id)
             checklist_result = await db.exec(checklist_query)
             review_id_result = checklist_result.first()
 
             if review_id_result:
-                review_query = select(MaterialReviewDB.material_number).where(
-                    MaterialReviewDB.review_id == review_id_result
-                )
+                review_query = select(MaterialReviewDB.material_number).where(MaterialReviewDB.review_id == review_id_result)
                 review_result = await db.exec(review_query)
                 mat_number = review_result.first()
             else:
                 mat_number = None
         elif log.table_name == "material_insights":
             # Look up the material_number from the insight
-            insight_query = select(MaterialInsightDB.material_number).where(
-                MaterialInsightDB.insight_id == log.record_id
-            )
+            insight_query = select(MaterialInsightDB.material_number).where(MaterialInsightDB.insight_id == log.record_id)
             insight_result = await db.exec(insight_query)
             mat_number_result = insight_result.first()
             mat_number = mat_number_result if mat_number_result else None
@@ -490,9 +410,7 @@ async def list_material_audit_logs(
         # Get material description
         material_desc = None
         if mat_number:
-            material_query = select(SAPMaterialData.material_desc).where(
-                SAPMaterialData.material_number == mat_number
-            )
+            material_query = select(SAPMaterialData.material_desc).where(SAPMaterialData.material_number == mat_number)
             material_result = await db.exec(material_query)
             material_desc = material_result.first()
 

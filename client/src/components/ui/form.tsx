@@ -183,6 +183,8 @@ type FormInputFieldProps<
   max?: string;
   className?: string;
   disabled?: boolean;
+  /** Show a red asterisk after the label to indicate required field */
+  required?: boolean;
 };
 
 function FormInputField<
@@ -197,6 +199,7 @@ function FormInputField<
   max,
   className,
   disabled,
+  required,
 }: FormInputFieldProps<TFieldValues, TName>) {
   const { control } = useFormContext<TFieldValues>();
 
@@ -229,7 +232,12 @@ function FormInputField<
 
         return (
           <FormItem className={className}>
-            {label && <FormLabel>{label}</FormLabel>}
+            {label && (
+              <FormLabel>
+                {label}
+                {required && <span className="text-destructive ml-1">*</span>}
+              </FormLabel>
+            )}
             <FormControl>
               <Input
                 type={type}
@@ -320,6 +328,8 @@ type FormTextareaFieldProps<
   rows?: number;
   className?: string;
   disabled?: boolean;
+  /** Show a red asterisk after the label to indicate required field */
+  required?: boolean;
 };
 
 function FormTextareaField<
@@ -332,6 +342,7 @@ function FormTextareaField<
   rows = 4,
   className,
   disabled,
+  required,
 }: FormTextareaFieldProps<TFieldValues, TName>) {
   const { control } = useFormContext<TFieldValues>();
 
@@ -341,7 +352,12 @@ function FormTextareaField<
       name={name}
       render={({ field }) => (
         <FormItem className={className}>
-          {label && <FormLabel>{label}</FormLabel>}
+          {label && (
+            <FormLabel>
+              {label}
+              {required && <span className="text-destructive ml-1">*</span>}
+            </FormLabel>
+          )}
           <FormControl>
             <Textarea
               placeholder={placeholder}
@@ -366,6 +382,8 @@ type FormToggleGroupFieldProps<
   label: string;
   className?: string;
   disabled?: boolean;
+  /** Show a red asterisk after the label to indicate required field */
+  required?: boolean;
 };
 
 function FormToggleGroupField<
@@ -376,6 +394,7 @@ function FormToggleGroupField<
   label,
   className,
   disabled,
+  required,
 }: FormToggleGroupFieldProps<TFieldValues, TName>) {
   const { control } = useFormContext<TFieldValues>();
 
@@ -388,6 +407,7 @@ function FormToggleGroupField<
           <div className="flex items-center justify-between gap-4">
             <FormLabel className="text-sm font-normal flex-1">
               {label}
+              {required && <span className="text-destructive ml-1">*</span>}
             </FormLabel>
             <FormControl>
               <ToggleGroup
@@ -451,6 +471,8 @@ type FormSelectFieldProps<
   options: SelectOption[];
   className?: string;
   disabled?: boolean;
+  /** Show a red asterisk after the label to indicate required field */
+  required?: boolean;
 };
 
 function FormSelectField<
@@ -463,6 +485,7 @@ function FormSelectField<
   options,
   className,
   disabled,
+  required,
 }: FormSelectFieldProps<TFieldValues, TName>) {
   const { control } = useFormContext<TFieldValues>();
 
@@ -472,7 +495,12 @@ function FormSelectField<
       name={name}
       render={({ field }) => (
         <FormItem className={className}>
-          {label && <FormLabel>{label}</FormLabel>}
+          {label && (
+            <FormLabel>
+              {label}
+              {required && <span className="text-destructive ml-1">*</span>}
+            </FormLabel>
+          )}
           <Select
             onValueChange={field.onChange}
             value={field.value as string}
@@ -520,6 +548,8 @@ type FormGroupedSelectFieldProps<
   groups: GroupedSelectGroup[];
   className?: string;
   disabled?: boolean;
+  /** Show a red asterisk after the label to indicate required field */
+  required?: boolean;
 };
 
 function FormGroupedSelectField<
@@ -532,6 +562,7 @@ function FormGroupedSelectField<
   groups,
   className,
   disabled,
+  required,
 }: FormGroupedSelectFieldProps<TFieldValues, TName>) {
   const { control } = useFormContext<TFieldValues>();
 
@@ -541,7 +572,12 @@ function FormGroupedSelectField<
       name={name}
       render={({ field }) => (
         <FormItem className={className}>
-          {label && <FormLabel>{label}</FormLabel>}
+          {label && (
+            <FormLabel>
+              {label}
+              {required && <span className="text-destructive ml-1">*</span>}
+            </FormLabel>
+          )}
           <Select
             onValueChange={field.onChange}
             value={field.value as string}

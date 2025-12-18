@@ -64,7 +64,11 @@ htmlcov/
 
 # Client
 !client/src/lib
+*.tsbuildinfo
 
 
 # Claude
 CLAUDE.local.md
+
+# Database
+seed_*.sql
