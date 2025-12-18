@@ -82,10 +82,18 @@ export type ReviewAssignmentResponse =
 export type UserWithPermission = components["schemas"]["UserWithPermission"];
 export type MyAssignmentResponse =
   components["schemas"]["MyAssignmentResponse"];
+export type MyInitiatedReviewResponse =
+  components["schemas"]["MyInitiatedReviewResponse"];
 
 export interface MyAssignmentsQueryParams {
   status?: string;
   assignment_type?: string;
+  skip?: number;
+  limit?: number;
+}
+
+export interface MyInitiatedReviewsQueryParams {
+  status?: string;
   skip?: number;
   limit?: number;
 }
@@ -321,6 +329,22 @@ export class ApiClient {
     const queryString = queryParams.toString();
     return this.get<MyAssignmentResponse[]>(
       `/my-assignments${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async getMyInitiatedReviews(
+    params?: MyInitiatedReviewsQueryParams
+  ): Promise<MyInitiatedReviewResponse[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.skip !== undefined)
+      queryParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+
+    const queryString = queryParams.toString();
+    return this.get<MyInitiatedReviewResponse[]>(
+      `/my-initiated-reviews${queryString ? `?${queryString}` : ""}`
     );
   }
 

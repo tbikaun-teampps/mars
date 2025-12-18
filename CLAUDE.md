@@ -190,6 +190,24 @@ Record significant architectural or implementation decisions here with rationale
 
 **Consequences**: What trade-offs or follow-up work does this create?
 
+### 2025-12-17: Step-based field locking (immutability after workflow progression)
+
+**Context**: After a review progresses past certain phases, earlier fields should be locked to preserve data integrity and audit trail clarity.
+
+**Decision**: Implemented status-based field locking that enforces immutability:
+- Draft/Pending Assignment: Steps 0-2 editable (General Info, Checklist, Assignment)
+- Pending SME: Only Step 3 editable (SME Investigation) - earlier steps locked
+- Pending Decision: Steps 4-5 editable (Follow-up, Final Decision) - earlier steps locked
+- Terminal states: All steps locked
+
+**Rationale**: Once an SME reviews based on specific initial data, changing that data would invalidate their analysis. This creates a clear audit trail and enforces process discipline. Admins must assign themselves as SME/approver to edit those fields (no bypass).
+
+**Consequences**:
+- Backend: `validate_step_locking()` method in ReviewService validates field updates against status
+- Frontend: `getStepLockingForStatus()` utility computes locked steps; UI shows locked message
+- Follow-up fields moved to approver-restricted (editable during Pending Decision only)
+- Admin bypass removed from role-based field restrictions
+
 ### 2025-12-17: Review assignment system with view-only mode
 
 **Context**: Reviews needed a way to formally assign SMEs and Approvers, with enforcement that only assigned users can edit their respective steps.
@@ -212,6 +230,7 @@ Summarise all changes to this document below. Add new entries at the top.
 
 | Date       | Summary                                                                 |
 | ---------- | ----------------------------------------------------------------------- |
+| 2025-12-17 | Added step-based field locking to enforce immutability after progression |
 | 2025-12-17 | Added My Reviews page for viewing assigned reviews                      |
 | 2025-12-17 | Added review assignment system with view-only mode for non-assignees    |
 | 2025-12-16 | Added notification debugging to debug FAB (create test notifications)  |

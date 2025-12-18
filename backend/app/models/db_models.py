@@ -121,13 +121,7 @@ class MaterialReviewDB(SQLModel, table=True):
     # Checklist
     completed_checklist: Optional[bool] = Field(default=False)
 
-    # SME investigation results (Planner enters this after getting feedback)
-    sme_name: Optional[str] = Field(default=None, max_length=100)
-    sme_email: Optional[str] = Field(default=None, max_length=100)
-    sme_department: Optional[str] = Field(default=None, max_length=100)
-    sme_feedback_method: Optional[str] = Field(default=None, max_length=100)
-    sme_contacted_date: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
-    sme_responded_date: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
+    # SME investigation results (SME fills these out when assigned)
     sme_recommendation: Optional[str] = Field(default=None, max_length=50)
     sme_recommended_safety_stock_qty: Optional[float] = None
     sme_recommended_unrestricted_qty: Optional[float] = None
@@ -140,8 +134,6 @@ class MaterialReviewDB(SQLModel, table=True):
     final_safety_stock_qty: Optional[float] = None
     final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
-    decided_by: UUID = Field(sa_column_kwargs={"server_default": text("auth.uid()")})
-    decided_at: Optional[datetime] = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True)))
 
     # Follow-up scheduling
     requires_follow_up: Optional[bool] = None

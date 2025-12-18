@@ -33,9 +33,6 @@ CREATE INDEX idx_sap_material_mat_group ON sap_material_data(mat_group);
 -- material_reviews: Finding reviews a user created
 CREATE INDEX idx_material_reviews_created_by ON material_reviews(created_by);
 
--- material_reviews: Finding reviews a user decided
-CREATE INDEX idx_material_reviews_decided_by ON material_reviews(decided_by);
-
 -- review_attachments: Finding attachments by uploader
 CREATE INDEX idx_review_attachments_uploaded_by ON review_attachments(uploaded_by);
 

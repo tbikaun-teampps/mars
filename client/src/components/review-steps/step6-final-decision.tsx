@@ -14,11 +14,13 @@ import { useReviewAssignments, useCurrentUser } from "@/api/queries";
 interface Step6FinalDecisionProps {
   materialNumber?: number;
   reviewId?: number | null;
+  isStatusLocked?: boolean;
 }
 
 export function Step6FinalDecision({
   materialNumber,
   reviewId,
+  isStatusLocked = false,
 }: Step6FinalDecisionProps) {
   const { watch, setValue } = useFormContext();
   const proposedSafetyStockQty = watch("proposedSafetyStockQty");
@@ -61,7 +63,8 @@ export function Step6FinalDecision({
     };
   }, [currentUser, assignments]);
 
-  const isViewOnly = viewOnlyInfo.isViewOnly;
+  // Combine role-based view-only mode with status-based locking
+  const isViewOnly = viewOnlyInfo.isViewOnly || isStatusLocked;
 
   // Fetch proposed action options for final decision
   const { groups: proposedActionGroups, isLoading: actionsLoading } =
@@ -124,18 +127,20 @@ export function Step6FinalDecision({
 
       <FormGroupedSelectField
         name="finalDecision"
-        label="What is the final decision? *"
+        label="What is the final decision?"
         placeholder="Select final decision"
         groups={proposedActionGroups}
         disabled={actionsLoading || isViewOnly}
+        required
       />
 
       {finalDecision === "other" && (
         <FormInputField
           name="finalDecisionOther"
-          label="Please specify the final decision *"
+          label="Please specify the final decision"
           placeholder="Enter custom final decision"
           disabled={isViewOnly}
+          required
         />
       )}
 

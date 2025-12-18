@@ -43,21 +43,10 @@ export function generateStep2Data(): MaterialReviewUpdate {
 
 /**
  * Generate Step 3 (SME Investigation) data
+ * SME contact info is now captured via the assignment system
  */
 export function generateStep3Data(): MaterialReviewUpdate {
-  const contactedDate = new Date();
-  contactedDate.setDate(contactedDate.getDate() - 7);
-
-  const respondedDate = new Date();
-  respondedDate.setDate(respondedDate.getDate() - 3);
-
   return {
-    sme_name: "Debug Test SME",
-    sme_email: "debug.sme@test.com",
-    sme_department: "Operations",
-    sme_feedback_method: "Email",
-    sme_contacted_date: contactedDate.toISOString().split("T")[0],
-    sme_responded_date: respondedDate.toISOString().split("T")[0],
     sme_recommendation: "Approve disposal - no operational requirement",
     sme_recommended_safety_stock_qty: 0,
     sme_recommended_unrestricted_qty: 0,

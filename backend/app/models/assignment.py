@@ -98,3 +98,15 @@ class MyAssignmentResponse(BaseModel):
     review_status: str
     # Assigned by
     assigned_by_name: Optional[str] = None
+
+
+class MyInitiatedReviewResponse(BaseModel):
+    """Response for reviews initiated by the current user."""
+
+    review_id: int
+    material_number: int
+    material_description: Optional[str] = None
+    status: str  # review status (draft, pending_sme, etc.)
+    proposed_action: Optional[str] = None
+    review_date: datetime
+    created_at: datetime

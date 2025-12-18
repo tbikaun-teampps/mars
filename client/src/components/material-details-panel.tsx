@@ -35,6 +35,8 @@ interface MaterialDetailsPanelProps {
   loading: boolean;
   isError: boolean;
   error: Error | null;
+  /** Compact mode: hides insights, charts, and uses single-column layout */
+  compact?: boolean;
 }
 
 // Insights Panel Component (extracted from material-detail-sheet.tsx)
@@ -305,6 +307,7 @@ export function MaterialDetailsPanel({
   loading,
   isError,
   error,
+  compact = false,
 }: MaterialDetailsPanelProps) {
   // Loading state
   if (loading) {
@@ -414,10 +417,13 @@ export function MaterialDetailsPanel({
     },
   ];
 
+  // Grid class based on compact mode
+  const gridClass = compact ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-4";
+
   return (
     <div className="space-y-6">
-      {/* Insights Panel */}
-      {materialDetails.insights && materialDetails.insights.length > 0 && (
+      {/* Insights Panel - hidden in compact mode */}
+      {!compact && materialDetails.insights && materialDetails.insights.length > 0 && (
         <InsightsPanel
           insights={materialDetails.insights}
           materialNumber={materialDetails.material_number}
@@ -427,7 +433,7 @@ export function MaterialDetailsPanel({
       {/* Basic Information */}
       <div>
         <SectionHeader title="Basic Information" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridClass}>
           {basicInformation.map((info, index) => (
             <MetricItem
               key={index}
@@ -442,7 +448,7 @@ export function MaterialDetailsPanel({
       {/* Inventory Metrics */}
       <div>
         <SectionHeader title="Inventory" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridClass}>
           {inventoryMetrics.map((metric, index) => (
             <MetricItem
               key={index}
@@ -457,7 +463,7 @@ export function MaterialDetailsPanel({
       {/* Consumption Metrics */}
       <div>
         <SectionHeader title="Consumption" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridClass}>
           {consumptionMetrics.map((metric, index) => (
             <MetricItem
               key={index}
@@ -469,60 +475,62 @@ export function MaterialDetailsPanel({
         </div>
       </div>
 
-      {/* 5-Year Consumption Chart */}
-      <div>
-        <SectionHeader title="5-Year Consumption History" />
-        <div className="mx-auto">
-          {materialDetails.consumption_history_5yr &&
-          materialDetails.consumption_history_5yr.length > 0 ? (
-            <ChartContainer
-              config={{
-                quantity: {
-                  label: "Quantity",
-                  color: "hsl(var(--chart-1))",
-                },
-              }}
-              style={{ height: "150px", width: "100%" }}
-            >
-              <AreaChart
-                data={[...materialDetails.consumption_history_5yr]
-                  .sort((a, b) => b.years_ago - a.years_ago)
-                  .map((item) => ({
-                    year: `${item.years_ago}Y ago`,
-                    quantity: item.quantity,
-                  }))}
+      {/* 5-Year Consumption Chart - hidden in compact mode */}
+      {!compact && (
+        <div>
+          <SectionHeader title="5-Year Consumption History" />
+          <div className="mx-auto">
+            {materialDetails.consumption_history_5yr &&
+            materialDetails.consumption_history_5yr.length > 0 ? (
+              <ChartContainer
+                config={{
+                  quantity: {
+                    label: "Quantity",
+                    color: "hsl(var(--chart-1))",
+                  },
+                }}
+                style={{ height: "150px", width: "100%" }}
               >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="year"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  tickFormatter={(value) => value.toLocaleString()}
-                />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area
-                  type="linear"
-                  dataKey="quantity"
-                  stroke="var(--color-quantity)"
-                  fill="var(--color-quantity)"
-                  fillOpacity={0.2}
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ChartContainer>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No consumption history available
-            </p>
-          )}
+                <AreaChart
+                  data={[...materialDetails.consumption_history_5yr]
+                    .sort((a, b) => b.years_ago - a.years_ago)
+                    .map((item) => ({
+                      year: `${item.years_ago}Y ago`,
+                      quantity: item.quantity,
+                    }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="year"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tickFormatter={(value) => value.toLocaleString()}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area
+                    type="linear"
+                    dataKey="quantity"
+                    stroke="var(--color-quantity)"
+                    fill="var(--color-quantity)"
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No consumption history available
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

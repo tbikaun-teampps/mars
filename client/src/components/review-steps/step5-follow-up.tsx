@@ -9,7 +9,11 @@ import {
 import { Stepheader } from "./step-header";
 import { useLookupOptions } from "@/api/queries";
 
-export function Step5FollowUp() {
+interface Step5FollowUpProps {
+  isStatusLocked?: boolean;
+}
+
+export function Step5FollowUp({ isStatusLocked = false }: Step5FollowUpProps) {
   const { watch } = useFormContext();
   const scheduleFollowUp = watch("scheduleFollowUp");
   const scheduleFollowUpReason = watch("scheduleFollowUpReason");
@@ -81,38 +85,43 @@ export function Step5FollowUp() {
       <FormToggleGroupField
         name="scheduleFollowUp"
         label="Will this material require a follow-up review?"
+        disabled={isStatusLocked}
       />
 
       <FormGroupedSelectField
         name="scheduleFollowUpReason"
-        label="What is the reason for the follow-up review? *"
+        label="What is the reason for the follow-up review?"
         placeholder="Select reason for follow-up"
         groups={followUpTriggerGroups}
-        disabled={!scheduleFollowUp || triggerLoading}
+        disabled={!scheduleFollowUp || triggerLoading || isStatusLocked}
+        required
       />
 
       {scheduleFollowUpReason === "other" && (
         <FormInputField
           name="scheduleFollowUpReasonOther"
-          label="Please specify the follow-up reason *"
+          label="Please specify the follow-up reason"
           placeholder="Enter custom follow-up reason"
-          disabled={!scheduleFollowUp}
+          disabled={!scheduleFollowUp || isStatusLocked}
+          required
         />
       )}
 
       <FormInputField
         name="scheduleFollowUpDate"
-        label="When is the follow-up review scheduled? *"
+        label="When is the follow-up review scheduled?"
         type="date"
-        disabled={!scheduleFollowUp}
+        disabled={!scheduleFollowUp || isStatusLocked}
+        required
       />
 
       <FormInputField
         name="scheduleReviewFrequencyWeeks"
-        label="What is the review frequency (in weeks)? *"
+        label="What is the review frequency (in weeks)?"
         type="number"
         placeholder="Enter review frequency in weeks. If left blank, no automatic reviews will be scheduled."
-        disabled={!scheduleFollowUp}
+        disabled={!scheduleFollowUp || isStatusLocked}
+        required
       />
     </div>
   );

@@ -7,13 +7,14 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.rbac import check_user_is_admin, get_user_permissions, require_permission
-from app.api.utils import get_proposed_action_config, is_sme_required
+from app.api.utils import get_proposed_action_config
 from app.core.auth import User, get_current_user
 from app.core.database import get_db
 from app.models.assignment import (
     AssignmentStepPayload,
     AssignmentType,
     MyAssignmentResponse,
+    MyInitiatedReviewResponse,
     ReviewAssignmentResponse,
     UserWithPermission,
 )
@@ -28,6 +29,7 @@ from app.models.db_models import (
     UserRoleDB,
 )
 from app.services.notification_service import NotificationService
+from app.services.workflow import is_sme_required
 
 router = APIRouter()
 
@@ -99,6 +101,69 @@ async def get_my_assignments(
         )
 
     return assignments
+
+
+@router.get("/my-initiated-reviews")
+async def get_my_initiated_reviews(
+    status: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[MyInitiatedReviewResponse]:
+    """Get reviews initiated by the current user.
+
+    Used for the "My Reviews" page to show users reviews they created.
+    """
+    from uuid import UUID as UUIDType
+
+    user_uuid = UUIDType(current_user.id)
+
+    # Build query with join to get material details
+    query = (
+        select(
+            MaterialReviewDB.review_id,
+            MaterialReviewDB.status,
+            MaterialReviewDB.proposed_action,
+            MaterialReviewDB.review_date,
+            MaterialReviewDB.created_at,
+            SAPMaterialData.material_number,
+            SAPMaterialData.material_desc,
+        )
+        .join(SAPMaterialData, MaterialReviewDB.material_number == SAPMaterialData.material_number)
+        .where(MaterialReviewDB.initiated_by == user_uuid)
+    )
+
+    # Apply status filter
+    if status:
+        query = query.where(MaterialReviewDB.status == status)
+
+    # Order by created_at descending (most recent first)
+    query = query.order_by(MaterialReviewDB.created_at.desc())
+
+    # Apply pagination
+    query = query.offset(skip).limit(limit)
+
+    result = await db.exec(query)
+    rows = result.all()
+
+    # Transform to response format
+    reviews = []
+    for row in rows:
+        review_id, review_status, proposed_action, review_date, created_at, material_number, material_desc = row
+        reviews.append(
+            MyInitiatedReviewResponse(
+                review_id=review_id,
+                material_number=material_number,
+                material_description=material_desc,
+                status=review_status,
+                proposed_action=proposed_action,
+                review_date=review_date,
+                created_at=created_at,
+            )
+        )
+
+    return reviews
 
 
 @router.get("/materials/{material_number}/reviews/{review_id}/assignments")

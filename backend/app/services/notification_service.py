@@ -10,6 +10,7 @@ from app.models.db_models import (
     MaterialReviewDB,
     NotificationDB,
     ProfileDB,
+    ReviewAssignmentDB,
     ReviewCommentDB,
 )
 from app.models.notification import NotificationPreferences, NotificationType
@@ -163,9 +164,14 @@ class NotificationService:
         if review.initiated_by:
             involved.add(review.initiated_by)
 
-        # Add decider (if exists and different from initiator)
-        if review.decided_by:
-            involved.add(review.decided_by)
+        # Add assigned SME and approver
+        assignments_query = select(ReviewAssignmentDB.user_id).where(
+            ReviewAssignmentDB.review_id == review.review_id,
+            ReviewAssignmentDB.status.notin_(["declined", "reassigned"]),
+        )
+        assignments_result = await self.db.exec(assignments_query)
+        for user_id in assignments_result.all():
+            involved.add(user_id)
 
         # Add commenters
         comments_query = select(ReviewCommentDB.user_id).where(ReviewCommentDB.review_id == review.review_id).distinct()

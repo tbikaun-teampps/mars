@@ -426,15 +426,19 @@ function ReviewHistoryTimeline({
                           {review.initiated_by_user?.full_name ?? "Unknown"}
                         </span>
                       </span>
-                      <span className="text-muted-foreground">•</span>
-                      <span>
-                        <span className="text-muted-foreground">
-                          Decided by:
-                        </span>{" "}
-                        <span className="font-medium capitalize">
-                          {review.decided_by_user?.full_name ?? "—"}
-                        </span>
-                      </span>
+                      {review.final_decision != null && (
+                        <>
+                          <span className="text-muted-foreground">•</span>
+                          <span>
+                            <span className="text-muted-foreground">
+                              Approved by:
+                            </span>{" "}
+                            <span className="font-medium capitalize">
+                              {review.assigned_approver_name ?? "—"}
+                            </span>
+                          </span>
+                        </>
+                      )}
                       {review.comments_count != null &&
                         review.comments_count > 0 && (
                           <>
@@ -509,12 +513,17 @@ function ReviewHistoryTimeline({
                     <div className="flex justify-end items-center pt-1">
                       <div className="flex gap-3">
                         {review.is_read_only ? (
-                          <span
-                            className="text-xs text-primary hover:underline cursor-pointer"
-                            onClick={() => handleEditReview(review)}
+                          <RequirePermission
+                            permission="can_view_all_reviews"
+                            fallback="hide"
                           >
-                            Show Details
-                          </span>
+                            <span
+                              className="text-xs text-primary hover:underline cursor-pointer"
+                              onClick={() => handleEditReview(review)}
+                            >
+                              Show Details
+                            </span>
+                          </RequirePermission>
                         ) : (
                           <RequirePermission
                             permission="can_edit_reviews"
@@ -733,7 +742,8 @@ function MaterialDetailsContent({
   const hasActiveReview =
     materialDetails?.reviews?.some(
       (review) =>
-        review.status && !["cancelled", "approved", "rejected"].includes(review.status)
+        review.status &&
+        !["cancelled", "approved", "rejected"].includes(review.status)
     ) ?? false;
 
   return (

@@ -215,6 +215,19 @@ async def check_user_is_admin(
     return False
 
 
+async def has_permission(
+    user_id: str,
+    db: AsyncSession,
+    permission: str,
+) -> bool:
+    """
+    Check if user has a specific permission. Returns boolean.
+    Note: Does NOT check admin status - use check_user_is_admin separately if needed.
+    """
+    permissions = await get_user_permissions(user_id, db)
+    return permission in permissions
+
+
 async def require_permission(
     user_id: str,
     db: AsyncSession,

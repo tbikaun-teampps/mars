@@ -1,6 +1,7 @@
 """Material reviews endpoints."""
 
-from datetime import date, datetime
+from datetime import datetime
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -8,24 +9,21 @@ from fastapi import (
     HTTPException,
     status,
 )
-from sqlmodel import func, select
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.rbac import check_user_is_admin, require_permission
-from app.api.utils import calculate_workflow_state, determine_status_after_step
+from app.api.rbac import check_user_is_admin, has_permission, require_permission
 from app.core.auth import User, get_current_user
 from app.core.database import get_db
-from app.models.db_models import MaterialReviewDB, ProfileDB, ReviewAssignmentDB, ReviewChecklistDB, ReviewCommentDB, SAPMaterialData
+from app.models.db_models import MaterialReviewDB, ReviewAssignmentDB, SAPMaterialData
 from app.models.review import (
     MaterialReview,
     MaterialReviewCreate,
     MaterialReviewUpdate,
-    ReviewChecklist,
     ReviewStatus,
     ReviewStepEnum,
 )
-from app.models.user import UserProfile
-from app.services.notification_service import NotificationService
+from app.services.review_service import ReviewService
 
 router = APIRouter()
 
@@ -71,6 +69,64 @@ async def validate_assignee(
         )
 
 
+async def check_review_access(
+    user_id: str,
+    review: MaterialReviewDB,
+    db: AsyncSession,
+) -> str:
+    """Check if user can access review and return their role.
+
+    Access is granted to:
+    - Admins (role: 'admin')
+    - Users with 'can_view_all_reviews' permission (role: 'viewer')
+    - The review initiator (role: 'initiator')
+    - Assigned SME (role: 'sme')
+    - Assigned approver (role: 'approver')
+
+    Args:
+        user_id: Current user's ID
+        review: The review being accessed
+        db: Database session
+
+    Returns:
+        The user's role string
+
+    Raises:
+        HTTPException 403 if user is not authorized to access this review
+    """
+    user_uuid = UUID(user_id)
+
+    # Check if admin first
+    if await check_user_is_admin(user_id, db):
+        return "admin"
+
+    # Check can_view_all_reviews permission
+    if await has_permission(user_id, db, "can_view_all_reviews"):
+        return "viewer"
+
+    # Check if user is the initiator
+    if review.initiated_by == user_uuid:
+        return "initiator"
+
+    # Check if user is assigned as SME or approver
+    query = select(ReviewAssignmentDB).where(
+        ReviewAssignmentDB.review_id == review.review_id,
+        ReviewAssignmentDB.user_id == user_uuid,
+        ReviewAssignmentDB.status.notin_(["declined", "reassigned"]),
+    )
+    result = await db.exec(query)
+    assignment = result.first()
+
+    if assignment:
+        return assignment.assignment_type  # 'sme' or 'approver'
+
+    # User is not authorized
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You don't have access to this review",
+    )
+
+
 @router.get("/materials/{material_number}/reviews/{review_id}", status_code=status.HTTP_200_OK)
 async def get_review(
     material_number: int,
@@ -105,147 +161,12 @@ async def get_review(
             detail=f"Review {review_id} not found for material {material_number}",
         )
 
-    # Fetch checklist data if it exists
-    checklist_query = select(ReviewChecklistDB).where(ReviewChecklistDB.review_id == review_id)
-    checklist_result = await db.exec(checklist_query)
-    checklist_db = checklist_result.first()
+    # Check access and get user's role
+    user_role = await check_review_access(current_user.id, review_db, db)
 
-    checklist = None
-    if checklist_db:
-        checklist = ReviewChecklist(
-            has_open_orders=checklist_db.has_open_orders,
-            has_forecast_demand=checklist_db.has_forecast_demand,
-            checked_alternate_plants=checklist_db.checked_alternate_plants,
-            contacted_procurement=checklist_db.contacted_procurement,
-            reviewed_bom_usage=checklist_db.reviewed_bom_usage,
-            checked_supersession=checklist_db.checked_supersession,
-            checked_historical_usage=checklist_db.checked_historical_usage,
-            open_order_numbers=checklist_db.open_order_numbers,
-            forecast_next_12m=checklist_db.forecast_next_12m,
-            alternate_plant_qty=checklist_db.alternate_plant_qty,
-            procurement_feedback=checklist_db.procurement_feedback,
-        )
-
-    # Fetch initiator profile
-    initiator_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.initiated_by)
-    initiator_profile_result = await db.exec(initiator_profile_query)
-    initiator_profile = initiator_profile_result.first()
-
-    initiated_by_user = None
-    if initiator_profile:
-        initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
-
-    # Fetch decider profile if decided_by is set
-    decided_by_user = None
-    if review_db.decided_by:
-        decider_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.decided_by)
-        decider_profile_result = await db.exec(decider_profile_query)
-        decider_profile = decider_profile_result.first()
-
-        if decider_profile:
-            decided_by_user = UserProfile(id=decider_profile.id, full_name=decider_profile.full_name)
-
-    # Get comment count
-    comments_count_query = select(func.count(ReviewCommentDB.comment_id)).where(
-        ReviewCommentDB.review_id == review_db.review_id
-    )
-    comments_count_result = await db.exec(comments_count_query)
-    comments_count = comments_count_result.one() or 0
-
-    # Check if both SME and approver are assigned
-    assignments_query = select(ReviewAssignmentDB).where(
-        ReviewAssignmentDB.review_id == review_id,
-        ReviewAssignmentDB.status.notin_(["declined", "reassigned"]),
-    )
-    assignments_result = await db.exec(assignments_query)
-    assignments = assignments_result.all()
-    has_sme = any(a.assignment_type == "sme" for a in assignments)
-    has_approver = any(a.assignment_type == "approver" for a in assignments)
-    has_assignments = has_sme and has_approver
-
-    # Get assigned user names
-    assigned_sme_id = None
-    assigned_sme_name = None
-    assigned_approver_id = None
-    assigned_approver_name = None
-    for a in assignments:
-        if a.assignment_type == "sme":
-            assigned_sme_id = a.user_id
-            # Fetch SME name
-            sme_profile_query = select(ProfileDB).where(ProfileDB.id == a.user_id)
-            sme_profile_result = await db.exec(sme_profile_query)
-            sme_profile = sme_profile_result.first()
-            if sme_profile:
-                assigned_sme_name = sme_profile.full_name
-        elif a.assignment_type == "approver":
-            assigned_approver_id = a.user_id
-            # Fetch approver name
-            approver_profile_query = select(ProfileDB).where(ProfileDB.id == a.user_id)
-            approver_profile_result = await db.exec(approver_profile_query)
-            approver_profile = approver_profile_result.first()
-            if approver_profile:
-                assigned_approver_name = approver_profile.full_name
-
-    # Calculate workflow state
-    current_step, sme_required = calculate_workflow_state(review_db, has_assignments)
-
-    return MaterialReview(
-        created_by=review_db.created_by,
-        last_updated_by=review_db.last_updated_by,
-        review_id=review_db.review_id,
-        material_number=review_db.material_number,
-        initiated_by=review_db.initiated_by,
-        initiated_by_user=initiated_by_user,
-        review_date=review_db.review_date,
-        review_reason=review_db.review_reason,
-        current_stock_qty=review_db.current_stock_qty,
-        current_stock_value=review_db.current_stock_value,
-        months_no_movement=review_db.months_no_movement,
-        proposed_action=review_db.proposed_action,
-        proposed_safety_stock_qty=review_db.proposed_safety_stock_qty,
-        proposed_unrestricted_qty=review_db.proposed_unrestricted_qty,
-        business_justification=review_db.business_justification,
-        sme_name=review_db.sme_name,
-        sme_email=review_db.sme_email,
-        sme_department=review_db.sme_department,
-        sme_feedback_method=review_db.sme_feedback_method,
-        sme_contacted_date=review_db.sme_contacted_date,
-        sme_responded_date=review_db.sme_responded_date,
-        sme_recommendation=review_db.sme_recommendation,
-        sme_recommended_safety_stock_qty=review_db.sme_recommended_safety_stock_qty,
-        sme_recommended_unrestricted_qty=review_db.sme_recommended_unrestricted_qty,
-        sme_analysis=review_db.sme_analysis,
-        alternative_applications=review_db.alternative_applications,
-        risk_assessment=review_db.risk_assessment,
-        final_decision=review_db.final_decision,
-        final_safety_stock_qty=review_db.final_safety_stock_qty,
-        final_unrestricted_qty=review_db.final_unrestricted_qty,
-        final_notes=review_db.final_notes,
-        decided_by=review_db.decided_by,
-        decided_by_user=decided_by_user,
-        decided_at=review_db.decided_at,
-        requires_follow_up=review_db.requires_follow_up,
-        next_review_date=review_db.next_review_date,
-        follow_up_reason=review_db.follow_up_reason,
-        review_frequency_weeks=review_db.review_frequency_weeks,
-        previous_review_id=review_db.previous_review_id,
-        estimated_savings=review_db.estimated_savings,
-        implementation_date=review_db.implementation_date,
-        status=review_db.status,
-        completed_checklist=review_db.completed_checklist,
-        checklist=checklist,
-        created_at=review_db.created_at,
-        updated_at=review_db.updated_at,
-        is_read_only=review_db.status in [ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value],
-        comments_count=comments_count,
-        assigned_sme_id=assigned_sme_id,
-        assigned_sme_name=assigned_sme_name,
-        assigned_approver_id=assigned_approver_id,
-        assigned_approver_name=assigned_approver_name,
-        current_step=current_step,
-        sme_required=sme_required,
-        has_assignments=has_assignments,
-    )
+    # Use ReviewService to build the response with all enrichments
+    review_service = ReviewService(db)
+    return await review_service.build_review_response(review_db, user_role=user_role)
 
 
 @router.post("/materials/{material_number}/review", status_code=status.HTTP_201_CREATED)
@@ -271,141 +192,23 @@ async def create_material_review(
             detail=f"Material {material_number} not found",
         )
 
+    # Use ReviewService for all business logic
+    review_service = ReviewService(db)
+
     # Block a new review if there are any that exist which are not in a terminal state
-    # Terminal states: approved, rejected, cancelled
-    existing_review_query = select(MaterialReviewDB).where(
-        MaterialReviewDB.material_number == material_number,
-        MaterialReviewDB.status.notin_(["approved", "rejected", "cancelled"]),
-    )
-    existing_review_result = await db.exec(existing_review_query)
-    existing_review = existing_review_result.first()
+    await review_service.validate_no_active_review(material_number)
 
-    if existing_review:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "An active review already exists for this material. A new review cannot be created until the existing one is completed or cancelled."
-            ),
-        )
-
-    # Create the review database record
-    review_db = MaterialReviewDB(
-        created_by=current_user.id,
-        last_updated_by=current_user.id,
+    # Create the review
+    review_db = await review_service.create_review(
         material_number=material_number,
-        initiated_by=current_user.id,
-        review_date=date.today(),
-        review_reason=review_data.review_reason,
+        review_data=review_data,
+        user_id=current_user.id,
         current_stock_qty=material_exists.total_quantity,
         current_stock_value=material_exists.total_value,
-        months_no_movement=review_data.months_no_movement,
-        proposed_action=review_data.proposed_action,
-        proposed_safety_stock_qty=review_data.proposed_safety_stock_qty,
-        proposed_unrestricted_qty=review_data.proposed_unrestricted_qty,
-        business_justification=review_data.business_justification,
-        sme_name=review_data.sme_name,
-        sme_email=review_data.sme_email,
-        sme_department=review_data.sme_department,
-        sme_feedback_method=review_data.sme_feedback_method,
-        sme_contacted_date=review_data.sme_contacted_date,
-        sme_responded_date=review_data.sme_responded_date,
-        sme_recommendation=review_data.sme_recommendation,
-        sme_recommended_safety_stock_qty=review_data.sme_recommended_safety_stock_qty,
-        sme_recommended_unrestricted_qty=review_data.sme_recommended_unrestricted_qty,
-        sme_analysis=review_data.sme_analysis,
-        alternative_applications=review_data.alternative_applications,
-        risk_assessment=review_data.risk_assessment,
-        final_decision=review_data.final_decision,
-        final_safety_stock_qty=review_data.final_safety_stock_qty,
-        final_unrestricted_qty=review_data.final_unrestricted_qty,
-        final_notes=review_data.final_notes,
-        requires_follow_up=review_data.requires_follow_up,
-        next_review_date=review_data.next_review_date,
-        follow_up_reason=review_data.follow_up_reason,
-        review_frequency_weeks=review_data.review_frequency_weeks,
-        previous_review_id=review_data.previous_review_id,
-        estimated_savings=review_data.estimated_savings,
-        implementation_date=review_data.implementation_date,
-        status="draft",
     )
 
-    # Save to database
-    try:
-        db.add(review_db)
-        await db.commit()
-        await db.refresh(review_db)
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save review: {str(e)}",
-        )
-
-    # Fetch initiator profile
-    initiator_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.initiated_by)
-    initiator_profile_result = await db.exec(initiator_profile_query)
-    initiator_profile = initiator_profile_result.first()
-
-    # Create user profile object if profile exists
-    initiated_by_user = None
-    if initiator_profile:
-        initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
-
-    # Calculate workflow state (new review has no assignments)
-    current_step, sme_required = calculate_workflow_state(review_db, has_assignments=False)
-
-    return MaterialReview(
-        created_by=review_db.created_by,
-        last_updated_by=review_db.last_updated_by,
-        review_id=review_db.review_id,
-        material_number=review_db.material_number,
-        initiated_by=review_db.initiated_by,
-        initiated_by_user=initiated_by_user,
-        review_date=review_db.review_date,
-        review_reason=review_db.review_reason,
-        current_stock_qty=review_db.current_stock_qty,
-        current_stock_value=review_db.current_stock_value,
-        months_no_movement=review_db.months_no_movement,
-        proposed_action=review_db.proposed_action,
-        proposed_safety_stock_qty=review_db.proposed_safety_stock_qty,
-        proposed_unrestricted_qty=review_db.proposed_unrestricted_qty,
-        business_justification=review_db.business_justification,
-        sme_name=review_db.sme_name,
-        sme_email=review_db.sme_email,
-        sme_department=review_db.sme_department,
-        sme_feedback_method=review_db.sme_feedback_method,
-        sme_contacted_date=review_db.sme_contacted_date,
-        sme_responded_date=review_db.sme_responded_date,
-        sme_recommendation=review_db.sme_recommendation,
-        sme_recommended_safety_stock_qty=review_db.sme_recommended_safety_stock_qty,
-        sme_recommended_unrestricted_qty=review_db.sme_recommended_unrestricted_qty,
-        sme_analysis=review_db.sme_analysis,
-        alternative_applications=review_db.alternative_applications,
-        risk_assessment=review_db.risk_assessment,
-        final_decision=review_db.final_decision,
-        final_safety_stock_qty=review_db.final_safety_stock_qty,
-        final_unrestricted_qty=review_db.final_unrestricted_qty,
-        final_notes=review_db.final_notes,
-        decided_by=review_db.decided_by,
-        decided_by_user=None,  # New review, no decider yet
-        decided_at=review_db.decided_at,
-        requires_follow_up=review_db.requires_follow_up,
-        next_review_date=review_db.next_review_date,
-        follow_up_reason=review_db.follow_up_reason,
-        review_frequency_weeks=review_db.review_frequency_weeks,
-        previous_review_id=review_db.previous_review_id,
-        estimated_savings=review_db.estimated_savings,
-        implementation_date=review_db.implementation_date,
-        status=review_db.status,
-        completed_checklist=review_db.completed_checklist,
-        created_at=review_db.created_at,
-        updated_at=review_db.updated_at,
-        comments_count=0,  # New review has no comments yet
-        # Workflow state fields
-        current_step=current_step,
-        sme_required=sme_required,
-        has_assignments=False,  # New review has no assignments
-    )
+    # Build the response with all enrichments
+    return await review_service.build_review_response(review_db)
 
 
 @router.put("/materials/{material_number}/review/{review_id}", status_code=status.HTTP_200_OK)
@@ -457,267 +260,25 @@ async def update_material_review(
             detail=f"Review {review_id} not found for material {material_number}",
         )
 
-    # Block edits if status is in a terminal state (approved, rejected, cancelled)
-    if review_db.status in ["approved", "rejected", "cancelled"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Cannot edit review with status '{review_db.status}'. Review is locked.",
-        )
+    # Use ReviewService for all business logic
+    review_service = ReviewService(db)
 
-    # Get update data
+    # Block edits if status is in a terminal state (approved, rejected, cancelled)
+    review_service.validate_can_edit(review_db)
+
+    # Get update data and delegate to service
     update_data = review_data.model_dump(exclude_unset=True)
 
-    # Step 2 Special Handling: Save checklist data to review_checklist table
-    if step == ReviewStepEnum.CHECKLIST:
-        from app.models.db_models import ReviewChecklistDB
-
-        print(f"update_data: {update_data}")
-
-        # Extract checklist fields from update_data
-        checklist_fields = [
-            "has_open_orders",
-            "has_forecast_demand",
-            "checked_alternate_plants",
-            "contacted_procurement",
-            "reviewed_bom_usage",
-            "checked_supersession",
-            "checked_historical_usage",
-            "open_order_numbers",
-            "forecast_next_12m",
-            "alternate_plant_qty",
-            "procurement_feedback",
-        ]
-
-        checklist_data = {k: v for k, v in update_data.items() if k in checklist_fields}
-
-        # Validate that all required boolean fields are present
-        required_checks = [
-            "has_open_orders",
-            "has_forecast_demand",
-            "checked_alternate_plants",
-            "contacted_procurement",
-            "reviewed_bom_usage",
-            "checked_supersession",
-            "checked_historical_usage",
-        ]
-        missing_fields = [f for f in required_checks if f not in checklist_data]
-        if missing_fields:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Checklist step requires all boolean fields: {missing_fields}. You provided: {list(checklist_data.keys())}",
-            )
-
-        # Upsert checklist data
-        checklist_query = select(ReviewChecklistDB).where(ReviewChecklistDB.review_id == review_id)
-        checklist_result = await db.exec(checklist_query)
-        existing_checklist = checklist_result.first()
-
-        if existing_checklist:
-            # Update existing checklist
-            for field, value in checklist_data.items():
-                setattr(existing_checklist, field, value)
-            existing_checklist.last_updated_by = current_user.id
-            existing_checklist.updated_at = datetime.now()
-            db.add(existing_checklist)
-        else:
-            # Create new checklist
-            new_checklist = ReviewChecklistDB(review_id=review_id, **checklist_data, created_by=current_user.id, last_updated_by=current_user.id)
-            db.add(new_checklist)
-
-        # Mark checklist as completed on the review
-        review_db.completed_checklist = True
-
-        # Remove checklist fields from update_data so they don't get applied to review
-        for field in checklist_fields:
-            update_data.pop(field, None)
-
-    # Update review fields (partial update - only fields provided)
-    for field, value in update_data.items():
-        if hasattr(review_db, field):
-            setattr(review_db, field, value)
-
-    # Auto-clear follow-up fields when requires_follow_up is set to false
-    if "requires_follow_up" in update_data and update_data["requires_follow_up"] is False:
-        review_db.next_review_date = None
-        review_db.follow_up_reason = None
-        review_db.review_frequency_weeks = None
-
-    # Capture old status before update for notification purposes
-    old_status = review_db.status
-
-    # Determine and update status based on step completion
-    new_status = determine_status_after_step(step, review_db, update_data)
-    review_db.status = new_status
-
-    # Auto-set decided_by and decided_at when status becomes a terminal decision state
-    if new_status in (ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value) and not review_db.decided_at:
-        review_db.decided_at = datetime.now()
-        if not review_db.decided_by:
-            review_db.decided_by = current_user.id
-
-    # Update last_updated_by and updated_at
-    review_db.last_updated_by = current_user.id
-    review_db.updated_at = datetime.now()
-
-    # Save to database
-    try:
-        db.add(review_db)
-        await db.commit()
-        await db.refresh(review_db)
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update review: {str(e)}",
-        )
-
-    # Send notification if status changed
-    if old_status != new_status:
-        from uuid import UUID
-
-        notification_service = NotificationService(db)
-        await notification_service.notify_status_change(
-            review=review_db,
-            old_status=old_status,
-            new_status=new_status,
-            changed_by=UUID(current_user.id),
-        )
-
-    # Query checklist data if it exists
-    from app.models.db_models import ReviewChecklistDB
-
-    checklist_query = select(ReviewChecklistDB).where(ReviewChecklistDB.review_id == review_id)
-    checklist_result = await db.exec(checklist_query)
-    checklist_db = checklist_result.first()
-
-    # Create ReviewChecklist object if data exists
-    checklist = None
-    if checklist_db:
-        checklist = ReviewChecklist(
-            has_open_orders=checklist_db.has_open_orders,
-            has_forecast_demand=checklist_db.has_forecast_demand,
-            checked_alternate_plants=checklist_db.checked_alternate_plants,
-            contacted_procurement=checklist_db.contacted_procurement,
-            reviewed_bom_usage=checklist_db.reviewed_bom_usage,
-            checked_supersession=checklist_db.checked_supersession,
-            checked_historical_usage=checklist_db.checked_historical_usage,
-            open_order_numbers=checklist_db.open_order_numbers,
-            forecast_next_12m=checklist_db.forecast_next_12m,
-            alternate_plant_qty=checklist_db.alternate_plant_qty,
-            procurement_feedback=checklist_db.procurement_feedback,
-        )
-
-    # Fetch initiator and decider profiles
-    initiator_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.initiated_by)
-    initiator_profile_result = await db.exec(initiator_profile_query)
-    initiator_profile = initiator_profile_result.first()
-
-    # Create initiator user profile object if profile exists
-    initiated_by_user = None
-    if initiator_profile:
-        initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
-
-    # Fetch decider profile if decided_by is set
-    decided_by_user = None
-    if review_db.decided_by:
-        decider_profile_query = select(ProfileDB).where(ProfileDB.id == review_db.decided_by)
-        decider_profile_result = await db.exec(decider_profile_query)
-        decider_profile = decider_profile_result.first()
-
-        if decider_profile:
-            decided_by_user = UserProfile(id=decider_profile.id, full_name=decider_profile.full_name)
-
-    # Get comment count for this review
-    comments_count_query = select(func.count(ReviewCommentDB.comment_id)).where(ReviewCommentDB.review_id == review_db.review_id)
-    comments_count_result = await db.exec(comments_count_query)
-    comments_count = comments_count_result.one() or 0
-
-    # Check if both SME and approver are assigned (for workflow state)
-    assignments_query = select(ReviewAssignmentDB).where(
-        ReviewAssignmentDB.review_id == review_id,
-        ReviewAssignmentDB.status.notin_(["declined", "reassigned"]),
+    # Update the review using the service
+    review_db = await review_service.update_review_step(
+        review_db=review_db,
+        step=step.value,
+        update_data=update_data,
+        user_id=current_user.id,
     )
-    assignments_result = await db.exec(assignments_query)
-    assignments = assignments_result.all()
-    has_sme = any(a.assignment_type == "sme" for a in assignments)
-    has_approver = any(a.assignment_type == "approver" for a in assignments)
-    has_assignments = has_sme and has_approver
 
-    # Calculate workflow state
-    current_step, sme_required = calculate_workflow_state(review_db, has_assignments)
-
-    # If the review is marked as approved, ensure all OTHER approved reviews are marked as superseded
-    if review_db.status == ReviewStatus.APPROVED.value:
-        print("Marking other reviews as superseded")
-        approved_reviews_query = select(MaterialReviewDB).where(
-            MaterialReviewDB.material_number == material_number,
-            MaterialReviewDB.review_id != review_db.review_id,  # Exclude current review
-            MaterialReviewDB.status == "approved",
-            MaterialReviewDB.is_superseded.is_(False),
-        )
-        approved_reviews_result = await db.exec(approved_reviews_query)
-        approved_reviews = approved_reviews_result.all()
-
-        for review in approved_reviews:
-            review.is_superseded = True
-            db.add(review)
-        await db.commit()
-
-    # Return as MaterialReview response model
-    return MaterialReview(
-        created_by=review_db.created_by,
-        last_updated_by=review_db.last_updated_by,
-        review_id=review_db.review_id,
-        material_number=review_db.material_number,
-        initiated_by=review_db.initiated_by,
-        initiated_by_user=initiated_by_user,
-        review_date=review_db.review_date,
-        review_reason=review_db.review_reason,
-        current_stock_qty=review_db.current_stock_qty,
-        current_stock_value=review_db.current_stock_value,
-        months_no_movement=review_db.months_no_movement,
-        proposed_action=review_db.proposed_action,
-        proposed_safety_stock_qty=review_db.proposed_safety_stock_qty,
-        proposed_unrestricted_qty=review_db.proposed_unrestricted_qty,
-        business_justification=review_db.business_justification,
-        sme_name=review_db.sme_name,
-        sme_email=review_db.sme_email,
-        sme_department=review_db.sme_department,
-        sme_feedback_method=review_db.sme_feedback_method,
-        sme_contacted_date=review_db.sme_contacted_date,
-        sme_responded_date=review_db.sme_responded_date,
-        sme_recommendation=review_db.sme_recommendation,
-        sme_recommended_safety_stock_qty=review_db.sme_recommended_safety_stock_qty,
-        sme_recommended_unrestricted_qty=review_db.sme_recommended_unrestricted_qty,
-        sme_analysis=review_db.sme_analysis,
-        alternative_applications=review_db.alternative_applications,
-        risk_assessment=review_db.risk_assessment,
-        final_decision=review_db.final_decision,
-        final_safety_stock_qty=review_db.final_safety_stock_qty,
-        final_unrestricted_qty=review_db.final_unrestricted_qty,
-        final_notes=review_db.final_notes,
-        decided_by=review_db.decided_by,
-        decided_by_user=decided_by_user,
-        decided_at=review_db.decided_at,
-        requires_follow_up=review_db.requires_follow_up,
-        next_review_date=review_db.next_review_date,
-        follow_up_reason=review_db.follow_up_reason,
-        review_frequency_weeks=review_db.review_frequency_weeks,
-        previous_review_id=review_db.previous_review_id,
-        estimated_savings=review_db.estimated_savings,
-        implementation_date=review_db.implementation_date,
-        status=review_db.status,
-        completed_checklist=review_db.completed_checklist,
-        checklist=checklist,
-        created_at=review_db.created_at,
-        updated_at=review_db.updated_at,
-        is_read_only=review_db.status in [ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value],
-        comments_count=comments_count,
-        # Workflow state fields
-        current_step=current_step,
-        sme_required=sme_required,
-        has_assignments=has_assignments,
-    )
+    # Build the response with all enrichments
+    return await review_service.build_review_response(review_db)
 
 
 @router.put(

@@ -41,6 +41,14 @@ class DisposalMethod(str, Enum):
     SCRAP = "scrap"
 
 
+class UserReviewContext(BaseModel):
+    """Context about the current user's role in a review."""
+
+    role: str  # 'initiator', 'sme', 'approver', 'admin', 'viewer'
+    editable_steps: list[str]  # Step names user can edit
+    guidance: Optional[str] = None  # Human-readable guidance text
+
+
 class ReviewChecklist(BaseModel):
     """Review checklist data."""
 
@@ -71,7 +79,7 @@ class ReviewSummary(BaseModel):
     initiated_by_user: Optional[UserProfile] = None
 
     # Workflow state
-    current_step: int = 0
+    current_step: str = "general_info"
 
     # Assignments
     assigned_sme_id: Optional[UUID] = None
@@ -80,8 +88,6 @@ class ReviewSummary(BaseModel):
     assigned_approver_name: Optional[str] = None
 
     # Decision
-    decided_by: Optional[UUID] = None
-    decided_by_user: Optional[UserProfile] = None
     final_decision: Optional[str] = None
     final_safety_stock_qty: Optional[float] = None
     final_unrestricted_qty: Optional[float] = None
@@ -119,12 +125,6 @@ class MaterialReview(BaseModel):
     business_justification: Optional[str] = None
 
     # SME investigation results
-    sme_name: Optional[str] = None
-    sme_email: Optional[str] = None
-    sme_department: Optional[str] = None
-    sme_feedback_method: Optional[str] = None
-    sme_contacted_date: Optional[datetime] = None
-    sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
     sme_recommended_safety_stock_qty: Optional[float] = None
     sme_recommended_unrestricted_qty: Optional[float] = None
@@ -137,9 +137,6 @@ class MaterialReview(BaseModel):
     final_safety_stock_qty: Optional[float] = None
     final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
-    decided_by: Optional[UUID] = None
-    decided_by_user: Optional[UserProfile] = None
-    decided_at: Optional[datetime] = None
 
     # Follow-up scheduling
     requires_follow_up: Optional[bool] = None
@@ -171,56 +168,31 @@ class MaterialReview(BaseModel):
     comments_count: Optional[int] = 0  # Number of comments on this review
 
     # Workflow state (computed by backend, used by frontend for navigation)
-    current_step: int = 0  # 0-5 based on status and saved data
+    current_step: str = "general_info"  # Step name based on status and saved data
     sme_required: bool = False  # True if qty adjustment proposed (non-zero)
     has_assignments: bool = False  # True if SME and approver are assigned
 
+    # User context (populated based on requesting user)
+    user_context: Optional[UserReviewContext] = None
+
 
 class MaterialReviewCreate(BaseModel):
-    """Material review creation model (without material_number, which comes from URL)."""
+    """Material review creation model (without material_number, which comes from URL).
+
+    Only includes fields needed at creation time. SME fields, final decision fields,
+    and follow-up fields are added later in the workflow via updates.
+    """
 
     # Structured form fields (required for creating a review)
     review_reason: Optional[str] = None
-    current_stock_qty: Optional[float] = None
-    current_stock_value: Optional[float] = None
     months_no_movement: Optional[int] = None
     proposed_action: Optional[str] = None
     proposed_safety_stock_qty: Optional[float] = None
     proposed_unrestricted_qty: Optional[float] = None
     business_justification: Optional[str] = None
 
-    # SME investigation results (can be added at creation or later)
-    sme_name: Optional[str] = None
-    sme_email: Optional[str] = None
-    sme_department: Optional[str] = None
-    sme_feedback_method: Optional[str] = None
-    sme_contacted_date: Optional[datetime] = None
-    sme_responded_date: Optional[datetime] = None
-    sme_recommendation: Optional[str] = None
-    sme_recommended_safety_stock_qty: Optional[float] = None
-    sme_recommended_unrestricted_qty: Optional[float] = None
-    sme_analysis: Optional[str] = None
-    alternative_applications: Optional[str] = None
-    risk_assessment: Optional[str] = None
-
-    # Final decision (typically added later in workflow)
-    final_decision: Optional[str] = None
-    final_safety_stock_qty: Optional[float] = None
-    final_unrestricted_qty: Optional[float] = None
-    final_notes: Optional[str] = None
-
-    # Follow-up scheduling
-    requires_follow_up: Optional[bool] = None
-    next_review_date: Optional[date] = None
-    follow_up_reason: Optional[str] = None
-    review_frequency_weeks: Optional[int] = None
-
-    # Link to previous review
+    # Link to previous review (for follow-up reviews)
     previous_review_id: Optional[int] = None
-
-    # Additional tracking
-    estimated_savings: Optional[float] = None
-    implementation_date: Optional[date] = None
 
 
 class MaterialReviewUpdate(BaseModel):
@@ -251,12 +223,6 @@ class MaterialReviewUpdate(BaseModel):
     procurement_feedback: Optional[str] = None
 
     # SME investigation results
-    sme_name: Optional[str] = None
-    sme_email: Optional[str] = None
-    sme_department: Optional[str] = None
-    sme_feedback_method: Optional[str] = None
-    sme_contacted_date: Optional[datetime] = None
-    sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
     sme_recommended_safety_stock_qty: Optional[float] = None
     sme_recommended_unrestricted_qty: Optional[float] = None
@@ -269,7 +235,6 @@ class MaterialReviewUpdate(BaseModel):
     final_safety_stock_qty: Optional[float] = None
     final_unrestricted_qty: Optional[float] = None
     final_notes: Optional[str] = None
-    decided_at: Optional[datetime] = None
 
     # Follow-up scheduling
     requires_follow_up: Optional[bool] = None
@@ -339,14 +304,8 @@ class Step2ChecklistPayload(BaseModel):
 
 
 class Step3SMEPayload(BaseModel):
-    """Step 3: SME Investigation payload."""
+    """Step 3 (now Step 4): SME Investigation payload (SME fills these out when assigned)."""
 
-    sme_name: str = Field(..., min_length=1)
-    sme_email: str = Field(..., min_length=1)
-    sme_department: str = Field(..., min_length=1)
-    sme_feedback_method: str = Field(..., min_length=1)
-    sme_contacted_date: Optional[datetime] = None
-    sme_responded_date: Optional[datetime] = None
     sme_recommendation: Optional[str] = None
     sme_recommended_safety_stock_qty: Optional[float] = None
     sme_recommended_unrestricted_qty: Optional[float] = None

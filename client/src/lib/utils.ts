@@ -6,6 +6,34 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Step name constants - ordered array for UI navigation
+export const STEP_NAMES = [
+  "general_info",
+  "checklist",
+  "assignment",
+  "sme_investigation",
+  "follow_up",
+  "final_decision",
+] as const;
+
+export type StepName = (typeof STEP_NAMES)[number];
+
+// Convert step name to index for UI navigation
+export function stepNameToIndex(stepName: string): number {
+  const index = STEP_NAMES.indexOf(stepName as StepName);
+  return index >= 0 ? index : 0;
+}
+
+// Convert step index to name for API communication
+export function stepIndexToName(index: number): StepName {
+  return STEP_NAMES[index] ?? "general_info";
+}
+
+// Convert array of step names to indices
+export function stepNamesToIndices(stepNames: string[]): number[] {
+  return stepNames.map(stepNameToIndex);
+}
+
 export function getMaterialReviewStatusBadgeColor(
   status: components["schemas"]["MaterialReview"]["status"]
 ) {
@@ -70,4 +98,80 @@ export function getMaterialTypeHexColor(type: string): string {
     default:
       return "#6b7280"; // gray-500
   }
+}
+
+/**
+ * Determines which review steps are locked based on the current review status.
+ *
+ * Step-based locking enforces immutability after workflow progression:
+ * - Draft/Pending Assignment: Steps 0-2 editable (General Info, Checklist, Assignment)
+ * - Pending SME: Only Step 3 editable (SME Investigation)
+ * - Pending Decision: Steps 4-5 editable (Follow-up, Final Decision)
+ * - Terminal states: All steps locked
+ *
+ * @param status - The current review status
+ * @returns Object with isStepLocked function and array of locked step indices
+ */
+export function getStepLockingForStatus(
+  status: string | undefined
+): {
+  isStepLocked: (stepIndex: number) => boolean;
+  lockedSteps: number[];
+  editableSteps: number[];
+} {
+  const terminalStatuses = ["approved", "rejected", "cancelled"];
+
+  // No status means new review - treat as draft (steps 0-2 editable)
+  if (!status) {
+    return {
+      isStepLocked: (step: number) => step > 2,
+      lockedSteps: [3, 4, 5],
+      editableSteps: [0, 1, 2],
+    };
+  }
+
+  // Terminal states: all steps locked
+  if (terminalStatuses.includes(status.toLowerCase())) {
+    return {
+      isStepLocked: () => true,
+      lockedSteps: [0, 1, 2, 3, 4, 5],
+      editableSteps: [],
+    };
+  }
+
+  const normalizedStatus = status.toLowerCase();
+
+  // Draft or Pending Assignment: Steps 0-2 editable
+  if (normalizedStatus === "draft" || normalizedStatus === "pending_assignment") {
+    return {
+      isStepLocked: (step: number) => step > 2,
+      lockedSteps: [3, 4, 5],
+      editableSteps: [0, 1, 2],
+    };
+  }
+
+  // Pending SME: Only Step 3 editable
+  if (normalizedStatus === "pending_sme") {
+    return {
+      isStepLocked: (step: number) => step !== 3,
+      lockedSteps: [0, 1, 2, 4, 5],
+      editableSteps: [3],
+    };
+  }
+
+  // Pending Decision: Steps 4-5 editable
+  if (normalizedStatus === "pending_decision") {
+    return {
+      isStepLocked: (step: number) => step < 4,
+      lockedSteps: [0, 1, 2, 3],
+      editableSteps: [4, 5],
+    };
+  }
+
+  // Default: all editable (shouldn't reach here with valid statuses)
+  return {
+    isStepLocked: () => false,
+    lockedSteps: [],
+    editableSteps: [0, 1, 2, 3, 4, 5],
+  };
 }

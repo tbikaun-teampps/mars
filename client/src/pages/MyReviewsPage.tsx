@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { ClipboardList, FileText, UserCheck, Clock, CheckCircle2 } from "lucide-react";
-import { useMyAssignments } from "@/api/queries";
+import {
+  ClipboardList,
+  FileText,
+  UserCheck,
+  Clock,
+  CheckCircle2,
+  FilePlus2,
+} from "lucide-react";
+import { useMyAssignments, useMyInitiatedReviews } from "@/api/queries";
 import { AppLayout } from "@/components/app-layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -45,11 +52,10 @@ export function MyReviewsPage() {
   };
 
   const { data: assignments, isLoading } = useMyAssignments(queryParams);
+  const { data: initiatedReviews, isLoading: isLoadingInitiated } =
+    useMyInitiatedReviews();
 
-  const breadcrumbs = [
-    { label: "App", href: "/app" },
-    { label: "My Reviews" },
-  ];
+  const breadcrumbs = [{ label: "App", href: "/app" }, { label: "My Reviews" }];
 
   const handleRowClick = (materialNumber: number, reviewId: number) => {
     navigate(`/app/materials/${materialNumber}/review/${reviewId}`);
@@ -59,21 +65,30 @@ export function MyReviewsPage() {
     switch (status) {
       case "pending":
         return (
-          <Badge variant="outline" className="border-yellow-500 text-yellow-700 bg-yellow-50">
+          <Badge
+            variant="outline"
+            className="border-yellow-500 text-yellow-700 bg-yellow-50"
+          >
             <Clock className="h-3 w-3 mr-1" />
             Pending
           </Badge>
         );
       case "accepted":
         return (
-          <Badge variant="outline" className="border-blue-500 text-blue-700 bg-blue-50">
+          <Badge
+            variant="outline"
+            className="border-blue-500 text-blue-700 bg-blue-50"
+          >
             <UserCheck className="h-3 w-3 mr-1" />
             Accepted
           </Badge>
         );
       case "completed":
         return (
-          <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">
+          <Badge
+            variant="outline"
+            className="border-green-500 text-green-700 bg-green-50"
+          >
             <CheckCircle2 className="h-3 w-3 mr-1" />
             Completed
           </Badge>
@@ -86,17 +101,9 @@ export function MyReviewsPage() {
   const getRoleBadge = (assignmentType: string) => {
     switch (assignmentType) {
       case "sme":
-        return (
-          <Badge variant="secondary">
-            SME Review
-          </Badge>
-        );
+        return <Badge variant="secondary">SME Review</Badge>;
       case "approver":
-        return (
-          <Badge variant="default">
-            Approver
-          </Badge>
-        );
+        return <Badge variant="default">Approver</Badge>;
       default:
         return <Badge variant="outline">{assignmentType}</Badge>;
     }
@@ -107,15 +114,50 @@ export function MyReviewsPage() {
       case "draft":
         return <Badge variant="outline">Draft</Badge>;
       case "pending_assignment":
-        return <Badge variant="outline" className="border-orange-500 text-orange-700 bg-orange-50">Pending Assignment</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="border-orange-500 text-orange-700 bg-orange-50"
+          >
+            Pending Assignment
+          </Badge>
+        );
       case "pending_sme":
-        return <Badge variant="outline" className="border-blue-500 text-blue-700 bg-blue-50">Awaiting SME</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="border-blue-500 text-blue-700 bg-blue-50"
+          >
+            Awaiting SME
+          </Badge>
+        );
       case "pending_decision":
-        return <Badge variant="outline" className="border-purple-500 text-purple-700 bg-purple-50">Awaiting Decision</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="border-purple-500 text-purple-700 bg-purple-50"
+          >
+            Awaiting Decision
+          </Badge>
+        );
       case "approved":
-        return <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">Approved</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="border-green-500 text-green-700 bg-green-50"
+          >
+            Approved
+          </Badge>
+        );
       case "rejected":
-        return <Badge variant="outline" className="border-red-500 text-red-700 bg-red-50">Rejected</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="border-red-500 text-red-700 bg-red-50"
+          >
+            Rejected
+          </Badge>
+        );
       case "cancelled":
         return <Badge variant="destructive">Cancelled</Badge>;
       default:
@@ -131,7 +173,7 @@ export function MyReviewsPage() {
           My Reviews
         </h1>
         <p className="text-muted-foreground">
-          Reviews assigned to you for SME review or approval.
+          Reviews assigned to you and reviews you have created.
         </p>
       </div>
 
@@ -179,7 +221,9 @@ export function MyReviewsPage() {
               {/* Status filter */}
               <Select
                 value={statusFilter}
-                onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+                onValueChange={(value) =>
+                  setStatusFilter(value as StatusFilter)
+                }
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Status" />
@@ -205,6 +249,7 @@ export function MyReviewsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Material</TableHead>
+                  <TableHead>Review</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Assignment Status</TableHead>
@@ -227,6 +272,7 @@ export function MyReviewsPage() {
                     <TableCell className="font-medium">
                       {assignment.material_number}
                     </TableCell>
+                    <TableCell>{assignment.review_id}</TableCell>
                     <TableCell className="max-w-[200px] truncate">
                       {assignment.material_description || (
                         <span className="text-muted-foreground italic">
@@ -234,9 +280,13 @@ export function MyReviewsPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell>{getRoleBadge(assignment.assignment_type)}</TableCell>
+                    <TableCell>
+                      {getRoleBadge(assignment.assignment_type)}
+                    </TableCell>
                     <TableCell>{getStatusBadge(assignment.status)}</TableCell>
-                    <TableCell>{getReviewStatusBadge(assignment.review_status)}</TableCell>
+                    <TableCell>
+                      {getReviewStatusBadge(assignment.review_status)}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDistanceToNow(new Date(assignment.assigned_at), {
                         addSuffix: true,
@@ -259,6 +309,87 @@ export function MyReviewsPage() {
                 {roleFilter !== "all" || statusFilter !== "all"
                   ? "Try adjusting your filters to see more results."
                   : "You don't have any reviews assigned to you yet."}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Reviews I Created section */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FilePlus2 className="h-5 w-5" />
+            Reviews I Created
+          </CardTitle>
+          <CardDescription>
+            Reviews you have initiated. Click on a row to open the review.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingInitiated ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : initiatedReviews && initiatedReviews.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Material</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Proposed Action</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {initiatedReviews.map((review) => (
+                  <TableRow
+                    key={review.review_id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() =>
+                      handleRowClick(review.material_number, review.review_id)
+                    }
+                  >
+                    <TableCell className="font-medium">
+                      {review.material_number}
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate">
+                      {review.material_description || (
+                        <span className="text-muted-foreground italic">
+                          No description
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getReviewStatusBadge(review.status)}</TableCell>
+                    <TableCell>
+                      {(review.proposed_action && (
+                        <span className="capitalize">
+                          {review.proposed_action.replace(/_/g, " ")}
+                        </span>
+                      )) || (
+                        <span className="text-muted-foreground italic">
+                          Not set
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDistanceToNow(new Date(review.created_at), {
+                        addSuffix: true,
+                      })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-12">
+              <FilePlus2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium">No reviews created</h3>
+              <p className="text-muted-foreground">
+                You haven't created any reviews yet.
               </p>
             </div>
           )}

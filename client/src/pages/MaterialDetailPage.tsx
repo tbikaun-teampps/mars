@@ -44,7 +44,16 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { RequirePermission } from "@/components/ui/require-permission";
-import { ReviewHistoryCard } from "@/components/review-history-card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { getReviewStatusConfig } from "@/components/review-history-card";
 import {
   useMaterialDetails,
   useCancelReview,
@@ -566,25 +575,22 @@ export function MaterialDetailPage() {
   const hasActiveReview =
     materialDetails.reviews?.some(
       (review) =>
-        review.status && !["cancelled", "approved", "rejected"].includes(review.status)
+        review.status &&
+        !["cancelled", "approved", "rejected"].includes(review.status)
     ) ?? false;
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       {/* Header */}
       <div className="mb-6">
-        <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold">
               {materialDetails.material_desc}
+              <span className="text-muted-foreground font-normal ml-2">
+                (#{materialDetails.material_number})
+              </span>
             </h1>
-            <p className="text-muted-foreground">
-              Material #{materialDetails.material_number}
-            </p>
           </div>
           <RequirePermission permission="can_create_reviews" fallback="disable">
             <Button onClick={handleStartReview} disabled={hasActiveReview}>
@@ -604,7 +610,7 @@ export function MaterialDetailPage() {
       {/* Main content grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left column */}
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           {/* Basic Information */}
           <Card>
             <CardHeader>
@@ -625,7 +631,7 @@ export function MaterialDetailPage() {
           </Card>
 
           {/* Inventory Metrics */}
-          <Card>
+          <Card className="flex-1">
             <CardHeader>
               <CardTitle>Inventory</CardTitle>
             </CardHeader>
@@ -645,7 +651,7 @@ export function MaterialDetailPage() {
         </div>
 
         {/* Right column */}
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           {/* Consumption Metrics */}
           <Card>
             <CardHeader>
@@ -666,7 +672,7 @@ export function MaterialDetailPage() {
           </Card>
 
           {/* 5-Year Consumption Chart */}
-          <Card>
+          <Card className="flex-1">
             <CardHeader>
               <CardTitle>5-Year Consumption History</CardTitle>
             </CardHeader>
@@ -756,18 +762,95 @@ export function MaterialDetailPage() {
           </CardHeader>
           <CardContent>
             {materialDetails.reviews && materialDetails.reviews.length > 0 ? (
-              <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-2">
-                {[...materialDetails.reviews]
-                  .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-                  .map((review) => (
-                    <ReviewHistoryCard
-                      key={review.review_id}
-                      review={review}
-                      materialNumber={materialNumber!}
-                      onView={handleViewReview}
-                      onCancel={handleCancelClick}
-                    />
-                  ))}
+              <div className="max-h-[32rem] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px]">Status</TableHead>
+                      <TableHead className="w-[100px]">Date</TableHead>
+                      <TableHead>Initiated By</TableHead>
+                      <TableHead>SME</TableHead>
+                      <TableHead>Approver</TableHead>
+                      <TableHead>Decision</TableHead>
+                      <TableHead className="w-[140px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...materialDetails.reviews]
+                      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+                      .map((review) => {
+                        const statusConfig = getReviewStatusConfig(review.status);
+                        return (
+                          <TableRow key={review.review_id}>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={cn("text-xs", statusConfig.badge)}
+                              >
+                                {statusConfig.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {formatDate(review.review_date, "MMM d, yyyy")}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {review.initiated_by_user?.full_name ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {review.assigned_sme_name ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {review.assigned_approver_name ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {review.final_decision
+                                ? review.final_decision.replace(/_/g, " ")
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                {review.is_read_only ? (
+                                  <RequirePermission permission="can_view_all_reviews" fallback="hide">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() => handleViewReview(review)}
+                                    >
+                                      View
+                                    </Button>
+                                  </RequirePermission>
+                                ) : (
+                                  <RequirePermission permission="can_edit_reviews" fallback="hide">
+                                    <Button
+                                      variant="default"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() => handleViewReview(review)}
+                                    >
+                                      Continue
+                                    </Button>
+                                  </RequirePermission>
+                                )}
+                                {!review.is_read_only && (
+                                  <RequirePermission permission="can_delete_reviews" fallback="hide">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => handleCancelClick(review)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </RequirePermission>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">

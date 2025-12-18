@@ -1,8 +1,14 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, AlertCircle, ShieldX } from "lucide-react";
+import { Loader2, AlertCircle, ShieldX } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { MaterialDetailsPanel } from "@/components/material-details-panel";
 import { useMaterialDetails, useReviewDetails } from "@/api/queries";
@@ -45,12 +51,13 @@ export function MaterialReviewPage() {
     navigate(`/app/materials/${materialNumber}`);
   };
 
-  const handleClose = () => {
-    navigate(-1); // Go back
-  };
-
   const handleBack = () => {
     navigate(`/app/materials/${materialNumber}`);
+  };
+
+  // Update URL when a new review is created (without full page reload)
+  const handleReviewCreated = (newReviewId: number) => {
+    navigate(`/app/materials/${materialNumber}/review/${newReviewId}`, { replace: true });
   };
 
   // Breadcrumbs for page
@@ -145,52 +152,68 @@ export function MaterialReviewPage() {
     );
   }
 
+  // Extract user context for role guidance (cast needed until types regenerated)
+  type UserReviewContext = {
+    role: string;
+    editable_steps: number[];
+    guidance?: string | null;
+  };
+  const userContext = (existingReview as { user_context?: UserReviewContext } | undefined)?.user_context;
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      {/* Header */}
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-        <div>
-          <h1 className="text-2xl font-semibold">
-            {reviewId ? "Edit Review" : "New Review"}
-          </h1>
-          <p className="text-muted-foreground">
-            {materialDetails?.material_desc} (#{materialNumber})
-          </p>
-        </div>
+      {/* Header - matches MaterialDetailPage style */}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-semibold truncate min-w-0">
+          {reviewId ? "Editing review for " : "Creating new review for "}
+          <span className="truncate">{materialDetails?.material_desc}</span>
+          <span className="text-muted-foreground font-normal ml-2 whitespace-nowrap">
+            (#{materialNumber})
+          </span>
+        </h1>
+        {/* Role guidance badge */}
+        {userContext?.guidance && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="secondary" className="text-sm py-1 px-3 cursor-help">
+                {userContext.role && (
+                  <span className="font-medium capitalize mr-1">{userContext.role}:</span>
+                )}
+                {userContext.guidance}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs max-w-xs">
+                Your assigned role determines which steps you can edit in this review.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* Dual-panel layout */}
-      <div className="flex gap-6 h-[calc(100vh-180px)]">
-        {/* Left panel - Review Form */}
-        <Card className="w-1/2 flex flex-col">
-          <CardHeader className="pb-3">
-            <CardTitle>Review Form</CardTitle>
-          </CardHeader>
+      <div className="flex gap-6">
+        {/* Left panel - Review Form (wider) */}
+        <Card className="w-4/5 flex flex-col">
           <CardContent className="flex-1 overflow-y-auto">
             <MaterialReviewForm
               materialData={materialDetails}
               existingReview={existingReview}
               onSubmit={handleReviewComplete}
-              onClose={handleClose}
+              onReviewCreated={handleReviewCreated}
             />
           </CardContent>
         </Card>
 
-        {/* Right panel - Material Details Reference */}
-        <Card className="w-1/2 flex flex-col">
-          <CardHeader className="pb-3">
-            <CardTitle>Material Reference</CardTitle>
-          </CardHeader>
+        {/* Right panel - Material Details Reference (skinny sidebar) */}
+        <Card className="w-1/5 flex flex-col">
           <CardContent className="flex-1 overflow-y-auto">
             <MaterialDetailsPanel
               materialDetails={materialDetails}
               loading={materialLoading}
               isError={materialError}
               error={materialErrorObj}
+              compact
             />
           </CardContent>
         </Card>

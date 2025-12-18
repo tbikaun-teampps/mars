@@ -29,6 +29,7 @@ import { Step5FollowUp } from "./review-steps/step5-follow-up";
 import { Step6FinalDecision } from "./review-steps/step6-final-decision";
 import { ReviewCommentsDialog } from "./review-comments-dialog";
 import { Badge } from "./ui/badge";
+import { AlertTriangle } from "lucide-react";
 import {
   step1Schema,
   step2Schema,
@@ -41,6 +42,7 @@ import {
   type MaterialReviewFormData,
 } from "@/validators/material-review-flow.validator";
 import { toast } from "sonner";
+import { getStepLockingForStatus, stepNamesToIndices, stepNameToIndex } from "@/lib/utils";
 
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReview = components["schemas"]["MaterialReview"];
@@ -59,7 +61,7 @@ interface MaterialReviewFormProps {
   materialData: MaterialWithReviews | null | undefined;
   existingReview?: MaterialReview | null;
   onSubmit: () => void;
-  onClose: () => void;
+  onReviewCreated?: (reviewId: number) => void;
 }
 
 // Define the steps for the multi-step form
@@ -121,32 +123,12 @@ function extractStep3Payload(
   formData: MaterialReviewFormData
 ): Partial<MaterialReviewUpdate> {
   // If "other" is selected, use the custom value; otherwise use the selected value
-  const smeDepartment =
-    formData.smeDepartment === "other"
-      ? formData.smeDepartmentOther || null
-      : formData.smeDepartment || null;
-
-  const smeFeedbackMethod =
-    formData.smeFeedbackMethod === "other"
-      ? formData.smeFeedbackMethodOther || null
-      : formData.smeFeedbackMethod || null;
-
   const smeRecommendation =
     formData.smeRecommendation === "other"
       ? formData.smeRecommendationOther || null
       : formData.smeRecommendation || null;
 
   return {
-    sme_name: formData.smeName || null,
-    sme_email: formData.smeEmail || null,
-    sme_department: smeDepartment,
-    sme_feedback_method: smeFeedbackMethod,
-    sme_contacted_date: formData.smeContactedDate
-      ? new Date(formData.smeContactedDate).toISOString()
-      : null,
-    sme_responded_date: formData.smeRespondedDate
-      ? new Date(formData.smeRespondedDate).toISOString()
-      : null,
     sme_recommendation: smeRecommendation,
     sme_recommended_safety_stock_qty: formData.smeRecommendedSafetyStockQty ?? null,
     sme_recommended_unrestricted_qty: formData.smeRecommendedUnrestrictedQty ?? null,
@@ -235,8 +217,6 @@ function mapReviewToFormData(
   // Map all lookup fields using the helper
   const reviewReason = mapLookupField(review.review_reason, predefinedOptions.reviewReasons);
   const proposedAction = mapLookupField(review.proposed_action, predefinedOptions.proposedActions);
-  const smeDepartment = mapLookupField(review.sme_department, predefinedOptions.smeTypes);
-  const smeFeedbackMethod = mapLookupField(review.sme_feedback_method, predefinedOptions.feedbackMethods);
   const smeRecommendation = mapLookupField(review.sme_recommendation, predefinedOptions.proposedActions);
   const scheduleFollowUpReason = mapLookupField(review.follow_up_reason, predefinedOptions.followUpTriggers);
   const finalDecision = mapLookupField(review.final_decision, predefinedOptions.proposedActions);
@@ -268,18 +248,6 @@ function mapReviewToFormData(
     alternatePlantQty: review.checklist?.alternate_plant_qty ?? undefined,
     procurementFeedback: review.checklist?.procurement_feedback || "",
     // SME step
-    smeName: review.sme_name || "",
-    smeEmail: review.sme_email || "",
-    smeDepartment: smeDepartment.selected,
-    smeDepartmentOther: smeDepartment.other,
-    smeFeedbackMethod: smeFeedbackMethod.selected,
-    smeFeedbackMethodOther: smeFeedbackMethod.other,
-    smeContactedDate: review.sme_contacted_date
-      ? new Date(review.sme_contacted_date)
-      : undefined,
-    smeRespondedDate: review.sme_responded_date
-      ? new Date(review.sme_responded_date)
-      : undefined,
     smeRecommendation: smeRecommendation.selected,
     smeRecommendationOther: smeRecommendation.other,
     smeRecommendedSafetyStockQty: review.sme_recommended_safety_stock_qty ?? undefined,
@@ -309,7 +277,7 @@ function MaterialReviewFormInner({
   materialData,
   existingReview,
   onSubmit,
-  onClose,
+  onReviewCreated,
 }: MaterialReviewFormProps) {
   const queryClient = useQueryClient();
   const {
@@ -361,6 +329,29 @@ function MaterialReviewFormInner({
     }
     return { blocked: false, message: "" };
   }, [currentStep, canProvideSmeReview, canApproveReviews]);
+
+  // Get user context from review
+  const userContext = existingReview?.user_context;
+
+  // Compute step locking using server-provided user_context (preferred) or fallback to status-based
+  // The server now provides editable_steps (as step names) based on user's role AND review status
+  const stepLocking = React.useMemo(() => {
+    // If server provides editable_steps, convert names to indices for UI logic
+    if (userContext?.editable_steps) {
+      const editableIndices = stepNamesToIndices(userContext.editable_steps);
+      const editableSet = new Set(editableIndices);
+      return {
+        isStepLocked: (step: number) => !editableSet.has(step),
+        lockedSteps: [0, 1, 2, 3, 4, 5].filter((s) => !editableSet.has(s)),
+        editableSteps: editableIndices,
+      };
+    }
+
+    // Fallback to client-side status-based locking (for backward compatibility)
+    return getStepLockingForStatus(existingReview?.status);
+  }, [userContext, existingReview?.status]);
+
+  const isCurrentStepStatusLocked = stepLocking.isStepLocked(currentStep);
 
   // Track the review_id after creation
   const [reviewId, setReviewId] = React.useState<number | null>(
@@ -439,14 +430,6 @@ function MaterialReviewFormInner({
       alternatePlantQty: undefined,
       procurementFeedback: "",
       // SME step
-      smeName: "",
-      smeEmail: "",
-      smeDepartment: "",
-      smeDepartmentOther: "",
-      smeFeedbackMethod: "",
-      smeFeedbackMethodOther: "",
-      smeContactedDate: undefined,
-      smeRespondedDate: undefined,
       smeRecommendation: "",
       smeRecommendationOther: "",
       smeRecommendedSafetyStockQty: undefined,
@@ -561,6 +544,8 @@ function MaterialReviewFormInner({
         // Store the review_id for subsequent updates
         if (result.review_id) {
           setReviewId(result.review_id);
+          // Notify parent that review was created (for URL update)
+          onReviewCreated?.(result.review_id);
         }
         return result;
       }
@@ -767,34 +752,13 @@ function MaterialReviewFormInner({
 
   return (
     <div className="space-y-6">
-      <StepProgressIndicator />
+      <StepProgressIndicator lockedSteps={stepLocking.lockedSteps} />
 
-      {!canSaveCurrentStep && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-yellow-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">
-                Complete previous steps to save this section
-              </h3>
-              <p className="text-sm text-yellow-700 mt-1">
-                You can view this step, but you must complete and save all
-                previous steps before you can save changes here.
-              </p>
-            </div>
-          </div>
+      {/* Only show prereq warning if user CAN edit this step but hasn't completed prerequisites */}
+      {!canSaveCurrentStep && !isCurrentStepStatusLocked && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md px-3 py-2 flex items-center gap-2 text-sm text-yellow-800">
+          <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+          You must complete the previous step{currentStep > 1 ? "s" : ""} before you can save this one
         </div>
       )}
 
@@ -802,12 +766,12 @@ function MaterialReviewFormInner({
         <form className="space-y-6">
           {/* Step 1: General Information */}
           <StepContent step={0}>
-            <Step1GeneralInfo />
+            <Step1GeneralInfo isStatusLocked={stepLocking.isStepLocked(0)} />
           </StepContent>
 
           {/* Step 2: Checklist */}
           <StepContent step={1}>
-            <Step2Checklist />
+            <Step2Checklist isStatusLocked={stepLocking.isStepLocked(1)} />
           </StepContent>
 
           {/* Step 3: Assignment */}
@@ -815,6 +779,7 @@ function MaterialReviewFormInner({
             <Step3Assignment
               materialNumber={materialData?.material_number}
               reviewId={reviewId}
+              isStatusLocked={stepLocking.isStepLocked(2)}
             />
           </StepContent>
 
@@ -823,12 +788,13 @@ function MaterialReviewFormInner({
             <Step4SMEInvestigation
               materialNumber={materialData?.material_number}
               reviewId={reviewId}
+              isStatusLocked={stepLocking.isStepLocked(3)}
             />
           </StepContent>
 
           {/* Step 5: Follow-up Scheduling */}
           <StepContent step={4}>
-            <Step5FollowUp />
+            <Step5FollowUp isStatusLocked={stepLocking.isStepLocked(4)} />
           </StepContent>
 
           {/* Step 6: Final Decision */}
@@ -836,20 +802,12 @@ function MaterialReviewFormInner({
             <Step6FinalDecision
               materialNumber={materialData?.material_number}
               reviewId={reviewId}
+              isStatusLocked={stepLocking.isStepLocked(5)}
             />
           </StepContent>
 
           {/* Navigation Buttons */}
           <div className="flex gap-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-              disabled={saveReviewMutation.isPending}
-            >
-              Close
-            </Button>
             {currentStep > 0 && (
               <Button
                 type="button"
@@ -872,7 +830,7 @@ function MaterialReviewFormInner({
                 Next
               </Button>
             )}
-            {stepPermissionInfo.blocked ? (
+            {stepPermissionInfo.blocked || isCurrentStepStatusLocked ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex-1">
@@ -888,7 +846,11 @@ function MaterialReviewFormInner({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="text-xs">{stepPermissionInfo.message}</p>
+                  <p className="text-xs">
+                    {isCurrentStepStatusLocked
+                      ? "This step is locked after workflow progression."
+                      : stepPermissionInfo.message}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             ) : (
@@ -948,11 +910,11 @@ function MaterialReviewFormInner({
 function deriveCompletedSteps(review: MaterialReview | null | undefined): number[] {
   if (!review) return [];
 
-  // If backend provides current_step, derive completed steps from it
+  // If backend provides current_step (step name), convert to index
   // All steps before current_step are considered complete
-  const currentStep = review.current_step ?? 0;
+  const currentStepIndex = stepNameToIndex(review.current_step ?? "general_info");
   const completed: number[] = [];
-  for (let i = 0; i < currentStep; i++) {
+  for (let i = 0; i < currentStepIndex; i++) {
     completed.push(i);
   }
   return completed;
@@ -961,8 +923,9 @@ function deriveCompletedSteps(review: MaterialReview | null | undefined): number
 // Helper to derive initial step from backend workflow state
 function deriveInitialStep(review: MaterialReview | null | undefined): number {
   if (!review) return 0;
-  // Cap at last step (5) to prevent out-of-bounds
-  return Math.min(review.current_step ?? 0, 5);
+  // Convert step name to index, cap at last step (5) to prevent out-of-bounds
+  const stepIndex = stepNameToIndex(review.current_step ?? "general_info");
+  return Math.min(stepIndex, 5);
 }
 
 // Main export wrapper with MultiStepFormProvider

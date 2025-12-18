@@ -22,6 +22,8 @@ import {
   UserWithPermission,
   MyAssignmentResponse,
   MyAssignmentsQueryParams,
+  MyInitiatedReviewResponse,
+  MyInitiatedReviewsQueryParams,
 } from "./client";
 import {
   queryKeys,
@@ -1110,6 +1112,19 @@ export function useMyAssignments(
   return useQuery({
     queryKey: ["myAssignments", params],
     queryFn: () => apiClient.getMyAssignments(params),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+}
+
+/**
+ * Hook to fetch reviews initiated by the current user (for My Reviews page)
+ */
+export function useMyInitiatedReviews(
+  params?: MyInitiatedReviewsQueryParams
+): UseQueryResult<MyInitiatedReviewResponse[], Error> {
+  return useQuery({
+    queryKey: ["myInitiatedReviews", params],
+    queryFn: () => apiClient.getMyInitiatedReviews(params),
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }

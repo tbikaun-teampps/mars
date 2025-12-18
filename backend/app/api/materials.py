@@ -51,6 +51,7 @@ from app.models.upload import (
     UploadSAPDataResponse,
 )
 from app.models.user import UserProfile
+from app.services.workflow import TERMINAL_STATES, ReviewStateMachine
 
 router = APIRouter()
 
@@ -123,7 +124,7 @@ async def list_materials(
             MaterialReviewDB.material_number,
             sa_func.count(MaterialReviewDB.review_id).label("active_count"),
         )
-        .where(MaterialReviewDB.status.notin_([ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value]))
+        .where(MaterialReviewDB.status.notin_(TERMINAL_STATES))
         .group_by(MaterialReviewDB.material_number)
         .subquery()
     )
@@ -535,26 +536,24 @@ async def get_material(
     if not material_data:
         return None
 
-    # Create aliases for profile joins (one for initiator, one for decider)
+    # Create alias for profile join (for initiator)
     InitiatorProfile = aliased(ProfileDB)
-    DeciderProfile = aliased(ProfileDB)
 
     # Get reviews for this material with comment counts, ordered by review_date descending
     reviews_query = (
-        select(MaterialReviewDB, ReviewChecklistDB, InitiatorProfile, DeciderProfile, func.count(ReviewCommentDB.comment_id).label("comments_count"))
+        select(MaterialReviewDB, ReviewChecklistDB, InitiatorProfile, func.count(ReviewCommentDB.comment_id).label("comments_count"))
         .where(MaterialReviewDB.material_number == material_number)
         .outerjoin(ReviewChecklistDB, MaterialReviewDB.review_id == ReviewChecklistDB.review_id)
         .outerjoin(InitiatorProfile, MaterialReviewDB.initiated_by == InitiatorProfile.id)
-        .outerjoin(DeciderProfile, MaterialReviewDB.decided_by == DeciderProfile.id)
         .outerjoin(ReviewCommentDB, MaterialReviewDB.review_id == ReviewCommentDB.review_id)
-        .group_by(MaterialReviewDB.review_id, ReviewChecklistDB.checklist_id, InitiatorProfile.id, DeciderProfile.id)
+        .group_by(MaterialReviewDB.review_id, ReviewChecklistDB.checklist_id, InitiatorProfile.id)
         .order_by(MaterialReviewDB.review_date.desc())
     )
     reviews_result = await db.exec(reviews_query)
     reviews_data = reviews_result.all()
 
     # Batch query assignments for all reviews (for workflow state and display)
-    review_ids = [r.review_id for r, _, _, _, _ in reviews_data]
+    review_ids = [r.review_id for r, _, _, _ in reviews_data]
     AssigneeProfile = aliased(ProfileDB)
     assignments_map: dict[int, dict] = {}
     if review_ids:
@@ -591,15 +590,11 @@ async def get_material(
     # Transform to response models
     material = transform_db_record_to_material(material_data.model_dump())
     reviews = []
-    for r, checklist_db, initiator_profile, decider_profile, comments_count in reviews_data:
+    for r, checklist_db, initiator_profile, comments_count in reviews_data:
         # Create user profile objects if profile data exists
         initiated_by_user = None
         if initiator_profile:
             initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
-
-        decided_by_user = None
-        if decider_profile:
-            decided_by_user = UserProfile(id=decider_profile.id, full_name=decider_profile.full_name)
 
         # Get assignment info for workflow state and display
         assignment_info = assignments_map.get(r.review_id, {"has_sme": False, "has_approver": False})
@@ -626,14 +621,12 @@ async def get_material(
             assigned_sme_name=assigned_sme_name,
             assigned_approver_id=assigned_approver_id,
             assigned_approver_name=assigned_approver_name,
-            decided_by=r.decided_by,
-            decided_by_user=decided_by_user,
             final_decision=r.final_decision,
             final_safety_stock_qty=r.final_safety_stock_qty,
             final_unrestricted_qty=r.final_unrestricted_qty,
             final_notes=r.final_notes,
             comments_count=comments_count or 0,
-            is_read_only=r.status in [ReviewStatus.APPROVED.value, ReviewStatus.REJECTED.value, ReviewStatus.CANCELLED.value],
+            is_read_only=ReviewStateMachine.is_terminal(r.status),
         )
         reviews.append(review)
 
@@ -642,7 +635,7 @@ async def get_material(
     if reviews_data:
         # Find the first approved review (reviews are ordered by date desc)
         most_recent_approved_review = None
-        for r, _, _, _, _ in reviews_data:
+        for r, _, _, _ in reviews_data:
             if r.status == ReviewStatus.APPROVED.value:
                 most_recent_approved_review = r
                 break
@@ -1431,12 +1424,6 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                             "proposed_safety_stock_qty": None,
                             "proposed_unrestricted_qty": None,
                             "business_justification": "N/A",
-                            "sme_name": "System",
-                            "sme_email": "system@mars.teampps.com",
-                            "sme_department": "System",
-                            "sme_feedback_method": "other",
-                            "sme_contacted_date": record.get("last_reviewed"),
-                            "sme_responded_date": record.get("last_reviewed"),
                             "sme_recommendation": "N/A",
                             "sme_recommended_safety_stock_qty": None,
                             "sme_recommended_unrestricted_qty": None,
@@ -1447,8 +1434,6 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                             "final_safety_stock_qty": None,
                             "final_unrestricted_qty": None,
                             "final_notes": record.get("review_notes"),
-                            "decided_by": system_user_id,
-                            "decided_at": record.get("last_reviewed"),
                             "requires_follow_up": True if record.get("next_review") else False,
                             "next_review_date": record.get("next_review"),
                             "follow_up_reason": "Scheduled review from initial OBS data import" if record.get("next_review") else None,
