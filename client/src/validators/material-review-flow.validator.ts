@@ -135,8 +135,14 @@ export const step3RequiredSchema = z
     }
   );
 
-// Assignment step schema - required fields for SME and approver assignment
+// Assignment step schema - approver always required, SME optional when not required
 export const stepAssignmentSchema = z.object({
+  smeUserId: z.string().uuid().optional().or(z.literal("")),
+  approverUserId: z.string().uuid("Approver assignment is required"),
+});
+
+// Assignment step schema when SME is required (qty adjustment or proposed action config)
+export const stepAssignmentWithSmeSchema = z.object({
   smeUserId: z.string().uuid("SME assignment is required"),
   approverUserId: z.string().uuid("Approver assignment is required"),
 });

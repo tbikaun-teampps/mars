@@ -264,15 +264,17 @@ async def create_review_assignments(
         )
 
     # Validate assigned users have the required permissions
-    sme_permissions = await get_user_permissions(str(data.sme_user_id), db)
-    if "can_provide_sme_review" not in sme_permissions:
-        # Check if user is admin
-        is_sme_admin = await check_user_is_admin(str(data.sme_user_id), db)
-        if not is_sme_admin:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Selected SME user does not have SME review permission",
-            )
+    # SME validation only if SME is provided
+    if data.sme_user_id:
+        sme_permissions = await get_user_permissions(str(data.sme_user_id), db)
+        if "can_provide_sme_review" not in sme_permissions:
+            # Check if user is admin
+            is_sme_admin = await check_user_is_admin(str(data.sme_user_id), db)
+            if not is_sme_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Selected SME user does not have SME review permission",
+                )
 
     approver_permissions = await get_user_permissions(str(data.approver_user_id), db)
     if "can_approve_reviews" not in approver_permissions:
@@ -295,30 +297,31 @@ async def create_review_assignments(
     current_user_uuid = UUID(current_user.id)
     created_assignments = []
 
-    # Create or update SME assignment
-    if "sme" in existing_assignments:
-        # Update existing
-        sme_assignment = existing_assignments["sme"]
-        old_user_id = sme_assignment.user_id
-        if old_user_id != data.sme_user_id:
-            sme_assignment.reassigned_from_user_id = old_user_id
-            sme_assignment.reassigned_reason = "Reassigned during assignment step"
-            sme_assignment.user_id = data.sme_user_id
-            sme_assignment.status = "pending"
-        sme_assignment.due_at = data.sme_due_at
-        db.add(sme_assignment)
-    else:
-        # Create new
-        sme_assignment = ReviewAssignmentDB(
-            review_id=review_id,
-            user_id=data.sme_user_id,
-            assignment_type=AssignmentType.SME.value,
-            status="pending",
-            due_at=data.sme_due_at,
-            assigned_by=current_user_uuid,
-        )
-        db.add(sme_assignment)
-    created_assignments.append(sme_assignment)
+    # Create or update SME assignment (only if SME user is provided)
+    if data.sme_user_id:
+        if "sme" in existing_assignments:
+            # Update existing
+            sme_assignment = existing_assignments["sme"]
+            old_user_id = sme_assignment.user_id
+            if old_user_id != data.sme_user_id:
+                sme_assignment.reassigned_from_user_id = old_user_id
+                sme_assignment.reassigned_reason = "Reassigned during assignment step"
+                sme_assignment.user_id = data.sme_user_id
+                sme_assignment.status = "pending"
+            sme_assignment.due_at = data.sme_due_at
+            db.add(sme_assignment)
+        else:
+            # Create new
+            sme_assignment = ReviewAssignmentDB(
+                review_id=review_id,
+                user_id=data.sme_user_id,
+                assignment_type=AssignmentType.SME.value,
+                status="pending",
+                due_at=data.sme_due_at,
+                assigned_by=current_user_uuid,
+            )
+            db.add(sme_assignment)
+        created_assignments.append(sme_assignment)
 
     # Create or update Approver assignment
     if "approver" in existing_assignments:
@@ -376,11 +379,12 @@ async def create_review_assignments(
 
     # Send notifications
     notification_service = NotificationService(db)
-    await notification_service.notify_review_assigned(
-        review=review,
-        assigned_to=data.sme_user_id,
-        assigned_by=current_user_uuid,
-    )
+    if data.sme_user_id:
+        await notification_service.notify_review_assigned(
+            review=review,
+            assigned_to=data.sme_user_id,
+            assigned_by=current_user_uuid,
+        )
     await notification_service.notify_review_assigned(
         review=review,
         assigned_to=data.approver_user_id,

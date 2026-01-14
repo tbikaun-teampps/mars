@@ -9,12 +9,14 @@ interface Step3AssignmentProps {
   materialNumber?: number;
   reviewId?: number | null;
   isStatusLocked?: boolean;
+  smeRequired?: boolean;
 }
 
 export function Step3Assignment({
   materialNumber,
   reviewId,
   isStatusLocked = false,
+  smeRequired = true,
 }: Step3AssignmentProps) {
   const { watch, setValue } = useFormContext();
   const smeUserId = watch("smeUserId");
@@ -49,21 +51,27 @@ export function Step3Assignment({
       <div className="space-y-6">
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
-            Assign Subject Matter Expert (SME){" "}
-            <span className="text-destructive">*</span>
+            Assign Subject Matter Expert (SME)
+            {smeRequired ? (
+              <span className="text-destructive">*</span>
+            ) : (
+              <span className="text-muted-foreground text-xs">(Not required)</span>
+            )}
           </Label>
           <UserPickerByPermission
             permission="can_provide_sme_review"
             groupByExpertise={true}
-            value={smeUserId}
+            value={smeRequired ? smeUserId : undefined}
             onChange={(userId) => setValue("smeUserId", userId, { shouldDirty: true })}
-            placeholder="Select SME..."
-            disabled={isStatusLocked}
+            placeholder={smeRequired ? "Select SME..." : "Not required for this review"}
+            disabled={isStatusLocked || !smeRequired}
           />
-          <p className="text-xs text-muted-foreground">
-            The assigned subject matter expert (SME) will complete the SME Review step, providing
-            technical analysis and recommendations.
-          </p>
+          {smeRequired && (
+            <p className="text-xs text-muted-foreground">
+              The assigned subject matter expert (SME) will complete the SME Review step, providing
+              technical analysis and recommendations.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +35,7 @@ import {
   step1Schema,
   step2Schema,
   stepAssignmentSchema,
+  stepAssignmentWithSmeSchema,
   step3Schema,
   step3RequiredSchema,
   step4Schema,
@@ -279,6 +281,7 @@ function MaterialReviewFormInner({
   onSubmit,
   onReviewCreated,
 }: MaterialReviewFormProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const {
     currentStep,
@@ -506,14 +509,16 @@ function MaterialReviewFormInner({
       // Step 2 (Assignment) uses a different API endpoint
       if (step === 2 && reviewId) {
         const formData = data as MaterialReviewFormData;
-        if (!formData.smeUserId || !formData.approverUserId) {
-          throw new Error("SME and Approver must be selected");
+        // Approver is always required
+        if (!formData.approverUserId) {
+          throw new Error("Approver must be selected");
         }
+        // SME is only required when isSmeRequired is true (checked via schema validation)
         await apiClient.createReviewAssignments(
           materialData.material_number,
           reviewId,
           {
-            sme_user_id: formData.smeUserId,
+            sme_user_id: formData.smeUserId || undefined,
             approver_user_id: formData.approverUserId,
           }
         );
@@ -550,10 +555,20 @@ function MaterialReviewFormInner({
         return result;
       }
     },
-    onSuccess: (savedReview) => {
-      // Reset the form immediately with the saved data from the server
-      // This eliminates race conditions and provides instant UI feedback
-      if (savedReview) {
+    onSuccess: (savedReview, variables) => {
+      // For assignment step (step 2), the data comes from a separate query
+      // Don't reset form fields - instead invalidate the assignments query
+      // so the useEffect in Step3Assignment repopulates the values
+      if (variables.step === 2 && materialData?.material_number && reviewId) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.reviewAssignments.detail(
+            materialData.material_number,
+            reviewId
+          ),
+        });
+      } else if (savedReview) {
+        // Reset the form immediately with the saved data from the server
+        // This eliminates race conditions and provides instant UI feedback
         const formData = mapReviewToFormData(savedReview, predefinedOptions);
         form.reset(formData, { keepErrors: false, keepDirty: false });
 
@@ -571,6 +586,12 @@ function MaterialReviewFormInner({
         queryClient.invalidateQueries({
           queryKey: queryKeys.materials.all,
         });
+        // Invalidate review details to update step locking and user_context
+        if (reviewId) {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.reviews.detail(materialData.material_number, reviewId),
+          });
+        }
       }
 
       // Invalidate dashboard to refresh widgets (metrics may change)
@@ -592,12 +613,14 @@ function MaterialReviewFormInner({
     }
 
     // Get the appropriate schema for current step
-    // Use step3RequiredSchema when SME is required (qty adjustment is non-zero)
+    // Use conditional schemas based on isSmeRequired:
+    // - Assignment step: Use stepAssignmentWithSmeSchema when SME is required
+    // - SME step: Use step3RequiredSchema when SME is required
     // Step indices: 0=General, 1=Checklist, 2=Assignment, 3=SME, 4=FollowUp, 5=FinalDecision
     const stepSchemas = [
       step1Schema,
       step2Schema,
-      stepAssignmentSchema,
+      isSmeRequired ? stepAssignmentWithSmeSchema : stepAssignmentSchema,
       isSmeRequired ? step3RequiredSchema : step3Schema,
       step4Schema,
       step5Schema,
@@ -661,12 +684,18 @@ function MaterialReviewFormInner({
       });
       markStepComplete(currentStep);
 
-      // If this is the last step, trigger the parent onSubmit callback
-      if (currentStep === 4) {
+      // If this is the last step (Final Decision), trigger callback and redirect
+      if (currentStep === totalSteps - 1) {
         onSubmit();
+        // Redirect to the material page
+        if (materialData?.material_number) {
+          navigate(`/app/materials/${materialData.material_number}`);
+        }
         return true;
       }
 
+      // Progress to next step after successful save
+      nextStep();
       return true;
     } catch (error) {
       console.error("Error saving step:", error);
@@ -683,7 +712,7 @@ function MaterialReviewFormInner({
       const stepSchemas = [
         step1Schema,
         step2Schema,
-        stepAssignmentSchema,
+        isSmeRequired ? stepAssignmentWithSmeSchema : stepAssignmentSchema,
         isSmeRequired ? step3RequiredSchema : step3Schema,
         step4Schema,
         step5Schema,
@@ -780,6 +809,7 @@ function MaterialReviewFormInner({
               materialNumber={materialData?.material_number}
               reviewId={reviewId}
               isStatusLocked={stepLocking.isStepLocked(2)}
+              smeRequired={isSmeRequired}
             />
           </StepContent>
 

@@ -53,6 +53,15 @@ export function MultiStepFormProvider({
     () => new Set(initialCompletedSteps)
   );
 
+  // Sync completed steps when initial value changes (e.g., after query invalidation)
+  // This ensures UI reflects backend state after save operations
+  // Using JSON.stringify for stable dependency comparison of array contents
+  const initialCompletedStepsKey = JSON.stringify(initialCompletedSteps);
+  React.useEffect(() => {
+    setCompletedSteps(new Set(initialCompletedSteps));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCompletedStepsKey]);
+
   const goToStep = React.useCallback(
     (step: number) => {
       if (step >= 0 && step < steps.length) {

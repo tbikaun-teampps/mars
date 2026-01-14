@@ -65,9 +65,9 @@ class ReviewAssignmentResponse(BaseModel):
 
 
 class AssignmentStepPayload(BaseModel):
-    """Payload for the assignment step (Step 3) - creates both SME and approver assignments."""
+    """Payload for the assignment step (Step 3) - creates SME (if required) and approver assignments."""
 
-    sme_user_id: UUID
+    sme_user_id: Optional[UUID] = None  # Optional - only required when SME review is needed
     approver_user_id: UUID
     sme_due_at: Optional[datetime] = None
     approver_due_at: Optional[datetime] = None

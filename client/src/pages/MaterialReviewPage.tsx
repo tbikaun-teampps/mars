@@ -1,5 +1,6 @@
+import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, AlertCircle, ShieldX } from "lucide-react";
+import { Loader2, AlertCircle, ShieldX, X } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +10,17 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { MaterialReviewForm } from "@/components/material-review-form";
 import { MaterialDetailsPanel } from "@/components/material-details-panel";
-import { useMaterialDetails, useReviewDetails } from "@/api/queries";
+import { useMaterialDetails, useReviewDetails, useCancelReview } from "@/api/queries";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export function MaterialReviewPage() {
@@ -46,6 +55,10 @@ export function MaterialReviewPage() {
   const requiredPermission = reviewId ? "can_edit_reviews" : "can_create_reviews";
   const hasRequiredPermission = hasPermission(requiredPermission);
 
+  // Cancel dialog state
+  const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
+  const cancelReviewMutation = useCancelReview();
+
   // Handlers
   const handleReviewComplete = () => {
     navigate(`/app/materials/${materialNumber}`);
@@ -53,6 +66,25 @@ export function MaterialReviewPage() {
 
   const handleBack = () => {
     navigate(`/app/materials/${materialNumber}`);
+  };
+
+  const handleCancelClick = () => {
+    setCancelDialogOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!materialNumber || !reviewId) return;
+
+    try {
+      await cancelReviewMutation.mutateAsync({
+        materialNumber,
+        reviewId,
+      });
+      navigate(`/app/materials/${materialNumber}`);
+    } catch (error) {
+      console.error("Failed to cancel review:", error);
+    }
+    setCancelDialogOpen(false);
   };
 
   // Update URL when a new review is created (without full page reload)
@@ -206,18 +238,56 @@ export function MaterialReviewPage() {
         </Card>
 
         {/* Right panel - Material Details Reference (skinny sidebar) */}
-        <Card className="w-1/5 flex flex-col">
-          <CardContent className="flex-1 overflow-y-auto">
-            <MaterialDetailsPanel
-              materialDetails={materialDetails}
-              loading={materialLoading}
-              isError={materialError}
-              error={materialErrorObj}
-              compact
-            />
-          </CardContent>
-        </Card>
+        <div className="w-1/5 flex flex-col gap-4">
+          <Button
+            variant="destructive"
+            onClick={reviewId ? handleCancelClick : handleBack}
+            className="w-full"
+          >
+            <X className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+          <Card className="flex-1 flex flex-col">
+            <CardContent className="flex-1 overflow-y-auto">
+              <MaterialDetailsPanel
+                materialDetails={materialDetails}
+                loading={materialLoading}
+                isError={materialError}
+                error={materialErrorObj}
+                compact
+              />
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Cancel confirmation dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Review</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this review? This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCancelDialogOpen(false)}
+            >
+              Keep Review
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmCancel}
+              disabled={cancelReviewMutation.isPending}
+            >
+              {cancelReviewMutation.isPending ? "Cancelling..." : "Cancel Review"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

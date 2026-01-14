@@ -152,4 +152,11 @@ export const queryKeys = {
     unreadCount: () => [...queryKeys.notifications.all, "unreadCount"] as const,
     preferences: () => [...queryKeys.notifications.all, "preferences"] as const,
   },
+
+  // Review assignments queries
+  reviewAssignments: {
+    all: ["reviewAssignments"] as const,
+    detail: (materialNumber: number, reviewId: number) =>
+      [...queryKeys.reviewAssignments.all, materialNumber, reviewId] as const,
+  },
 } as const;

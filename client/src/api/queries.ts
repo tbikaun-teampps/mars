@@ -1096,7 +1096,7 @@ export function useReviewAssignments(
   reviewId: number | undefined | null
 ): UseQueryResult<ReviewAssignmentResponse[], Error> {
   return useQuery({
-    queryKey: ["reviewAssignments", materialNumber, reviewId],
+    queryKey: queryKeys.reviewAssignments.detail(materialNumber!, reviewId!),
     queryFn: () => apiClient.getReviewAssignments(materialNumber!, reviewId!),
     staleTime: 1000 * 60 * 2, // 2 minutes
     enabled: !!materialNumber && !!reviewId,

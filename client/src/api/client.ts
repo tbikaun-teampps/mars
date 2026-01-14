@@ -298,7 +298,7 @@ export class ApiClient {
   async createReviewAssignments(
     materialNumber: number,
     reviewId: number,
-    data: { sme_user_id: string; approver_user_id: string }
+    data: { sme_user_id?: string; approver_user_id: string }
   ): Promise<{ message: string; review_id: number }> {
     return this.post<{ message: string; review_id: number }>(
       `/materials/${materialNumber}/reviews/${reviewId}/assignments`,
