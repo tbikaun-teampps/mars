@@ -25,6 +25,7 @@ class AssignmentStatus(str, Enum):
     DECLINED = "declined"
     COMPLETED = "completed"
     REASSIGNED = "reassigned"
+    CANCELLED = "cancelled"
 
 
 class ReviewAssignmentCreate(BaseModel):

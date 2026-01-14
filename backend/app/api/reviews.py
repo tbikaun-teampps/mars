@@ -340,6 +340,12 @@ async def cancel_material_review(
             detail=f"Failed to cancel review: {str(e)}",
         )
 
+    # Cancel all pending/accepted assignments for this review
+    review_service = ReviewService(db)
+    await review_service.complete_assignments_for_review(
+        review_id, ReviewStatus.CANCELLED.value
+    )
+
     return {
         "message": f"Review {review_id} for material {material_number} cancelled successfully",
         "review_id": review_id,

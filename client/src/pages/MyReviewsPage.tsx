@@ -8,6 +8,7 @@ import {
   Clock,
   CheckCircle2,
   FilePlus2,
+  XCircle,
 } from "lucide-react";
 import { useMyAssignments, useMyInitiatedReviews } from "@/api/queries";
 import { AppLayout } from "@/components/app-layout";
@@ -38,7 +39,7 @@ import {
 } from "@/components/ui/table";
 
 type RoleFilter = "all" | "sme" | "approver";
-type StatusFilter = "all" | "pending" | "completed";
+type StatusFilter = "all" | "pending" | "completed" | "cancelled";
 
 export function MyReviewsPage() {
   const navigate = useNavigate();
@@ -91,6 +92,16 @@ export function MyReviewsPage() {
           >
             <CheckCircle2 className="h-3 w-3 mr-1" />
             Completed
+          </Badge>
+        );
+      case "cancelled":
+        return (
+          <Badge
+            variant="outline"
+            className="border-gray-400 text-gray-600 bg-gray-50"
+          >
+            <XCircle className="h-3 w-3 mr-1" />
+            Cancelled
           </Badge>
         );
       default:
@@ -232,6 +243,7 @@ export function MyReviewsPage() {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>

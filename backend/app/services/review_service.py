@@ -8,6 +8,7 @@ from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.utils import calculate_workflow_state
+from app.models.assignment import AssignmentStatus
 from app.models.db_models import (
     MaterialReviewDB,
     ProfileDB,
@@ -24,7 +25,7 @@ from app.models.review import (
 )
 from app.models.user import UserProfile
 from app.services.notification_service import NotificationService
-from app.services.workflow import ReviewStateMachine
+from app.services.workflow import TERMINAL_STATES, ReviewStateMachine
 
 
 class ReviewService:
@@ -677,6 +678,7 @@ class ReviewService:
         It handles:
         - Sending notifications to relevant users
         - Marking previous approved reviews as superseded (on approval)
+        - Completing/cancelling assignments when entering terminal state
 
         Args:
             review: The review database record (after status change)
@@ -698,6 +700,10 @@ class ReviewService:
             await self.supersede_previous_approvals(
                 review.material_number, review.review_id
             )
+
+        # If entering a terminal state, complete/cancel all assignments
+        if new_status in TERMINAL_STATES:
+            await self.complete_assignments_for_review(review.review_id, new_status)
 
     async def supersede_previous_approvals(
         self,
@@ -735,6 +741,57 @@ class ReviewService:
             await self.db.commit()
 
         return superseded_ids
+
+    async def complete_assignments_for_review(
+        self,
+        review_id: int,
+        new_status: str,
+    ) -> int:
+        """Complete or cancel all pending/accepted assignments when review reaches terminal state.
+
+        When a review is completed (approved/rejected), assignments are marked COMPLETED.
+        When a review is cancelled, assignments are marked CANCELLED.
+
+        Only updates assignments that are in PENDING or ACCEPTED status - already
+        DECLINED, REASSIGNED, or COMPLETED assignments are left unchanged.
+
+        Args:
+            review_id: The review ID
+            new_status: The terminal status the review transitioned to
+
+        Returns:
+            Number of assignments updated
+        """
+        # Determine the target assignment status based on review status
+        if new_status == ReviewStatus.CANCELLED.value:
+            target_status = AssignmentStatus.CANCELLED.value
+        else:
+            # For approved/rejected, mark as completed
+            target_status = AssignmentStatus.COMPLETED.value
+
+        # Find all active assignments (pending or accepted)
+        query = select(ReviewAssignmentDB).where(
+            ReviewAssignmentDB.review_id == review_id,
+            ReviewAssignmentDB.status.in_([
+                AssignmentStatus.PENDING.value,
+                AssignmentStatus.ACCEPTED.value,
+            ]),
+        )
+        result = await self.db.exec(query)
+        assignments = result.all()
+
+        # Update each assignment
+        updated_count = 0
+        for assignment in assignments:
+            assignment.status = target_status
+            assignment.completed_at = datetime.now()
+            self.db.add(assignment)
+            updated_count += 1
+
+        if updated_count > 0:
+            await self.db.commit()
+
+        return updated_count
 
     # =========================================================================
     # Private helper methods
