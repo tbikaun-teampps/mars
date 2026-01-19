@@ -47,6 +47,11 @@ import { toast } from "sonner";
 import { Plus, MoreHorizontal, Pencil, Trash2, History } from "lucide-react";
 import { format } from "date-fns";
 
+interface ProposedActionConfig {
+  requires_sme: boolean;
+  requires_approval: boolean;
+}
+
 interface LookupOptionFormData {
   category: string;
   value: string;
@@ -56,6 +61,7 @@ interface LookupOptionFormData {
   group_name: string;
   group_order: number;
   sort_order: number;
+  config: ProposedActionConfig | null;
 }
 
 const DEFAULT_FORM_DATA: LookupOptionFormData = {
@@ -67,6 +73,12 @@ const DEFAULT_FORM_DATA: LookupOptionFormData = {
   group_name: "",
   group_order: 0,
   sort_order: 0,
+  config: null,
+};
+
+const DEFAULT_PROPOSED_ACTION_CONFIG: ProposedActionConfig = {
+  requires_sme: false,
+  requires_approval: false,
 };
 
 const DEFAULT_VISIBLE_ROWS = 3;
@@ -117,13 +129,22 @@ export function LookupOptionsManager() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        name === "group_order" || name === "sort_order"
-          ? parseInt(value) || 0
-          : value,
-    }));
+    setFormData((prev) => {
+      const newData = {
+        ...prev,
+        [name]:
+          name === "group_order" || name === "sort_order"
+            ? parseInt(value) || 0
+            : value,
+      };
+      // Initialize config when category changes to proposed_action
+      if (name === "category" && value === "proposed_action" && !prev.config) {
+        newData.config = DEFAULT_PROPOSED_ACTION_CONFIG;
+      } else if (name === "category" && value !== "proposed_action") {
+        newData.config = null;
+      }
+      return newData;
+    });
   };
 
   const handleCreate = async () => {
@@ -142,6 +163,9 @@ export function LookupOptionsManager() {
         group_name: formData.group_name || undefined,
         group_order: formData.group_order,
         sort_order: formData.sort_order,
+        config: formData.category === "proposed_action"
+          ? (formData.config as Record<string, unknown> | null | undefined)
+          : undefined,
       });
       toast.success("Option created successfully");
       setIsAddDialogOpen(false);
@@ -167,6 +191,9 @@ export function LookupOptionsManager() {
           group_name: formData.group_name || undefined,
           group_order: formData.group_order,
           sort_order: formData.sort_order,
+          config: editingOption.category === "proposed_action"
+            ? (formData.config as Record<string, unknown> | null | undefined)
+            : undefined,
         },
       });
       toast.success("Option updated successfully");
@@ -220,11 +247,22 @@ export function LookupOptionsManager() {
     group_name?: string | null;
     group_order: number;
     sort_order: number;
+    config?: Record<string, unknown> | null;
   }) => {
     setEditingOption({
       option_id: option.option_id,
       category: option.category,
     });
+    // Parse config for proposed_action category
+    const parsedConfig = option.category === "proposed_action" && option.config
+      ? {
+          requires_sme: Boolean(option.config.requires_sme),
+          requires_approval: Boolean(option.config.requires_approval),
+        }
+      : option.category === "proposed_action"
+        ? DEFAULT_PROPOSED_ACTION_CONFIG
+        : null;
+
     setFormData({
       category: option.category,
       value: option.value,
@@ -234,6 +272,7 @@ export function LookupOptionsManager() {
       group_name: option.group_name || "",
       group_order: option.group_order,
       sort_order: option.sort_order,
+      config: parsedConfig,
     });
   };
 
@@ -292,6 +331,9 @@ export function LookupOptionsManager() {
                     onChange={handleInputChange}
                     onColorChange={(color) =>
                       setFormData((prev) => ({ ...prev, color }))
+                    }
+                    onConfigChange={(config) =>
+                      setFormData((prev) => ({ ...prev, config }))
                     }
                     isNew={true}
                   />
@@ -404,6 +446,7 @@ export function LookupOptionsManager() {
                                       group_name: group.group_name,
                                       group_order: group.group_order,
                                       sort_order: option.sort_order,
+                                      config: option.config,
                                     })
                                   }
                                 >
@@ -500,6 +543,9 @@ export function LookupOptionsManager() {
             onChange={handleInputChange}
             onColorChange={(color) =>
               setFormData((prev) => ({ ...prev, color }))
+            }
+            onConfigChange={(config) =>
+              setFormData((prev) => ({ ...prev, config }))
             }
             isNew={false}
           />
@@ -631,6 +677,7 @@ interface LookupOptionFormProps {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => void;
   onColorChange: (color: string) => void;
+  onConfigChange: (config: ProposedActionConfig) => void;
   isNew: boolean;
 }
 
@@ -638,6 +685,7 @@ function LookupOptionForm({
   formData,
   onChange,
   onColorChange,
+  onConfigChange,
   isNew,
 }: LookupOptionFormProps) {
   // Local state for color to avoid lag when dragging color picker
@@ -767,6 +815,55 @@ function LookupOptionForm({
           min={0}
         />
       </div>
+
+      {/* Workflow config toggles for proposed_action category */}
+      {formData.category === "proposed_action" && (
+        <>
+          <div className="col-span-1 border-t pt-4 mt-2">
+            <h4 className="text-sm font-medium mb-3">Workflow Configuration</h4>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="requires_sme" className="text-right">
+              Requires SME
+            </Label>
+            <div className="col-span-3 flex items-center gap-2">
+              <Switch
+                id="requires_sme"
+                checked={formData.config?.requires_sme ?? false}
+                onCheckedChange={(checked) =>
+                  onConfigChange({
+                    ...(formData.config ?? DEFAULT_PROPOSED_ACTION_CONFIG),
+                    requires_sme: checked,
+                  })
+                }
+              />
+              <span className="text-sm text-muted-foreground">
+                SME review required before approval
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="requires_approval" className="text-right">
+              Requires Approval
+            </Label>
+            <div className="col-span-3 flex items-center gap-2">
+              <Switch
+                id="requires_approval"
+                checked={formData.config?.requires_approval ?? false}
+                onCheckedChange={(checked) =>
+                  onConfigChange({
+                    ...(formData.config ?? DEFAULT_PROPOSED_ACTION_CONFIG),
+                    requires_approval: checked,
+                  })
+                }
+              />
+              <span className="text-sm text-muted-foreground">
+                Formal approval required to complete
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -40,7 +40,7 @@ All new features or things of importance should be summarised in this document t
 
 Consult the full application architecture diagram (`docs/architecture.md`) before making significant structural decisions. This is an evolving artifact—propose updates when changes warrant.
 
-For frontend permission handling, see `docs/permissions-ui.md`. To add new permissions, see `docs/extending-permissions.md`.
+For frontend permission handling, see `docs/permissions-ui.md`. To add new permissions, see `docs/extending-permissions.md`. For the in-app notification system, see `docs/notifications.md`. For the review assignment workflow, see the Review Workflow section below.
 
 ### Tech Stack
 
@@ -51,7 +51,31 @@ For frontend permission handling, see `docs/permissions-ui.md`. To add new permi
 | Database | PostgreSQL (Supabase)               |
 | Auth     | Supabase Auth                       |
 
----
+### Review workflow
+
+The material review process follows a 6-step workflow with role-based assignments:
+
+```
+General Info → Checklist → Assignment → SME Review → Follow-up → Final Decision
+   (Step 1)     (Step 2)    (Step 3)     (Step 4)     (Step 5)     (Step 6)
+```
+
+**Status flow:**
+```
+DRAFT → PENDING_ASSIGNMENT → PENDING_SME → PENDING_DECISION → COMPLETED
+```
+
+**Key concepts:**
+- **Assignment step**: Users with `can_assign_reviews` permission assign an SME and Approver
+- **View-only mode**: SME Review and Final Decision steps are read-only for non-assignees (admins can still edit)
+- **My Reviews page**: `/app/my-reviews` shows users their pending assignments with filtering by role and status
+
+**Key files:**
+- `backend/app/api/assignments.py` - Assignment endpoints including `/my-assignments`
+- `backend/app/models/assignment.py` - Assignment Pydantic models
+- `client/src/pages/MyReviewsPage.tsx` - My Reviews page
+- `client/src/components/review-steps/step3-assignment.tsx` - Assignment step UI
+- `client/src/components/user-picker-by-permission.tsx` - Permission-based user picker
 
 ---
 
@@ -166,6 +190,38 @@ Record significant architectural or implementation decisions here with rationale
 
 **Consequences**: What trade-offs or follow-up work does this create?
 
+### 2025-12-17: Step-based field locking (immutability after workflow progression)
+
+**Context**: After a review progresses past certain phases, earlier fields should be locked to preserve data integrity and audit trail clarity.
+
+**Decision**: Implemented status-based field locking that enforces immutability:
+- Draft/Pending Assignment: Steps 0-2 editable (General Info, Checklist, Assignment)
+- Pending SME: Only Step 3 editable (SME Investigation) - earlier steps locked
+- Pending Decision: Steps 4-5 editable (Follow-up, Final Decision) - earlier steps locked
+- Terminal states: All steps locked
+
+**Rationale**: Once an SME reviews based on specific initial data, changing that data would invalidate their analysis. This creates a clear audit trail and enforces process discipline. Admins must assign themselves as SME/approver to edit those fields (no bypass).
+
+**Consequences**:
+- Backend: `validate_step_locking()` method in ReviewService validates field updates against status
+- Frontend: `getStepLockingForStatus()` utility computes locked steps; UI shows locked message
+- Follow-up fields moved to approver-restricted (editable during Pending Decision only)
+- Admin bypass removed from role-based field restrictions
+
+### 2025-12-17: Review assignment system with view-only mode
+
+**Context**: Reviews needed a way to formally assign SMEs and Approvers, with enforcement that only assigned users can edit their respective steps.
+
+**Decision**: Added a new "Assignment" step (Step 3) to the review workflow. SME Review and Final Decision steps show view-only mode for non-assignees. Created a "My Reviews" page for users to see their pending work.
+
+**Rationale**: A dedicated assignment step keeps the workflow explicit and auditable. View-only mode (rather than hiding steps) allows transparency while preventing unauthorized edits. The My Reviews page provides a central location for users to manage their workload.
+
+**Consequences**:
+- Review workflow now has 6 steps instead of 5
+- `PENDING_ASSIGNMENT` status added to the status flow
+- Users need `can_assign_reviews` permission to assign reviewers
+- Notifications are sent when users are assigned
+
 ---
 
 ## Changelog
@@ -174,6 +230,11 @@ Summarise all changes to this document below. Add new entries at the top.
 
 | Date       | Summary                                                                 |
 | ---------- | ----------------------------------------------------------------------- |
+| 2025-12-17 | Added step-based field locking to enforce immutability after progression |
+| 2025-12-17 | Added My Reviews page for viewing assigned reviews                      |
+| 2025-12-17 | Added review assignment system with view-only mode for non-assignees    |
+| 2025-12-16 | Added notification debugging to debug FAB (create test notifications)  |
+| 2025-12-16 | Added `docs/notifications.md` for in-app notification system            |
 | 2025-12-16 | Added `docs/extending-permissions.md` guide for adding new permissions  |
 | 2025-12-16 | Added `can_upload_data` permission to RBAC system                       |
 | 2025-12-16 | Added `docs/permissions-ui.md` documenting frontend permission controls |

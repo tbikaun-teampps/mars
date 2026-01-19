@@ -1,7 +1,7 @@
 """Lookup option models for configurable dropdown options."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -24,6 +24,9 @@ class LookupOption(BaseModel):
 
     is_active: bool = True
 
+    # Category-specific configuration (e.g., workflow flags for proposed_action)
+    config: Optional[dict[str, Any]] = None
+
     # Audit fields
     created_by: Optional[UUID] = None
     created_at: Optional[datetime] = None
@@ -38,12 +41,15 @@ class LookupOptionCreate(BaseModel):
     value: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    color: Optional[str] = Field(default=None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(default=None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
 
     # Grouping & ordering
     group_name: Optional[str] = Field(default=None, max_length=100)
     group_order: int = Field(default=0, ge=0)
     sort_order: int = Field(default=0, ge=0)
+
+    # Category-specific configuration (e.g., workflow flags for proposed_action)
+    config: Optional[dict[str, Any]] = None
 
 
 class LookupOptionUpdate(BaseModel):
@@ -51,7 +57,7 @@ class LookupOptionUpdate(BaseModel):
 
     label: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
-    color: Optional[str] = Field(default=None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(default=None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
 
     # Grouping & ordering
     group_name: Optional[str] = Field(default=None, max_length=100)
@@ -59,6 +65,9 @@ class LookupOptionUpdate(BaseModel):
     sort_order: Optional[int] = Field(default=None, ge=0)
 
     is_active: Optional[bool] = None
+
+    # Category-specific configuration (e.g., workflow flags for proposed_action)
+    config: Optional[dict[str, Any]] = None
 
 
 class LookupOptionHistory(BaseModel):
@@ -83,6 +92,7 @@ class LookupOptionInGroup(BaseModel):
     color: Optional[str] = None
     sort_order: int = 0
     is_active: bool = True
+    config: Optional[dict[str, Any]] = None
 
 
 class LookupOptionGroup(BaseModel):

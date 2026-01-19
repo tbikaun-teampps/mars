@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.review import MaterialReview
+from app.models.review import ReviewSummary
 from app.models.user import UserProfile
 
 
@@ -67,9 +67,7 @@ class Material(BaseModel):
     cons_4y: Optional[float] = None
     cons_5y: Optional[float] = None
     purchased_qty_2y: Optional[float] = None
-    consumption_history_5yr: list[ConsumptionHistory] | None = (
-        None  # Computed from cons_1y-5y
-    )
+    consumption_history_5yr: list[ConsumptionHistory] | None = None  # Computed from cons_1y-5y
     last_reviewed: date | None = None
     next_review: date | None = None
     # review_notes: str | None = None
@@ -81,9 +79,10 @@ class Material(BaseModel):
 
 
 class MaterialWithReviews(Material):
-    """Material model with reviews."""
+    """Material model with review summaries for history display."""
 
-    reviews: list[MaterialReview]  # List of material reviews
+    reviews: list[ReviewSummary]  # List of review summaries (not full review details)
+
 
 class PaginatedMaterialsResponse(BaseModel):
     """Paginated materials response."""

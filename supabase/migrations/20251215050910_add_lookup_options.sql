@@ -18,6 +18,9 @@ CREATE TABLE lookup_options (
 
     is_active BOOLEAN DEFAULT true,         -- Soft disable without breaking history
 
+    -- Category-specific configuration (e.g., workflow flags for proposed_action)
+    config JSONB DEFAULT '{}',
+
     -- Audit fields
     created_by UUID DEFAULT auth.uid(),
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -42,6 +45,7 @@ CREATE TABLE lookup_options_history (
 CREATE INDEX idx_lookup_options_category ON lookup_options(category);
 CREATE INDEX idx_lookup_options_active ON lookup_options(category, is_active);
 CREATE INDEX idx_lookup_history_option ON lookup_options_history(option_id);
+CREATE INDEX idx_lookup_options_config ON lookup_options USING gin (config);
 
 
 -- ============================================================================
@@ -156,57 +160,58 @@ INSERT INTO lookup_options (category, value, label, description, color, group_na
 -- ============================================================================
 
 -- Retain (Green tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'keep_no_change', 'Keep - No Change', 'Retain current stock levels and settings unchanged', '#22c55e', 'Retain', 1, 1),
-('proposed_action', 'keep_adjust_levels', 'Keep - Adjust Levels', 'Retain material but modify min/max, safety stock, or reorder point', '#16a34a', 'Retain', 1, 2),
-('proposed_action', 'keep_reclassify', 'Keep - Reclassify', 'Retain but change criticality, stock type, or material group', '#15803d', 'Retain', 1, 3);
+-- config: requires_sme (whether SME review is required), requires_approval (whether formal approval is required)
+INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order, config) VALUES
+('proposed_action', 'keep_no_change', 'Keep - No Change', 'Retain current stock levels and settings unchanged', '#22c55e', 'Retain', 1, 1, '{"requires_sme": false, "requires_approval": false}'),
+('proposed_action', 'keep_adjust_levels', 'Keep - Adjust Levels', 'Retain material but modify min/max, safety stock, or reorder point', '#16a34a', 'Retain', 1, 2, '{"requires_sme": true, "requires_approval": true}'),
+('proposed_action', 'keep_reclassify', 'Keep - Reclassify', 'Retain but change criticality, stock type, or material group', '#15803d', 'Retain', 1, 3, '{"requires_sme": true, "requires_approval": true}');
 
 -- Consume & Run Down (Amber/Yellow tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'run_down', 'Run Down - Do Not Reorder', 'Consume existing stock but do not replenish', '#eab308', 'Consume & Run Down', 2, 1),
-('proposed_action', 'consume_accelerate', 'Consume - Accelerate Usage', 'Actively find opportunities to use stock before expiry or obsolescence', '#ca8a04', 'Consume & Run Down', 2, 2),
-('proposed_action', 'substitute', 'Substitute - Use as Alternative', 'Use as substitute for another part number where applicable', '#a16207', 'Consume & Run Down', 2, 3);
+INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order, config) VALUES
+('proposed_action', 'run_down', 'Run Down - Do Not Reorder', 'Consume existing stock but do not replenish', '#eab308', 'Consume & Run Down', 2, 1, '{"requires_sme": true, "requires_approval": true}');
+-- ('proposed_action', 'consume_accelerate', 'Consume - Accelerate Usage', 'Actively find opportunities to use stock before expiry or obsolescence', '#ca8a04', 'Consume & Run Down', 2, 2),
+-- ('proposed_action', 'substitute', 'Substitute - Use as Alternative', 'Use as substitute for another part number where applicable', '#a16207', 'Consume & Run Down', 2, 3);
 
--- Transfer & Redeploy (Blue tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'transfer_site', 'Transfer - Inter-Site', 'Move stock to another site with higher demand', '#3b82f6', 'Transfer & Redeploy', 3, 1),
-('proposed_action', 'transfer_project', 'Transfer - To Project', 'Allocate stock to a capital project or shutdown', '#2563eb', 'Transfer & Redeploy', 3, 2),
-('proposed_action', 'transfer_consignment', 'Transfer - To Consignment', 'Move to supplier-managed consignment arrangement', '#1d4ed8', 'Transfer & Redeploy', 3, 3),
-('proposed_action', 'return_supplier', 'Return to Supplier', 'Return stock to supplier for credit or exchange', '#1e40af', 'Transfer & Redeploy', 3, 4);
+-- -- Transfer & Redeploy (Blue tones)
+-- INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
+-- ('proposed_action', 'transfer_site', 'Transfer - Inter-Site', 'Move stock to another site with higher demand', '#3b82f6', 'Transfer & Redeploy', 3, 1),
+-- ('proposed_action', 'transfer_project', 'Transfer - To Project', 'Allocate stock to a capital project or shutdown', '#2563eb', 'Transfer & Redeploy', 3, 2),
+-- ('proposed_action', 'transfer_consignment', 'Transfer - To Consignment', 'Move to supplier-managed consignment arrangement', '#1d4ed8', 'Transfer & Redeploy', 3, 3),
+-- ('proposed_action', 'return_supplier', 'Return to Supplier', 'Return stock to supplier for credit or exchange', '#1e40af', 'Transfer & Redeploy', 3, 4);
 
--- Sell & Recover Value (Emerald tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'sell_external', 'Sell - External Sale', 'Sell to third party, broker, or surplus dealer', '#10b981', 'Sell & Recover Value', 4, 1),
-('proposed_action', 'sell_intercompany', 'Sell - Intercompany', 'Sell to affiliated company or joint venture partner', '#059669', 'Sell & Recover Value', 4, 2),
-('proposed_action', 'auction', 'Auction', 'Dispose via auction platform', '#047857', 'Sell & Recover Value', 4, 3);
+-- -- Sell & Recover Value (Emerald tones)
+-- INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
+-- ('proposed_action', 'sell_external', 'Sell - External Sale', 'Sell to third party, broker, or surplus dealer', '#10b981', 'Sell & Recover Value', 4, 1),
+-- ('proposed_action', 'sell_intercompany', 'Sell - Intercompany', 'Sell to affiliated company or joint venture partner', '#059669', 'Sell & Recover Value', 4, 2),
+-- ('proposed_action', 'auction', 'Auction', 'Dispose via auction platform', '#047857', 'Sell & Recover Value', 4, 3);
 
--- Repair & Refurbish (Cyan tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'repair', 'Repair - Return to Service', 'Repair damaged or failed item to serviceable condition', '#06b6d4', 'Repair & Refurbish', 5, 1),
-('proposed_action', 'refurbish', 'Refurbish / Recondition', 'Overhaul or recondition to extend useful life', '#0891b2', 'Repair & Refurbish', 5, 2),
-('proposed_action', 'recertify', 'Re-certify / Re-test', 'Test or inspect to verify condition and extend shelf life', '#0e7490', 'Repair & Refurbish', 5, 3),
-('proposed_action', 'rework', 'Rework - Modify to Spec', 'Modify to meet current specification or new application', '#155e75', 'Repair & Refurbish', 5, 4);
+-- -- Repair & Refurbish (Cyan tones)
+-- INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
+-- ('proposed_action', 'repair', 'Repair - Return to Service', 'Repair damaged or failed item to serviceable condition', '#06b6d4', 'Repair & Refurbish', 5, 1),
+-- ('proposed_action', 'refurbish', 'Refurbish / Recondition', 'Overhaul or recondition to extend useful life', '#0891b2', 'Repair & Refurbish', 5, 2),
+-- ('proposed_action', 'recertify', 'Re-certify / Re-test', 'Test or inspect to verify condition and extend shelf life', '#0e7490', 'Repair & Refurbish', 5, 3),
+-- ('proposed_action', 'rework', 'Rework - Modify to Spec', 'Modify to meet current specification or new application', '#155e75', 'Repair & Refurbish', 5, 4);
 
--- Rotables & Repairables (Slate tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'return_rotable_pool', 'Return to Rotable Pool', 'Return serviceable rotable to exchange pool', '#64748b', 'Rotables & Repairables', 6, 1),
-('proposed_action', 'condemn_ber', 'Condemn - BER', 'Condemn repairable as Beyond Economical Repair', '#475569', 'Rotables & Repairables', 6, 2),
-('proposed_action', 'scrap_core', 'Scrap Core', 'Dispose of unserviceable core with no repair or exchange value', '#334155', 'Rotables & Repairables', 6, 3),
-('proposed_action', 'return_core', 'Return Core to Supplier', 'Return core to OEM or repair vendor for credit', '#1e293b', 'Rotables & Repairables', 6, 4);
+-- -- Rotables & Repairables (Slate tones)
+-- INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
+-- ('proposed_action', 'return_rotable_pool', 'Return to Rotable Pool', 'Return serviceable rotable to exchange pool', '#64748b', 'Rotables & Repairables', 6, 1),
+-- ('proposed_action', 'condemn_ber', 'Condemn - BER', 'Condemn repairable as Beyond Economical Repair', '#475569', 'Rotables & Repairables', 6, 2),
+-- ('proposed_action', 'scrap_core', 'Scrap Core', 'Dispose of unserviceable core with no repair or exchange value', '#334155', 'Rotables & Repairables', 6, 3),
+-- ('proposed_action', 'return_core', 'Return Core to Supplier', 'Return core to OEM or repair vendor for credit', '#1e293b', 'Rotables & Repairables', 6, 4);
 
--- Write-Off & Dispose (Red tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'write_off_scrap', 'Write Off - Scrap', 'Write off value and dispose as scrap', '#ef4444', 'Write-Off & Dispose', 7, 1),
-('proposed_action', 'write_off_controlled', 'Write Off - Controlled Disposal', 'Write off and dispose via controlled method (hazmat, confidential)', '#dc2626', 'Write-Off & Dispose', 7, 2),
-('proposed_action', 'write_off_landfill', 'Write Off - Landfill', 'Write off and dispose to landfill', '#b91c1c', 'Write-Off & Dispose', 7, 3),
-('proposed_action', 'write_off_recycle', 'Write Off - Recycle', 'Write off and dispose via recycling (metal recovery, etc.)', '#991b1b', 'Write-Off & Dispose', 7, 4),
-('proposed_action', 'donate', 'Donate', 'Donate to training institution, community, or charity', '#f87171', 'Write-Off & Dispose', 7, 5);
+-- -- Write-Off & Dispose (Red tones)
+-- INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
+-- ('proposed_action', 'write_off_scrap', 'Write Off - Scrap', 'Write off value and dispose as scrap', '#ef4444', 'Write-Off & Dispose', 7, 1),
+-- ('proposed_action', 'write_off_controlled', 'Write Off - Controlled Disposal', 'Write off and dispose via controlled method (hazmat, confidential)', '#dc2626', 'Write-Off & Dispose', 7, 2),
+-- ('proposed_action', 'write_off_landfill', 'Write Off - Landfill', 'Write off and dispose to landfill', '#b91c1c', 'Write-Off & Dispose', 7, 3),
+-- ('proposed_action', 'write_off_recycle', 'Write Off - Recycle', 'Write off and dispose via recycling (metal recovery, etc.)', '#991b1b', 'Write-Off & Dispose', 7, 4),
+-- ('proposed_action', 'donate', 'Donate', 'Donate to training institution, community, or charity', '#f87171', 'Write-Off & Dispose', 7, 5);
 
--- Data & Master Record (Purple tones)
-INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
-('proposed_action', 'supersede', 'Supersede - Link to New PN', 'Mark as superseded and link to replacement part number', '#8b5cf6', 'Data & Master Record', 8, 1),
-('proposed_action', 'obsolete', 'Obsolete - Mark Inactive', 'Flag material master as obsolete, block future purchasing', '#7c3aed', 'Data & Master Record', 8, 2),
-('proposed_action', 'merge', 'Merge - Consolidate Part Numbers', 'Consolidate duplicate or similar part numbers', '#6d28d9', 'Data & Master Record', 8, 3);
+-- -- Data & Master Record (Purple tones)
+-- INSERT INTO lookup_options (category, value, label, description, color, group_name, group_order, sort_order) VALUES
+-- ('proposed_action', 'supersede', 'Supersede - Link to New PN', 'Mark as superseded and link to replacement part number', '#8b5cf6', 'Data & Master Record', 8, 1),
+-- ('proposed_action', 'obsolete', 'Obsolete - Mark Inactive', 'Flag material master as obsolete, block future purchasing', '#7c3aed', 'Data & Master Record', 8, 2),
+-- ('proposed_action', 'merge', 'Merge - Consolidate Part Numbers', 'Consolidate duplicate or similar part numbers', '#6d28d9', 'Data & Master Record', 8, 3);
 
 
 -- ============================================================================

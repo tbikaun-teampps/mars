@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { useCurrentUser, useUserRoles, useUpdateProfile } from "@/api/queries";
+import {
+  useCurrentUser,
+  useUserRoles,
+  useUpdateProfile,
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+} from "@/api/queries";
 import { AppLayout } from "@/components/app-layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -36,10 +42,25 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-interface NotificationPreferences {
-  email: boolean;
-  in_app: boolean;
-}
+const NOTIFICATION_TYPES = [
+  {
+    key: "review_assigned" as const,
+    label: "Review Assigned",
+    description: "Get notified when a review is assigned to you",
+  },
+  {
+    key: "review_status_changed" as const,
+    label: "Status Changes",
+    description:
+      "Get notified when review status changes for reviews you're involved in",
+  },
+  {
+    key: "comment_added" as const,
+    label: "New Comments",
+    description:
+      "Get notified when someone comments on reviews you're involved in",
+  },
+];
 
 export function AccountPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
@@ -48,6 +69,9 @@ export function AccountPage() {
     !!currentUser?.id
   );
   const updateProfile = useUpdateProfile();
+  const { data: notificationPrefs, isLoading: prefsLoading } =
+    useNotificationPreferences();
+  const updateNotificationPrefs = useUpdateNotificationPreferences();
 
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState("");
@@ -57,13 +81,6 @@ export function AccountPage() {
     { label: "App", href: "/app" },
     { label: "Account" },
   ];
-
-  // Parse notification preferences with defaults
-  const rawPrefs = currentUser?.notification_preferences as NotificationPreferences | undefined;
-  const notificationPrefs: NotificationPreferences = {
-    email: rawPrefs?.email ?? true,
-    in_app: rawPrefs?.in_app ?? true,
-  };
 
   const handleOpenEditProfile = () => {
     setEditDisplayName(currentUser?.display_name || "");
@@ -86,33 +103,15 @@ export function AccountPage() {
     }
   };
 
-  const handleNotificationChange = async (
-    key: keyof NotificationPreferences,
+  const handleNotificationToggle = async (
+    key: "review_assigned" | "review_status_changed" | "comment_added",
     value: boolean
   ) => {
-    // Prevent disabling both notifications
-    const otherKey = key === "email" ? "in_app" : "email";
-    if (!value && !notificationPrefs[otherKey]) {
-      toast.error("At least one notification method must be enabled");
-      return;
-    }
-
-    const newPrefs = {
-      ...notificationPrefs,
-      [key]: value,
-    };
-
     try {
-      await updateProfile.mutateAsync({
-        notification_preferences: newPrefs,
-      });
+      await updateNotificationPrefs.mutateAsync({ [key]: value });
       toast.success("Notification preferences updated");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to update notification preferences"
-      );
+    } catch {
+      toast.error("Failed to update notification preferences");
     }
   };
 
@@ -211,42 +210,45 @@ export function AccountPage() {
                 Notification Preferences
               </CardTitle>
               <CardDescription>
-                Control how you receive notifications.
+                Configure which notifications you want to receive.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="email-notifications">Email Notifications</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receive notifications via email
-                  </p>
+              {prefsLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-56" />
+                      </div>
+                      <Skeleton className="h-6 w-10 rounded-full" />
+                    </div>
+                  ))}
                 </div>
-                <Switch
-                  id="email-notifications"
-                  checked={notificationPrefs.email}
-                  onCheckedChange={(checked) =>
-                    handleNotificationChange("email", checked)
-                  }
-                  disabled={updateProfile.isPending}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="inapp-notifications">In-App Notifications</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Show notifications within the application
-                  </p>
-                </div>
-                <Switch
-                  id="inapp-notifications"
-                  checked={notificationPrefs.in_app}
-                  onCheckedChange={(checked) =>
-                    handleNotificationChange("in_app", checked)
-                  }
-                  disabled={updateProfile.isPending}
-                />
-              </div>
+              ) : (
+                NOTIFICATION_TYPES.map((type) => (
+                  <div
+                    key={type.key}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="space-y-0.5">
+                      <Label htmlFor={type.key}>{type.label}</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {type.description}
+                      </p>
+                    </div>
+                    <Switch
+                      id={type.key}
+                      checked={notificationPrefs?.[type.key] ?? true}
+                      onCheckedChange={(checked) =>
+                        handleNotificationToggle(type.key, checked)
+                      }
+                      disabled={updateNotificationPrefs.isPending}
+                    />
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 

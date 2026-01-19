@@ -84,16 +84,9 @@ export const step2Schema = z.object({
 });
 
 // SME Review step (optional when no qty adjustment, required otherwise)
+// SME contact info is now captured via the assignment system
 export const step3Schema = z
   .object({
-    smeName: z.string().optional(),
-    smeEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
-    smeDepartment: z.string().optional(),
-    smeDepartmentOther: z.string().optional(),
-    smeFeedbackMethod: z.string().optional(),
-    smeFeedbackMethodOther: z.string().optional(),
-    smeContactedDate: z.date().optional(),
-    smeRespondedDate: z.date().optional(),
     smeRecommendation: z.string().optional(),
     smeRecommendationOther: z.string().optional(),
     smeRecommendedSafetyStockQty: z.number().optional().nullable(),
@@ -102,43 +95,6 @@ export const step3Schema = z
     smeAlternativeApplications: z.string().optional(),
     smeRiskAssessment: z.string().optional(),
   })
-  .refine(
-    (data) => {
-      // If both dates are provided, ensure contacted date is before or on the responded date
-      if (data.smeContactedDate && data.smeRespondedDate) {
-        return data.smeContactedDate <= data.smeRespondedDate;
-      }
-      return true;
-    },
-    {
-      message: "Contacted date must be before or on the responded date",
-      path: ["smeRespondedDate"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.smeDepartment === "other") {
-        return !!data.smeDepartmentOther && data.smeDepartmentOther.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Please specify the custom department",
-      path: ["smeDepartmentOther"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.smeFeedbackMethod === "other") {
-        return !!data.smeFeedbackMethodOther && data.smeFeedbackMethodOther.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Please specify the custom feedback method",
-      path: ["smeFeedbackMethodOther"],
-    }
-  )
   .refine(
     (data) => {
       if (data.smeRecommendation === "other") {
@@ -153,20 +109,9 @@ export const step3Schema = z
   );
 
 // SME Review step schema for when it's required (qty adjustment is non-zero)
+// SME contact info is now captured via the assignment system
 export const step3RequiredSchema = z
   .object({
-    smeName: z.string().min(1, "SME name is required"),
-    smeEmail: z.email("Invalid email address"),
-    smeDepartment: z.string().min(1, "SME department is required"),
-    smeDepartmentOther: z.string().optional(),
-    smeFeedbackMethod: z.string().min(1, "Feedback method is required"),
-    smeFeedbackMethodOther: z.string().optional(),
-    smeContactedDate: z
-      .date()
-      .min(new Date(2000, 0, 1), "Contacted date is required"),
-    smeRespondedDate: z
-      .date()
-      .min(new Date(2000, 0, 1), "Responded date is required"),
     smeRecommendation: z.string().min(1, "SME recommendation is required"),
     smeRecommendationOther: z.string().optional(),
     smeRecommendedSafetyStockQty: z.number().optional().nullable(),
@@ -179,40 +124,6 @@ export const step3RequiredSchema = z
   })
   .refine(
     (data) => {
-      // Ensure contacted date is before or on the responded date
-      return data.smeContactedDate <= data.smeRespondedDate;
-    },
-    {
-      message: "Contacted date must be before or on the responded date",
-      path: ["smeRespondedDate"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.smeDepartment === "other") {
-        return !!data.smeDepartmentOther && data.smeDepartmentOther.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Please specify the custom department",
-      path: ["smeDepartmentOther"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.smeFeedbackMethod === "other") {
-        return !!data.smeFeedbackMethodOther && data.smeFeedbackMethodOther.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Please specify the custom feedback method",
-      path: ["smeFeedbackMethodOther"],
-    }
-  )
-  .refine(
-    (data) => {
       if (data.smeRecommendation === "other") {
         return !!data.smeRecommendationOther && data.smeRecommendationOther.trim().length > 0;
       }
@@ -223,6 +134,18 @@ export const step3RequiredSchema = z
       path: ["smeRecommendationOther"],
     }
   );
+
+// Assignment step schema - approver always required, SME optional when not required
+export const stepAssignmentSchema = z.object({
+  smeUserId: z.string().uuid().optional().or(z.literal("")),
+  approverUserId: z.string().uuid("Approver assignment is required"),
+});
+
+// Assignment step schema when SME is required (qty adjustment or proposed action config)
+export const stepAssignmentWithSmeSchema = z.object({
+  smeUserId: z.string().uuid("SME assignment is required"),
+  approverUserId: z.string().uuid("Approver assignment is required"),
+});
 
 // Follow-up Review Scheduling
 export const step4Schema = z
@@ -291,12 +214,14 @@ export const step5Schema = z
 // Individual step schemas remain strict for validation
 const step1SchemaOptional = step1Schema.partial();
 const step2SchemaOptional = step2Schema.partial();
+const stepAssignmentSchemaOptional = stepAssignmentSchema.partial();
 const step3SchemaOptional = step3Schema.partial();
 const step4SchemaOptional = step4Schema.partial();
 const step5SchemaOptional = step5Schema.partial();
 
 export const CombinedMaterialReviewSchema = step1SchemaOptional
   .merge(step2SchemaOptional)
+  .merge(stepAssignmentSchemaOptional)
   .merge(step3SchemaOptional)
   .merge(step4SchemaOptional)
   .merge(step5SchemaOptional);

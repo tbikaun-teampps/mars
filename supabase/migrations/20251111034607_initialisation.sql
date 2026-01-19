@@ -127,13 +127,7 @@ CREATE TABLE material_reviews (
     checklist_completed BOOLEAN DEFAULT false, -- Has the planner completed the review checklist?
 
 
-    -- SME investigation results (Planner enters this after getting feedback)
-    sme_name VARCHAR(100),
-    sme_email VARCHAR(100),
-    sme_department VARCHAR(100),              -- 'Maintenance', 'Reliability', 'Operations'
-    sme_feedback_method VARCHAR(100),         -- 'email', 'call', 'meeting', etc.
-    sme_contacted_date TIMESTAMPTZ,
-    sme_responded_date TIMESTAMPTZ,
+    -- SME investigation results (SME fills these out when assigned)
     sme_recommendation VARCHAR(50),           -- 'scrap', 'reduce', 'keep', 'alternative_use'
     sme_recommended_qty DOUBLE PRECISION,
     sme_analysis TEXT,                        -- SME's detailed feedback, could include:
@@ -149,8 +143,6 @@ CREATE TABLE material_reviews (
     final_decision VARCHAR(50), -- 'approve_scrap', 'approve_reduce', 'reject', 'defer', etc.
     final_qty_adjustment DOUBLE PRECISION,
     final_notes TEXT,
-    decided_by UUID DEFAULT auth.uid(), -- Might be different from initiator
-    decided_at TIMESTAMPTZ,
 
     -- Follow-up scheduling
     requires_follow_up BOOLEAN DEFAULT false,
@@ -254,9 +246,7 @@ CREATE TABLE public.review_schedules (
   
   -- Auto-assign settings (optional)
   default_reviewer UUID,
-  default_sme_name VARCHAR(100),
-  default_sme_email VARCHAR(100),
-  
+
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -283,10 +273,6 @@ CREATE INDEX idx_review_schedules_next_date ON review_schedules(next_review_date
 CREATE INDEX idx_material_reviews_next_review ON material_reviews(next_review_date, status);
 
 
--- Ensure logical date ordering
-ALTER TABLE material_reviews 
-ADD CONSTRAINT check_sme_dates 
-CHECK (sme_contacted_date IS NULL OR sme_responded_date IS NULL OR sme_contacted_date <= sme_responded_date);
 
 -- -- Ensure savings is positive
 -- ALTER TABLE material_reviews 
@@ -348,14 +334,6 @@ CHECK (sme_contacted_date IS NULL OR sme_responded_date IS NULL OR sme_contacted
 --     IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
 --         IF NEW.final_decision IS NULL THEN
 --             RAISE EXCEPTION 'final_decision is required to complete the review';
---         END IF;
-        
---         IF NEW.decided_by IS NULL THEN
---             NEW.decided_by = NEW.initiated_by; -- Default to initiator
---         END IF;
-        
---         IF NEW.decided_at IS NULL THEN
---             NEW.decided_at = NOW();
 --         END IF;
 --     END IF;
 

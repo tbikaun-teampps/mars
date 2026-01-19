@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    assignments,
     audit,
     comments,
     dashboard,
@@ -11,6 +12,7 @@ from app.api import (
     insights,
     lookups,
     materials,
+    notifications,
     rbac,
     reviews,
     users,
@@ -38,6 +40,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(materials.router, prefix="/api", tags=["Materials"])
 app.include_router(reviews.router, prefix="/api", tags=["Material Reviews"])
+app.include_router(assignments.router, prefix="/api", tags=["Assignments"])
 app.include_router(comments.router, prefix="/api", tags=["Comments"])
 app.include_router(audit.router, prefix="/api", tags=["Audit"])
 app.include_router(users.router, prefix="/api", tags=["Users"])
@@ -45,6 +48,7 @@ app.include_router(insights.router, prefix="/api", tags=["Insights"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 app.include_router(lookups.router, prefix="/api", tags=["Lookup Options"])
 app.include_router(rbac.router, prefix="/api", tags=["RBAC"])
+app.include_router(notifications.router, prefix="/api", tags=["Notifications"])
 
 
 @app.get("/")

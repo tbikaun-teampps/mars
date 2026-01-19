@@ -58,6 +58,14 @@ export const queryKeys = {
       [...queryKeys.materialAuditLogs.all, "list", params] as const,
   },
 
+  // Review queries
+  reviews: {
+    all: ["reviews"] as const,
+    // Single review detail
+    detail: (materialNumber: number, reviewId: number) =>
+      [...queryKeys.reviews.all, "detail", materialNumber, reviewId] as const,
+  },
+
   // Review comments queries
   reviewComments: {
     all: ["reviewComments"] as const,
@@ -134,5 +142,21 @@ export const queryKeys = {
     all: ["usersList"] as const,
     list: (params?: { search?: string; isActive?: boolean }) =>
       [...queryKeys.usersList.all, "list", params] as const,
+  },
+
+  // Notification queries
+  notifications: {
+    all: ["notifications"] as const,
+    list: (params?: { skip?: number; limit?: number; unread_only?: boolean }) =>
+      [...queryKeys.notifications.all, "list", params] as const,
+    unreadCount: () => [...queryKeys.notifications.all, "unreadCount"] as const,
+    preferences: () => [...queryKeys.notifications.all, "preferences"] as const,
+  },
+
+  // Review assignments queries
+  reviewAssignments: {
+    all: ["reviewAssignments"] as const,
+    detail: (materialNumber: number, reviewId: number) =>
+      [...queryKeys.reviewAssignments.all, materialNumber, reviewId] as const,
   },
 } as const;

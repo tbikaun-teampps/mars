@@ -18,6 +18,12 @@ import {
   ReviewComment,
   ReviewCommentCreate,
   UserResponse,
+  ReviewAssignmentResponse,
+  UserWithPermission,
+  MyAssignmentResponse,
+  MyAssignmentsQueryParams,
+  MyInitiatedReviewResponse,
+  MyInitiatedReviewsQueryParams,
 } from "./client";
 import {
   queryKeys,
@@ -33,6 +39,7 @@ type PaginatedMaterialsResponse =
   components["schemas"]["PaginatedMaterialsResponse"];
 type MaterialWithReviews = components["schemas"]["MaterialWithReviews"];
 type MaterialReview = components["schemas"]["MaterialReview"];
+type ReviewSummary = components["schemas"]["ReviewSummary"];
 type PaginatedAuditLogsResponse =
   components["schemas"]["PaginatedAuditLogsResponse"];
 type PaginatedMaterialAuditLogsResponse =
@@ -71,6 +78,23 @@ export function useMaterialDetails(
 }
 
 /**
+ * Hook to fetch a single review with full details
+ * @param materialNumber The material number
+ * @param reviewId The review ID to fetch
+ */
+export function useReviewDetails(
+  materialNumber: number | null,
+  reviewId: number | null
+): UseQueryResult<MaterialReview, Error> {
+  return useQuery({
+    queryKey: queryKeys.reviews.detail(materialNumber!, reviewId!),
+    queryFn: () => apiClient.getReview(materialNumber!, reviewId!),
+    enabled: materialNumber !== null && reviewId !== null,
+    staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+/**
  * Hook to update a review with optimistic updates
  */
 export function useUpdateReview(): UseMutationResult<
@@ -99,16 +123,15 @@ export function useUpdateReview(): UseMutationResult<
         queryKeys.materials.detail(materialNumber)
       );
 
-      // Optimistically update the cache
+      // Optimistically update the cache (reviews are ReviewSummary, not full MaterialReview)
       if (previousMaterial) {
-        const extendedReviews = previousMaterial.reviews as MaterialReview[];
         queryClient.setQueryData<MaterialWithReviews>(
           queryKeys.materials.detail(materialNumber),
           {
             ...previousMaterial,
-            reviews: extendedReviews.map((review) =>
+            reviews: previousMaterial.reviews.map((review) =>
               review.review_id === reviewId
-                ? ({ ...review, ...data } as MaterialReview)
+                ? ({ ...review, status: data.status ?? review.status } as ReviewSummary)
                 : review
             ),
           }
@@ -170,12 +193,11 @@ export function useCancelReview(): UseMutationResult<
 
       // Optimistically update the cache
       if (previousMaterial) {
-        const extendedReviews = previousMaterial.reviews as MaterialReview[];
         queryClient.setQueryData<MaterialWithReviews>(
           queryKeys.materials.detail(materialNumber),
           {
             ...previousMaterial,
-            reviews: extendedReviews.filter(
+            reviews: previousMaterial.reviews.filter(
               (review) => review.review_id !== reviewId
             ),
             reviews_count: Math.max(
@@ -879,5 +901,230 @@ export function useUsersList(
     queryFn: () => apiClient.getUsers(params),
     enabled,
     staleTime: 1000 * 60, // 1 minute
+  });
+}
+
+// ============================================================================
+// Notification Hooks
+// ============================================================================
+
+// Type aliases for Notifications
+type PaginatedNotificationsResponse =
+  components["schemas"]["PaginatedNotificationsResponse"];
+type NotificationPreferences =
+  components["schemas"]["NotificationPreferences"];
+
+/**
+ * Hook to fetch paginated notifications
+ * @param params Query parameters for pagination
+ * @param enabled Whether the query should run (default: true)
+ */
+export function useNotifications(
+  params?: { skip?: number; limit?: number; unread_only?: boolean },
+  enabled: boolean = true
+): UseQueryResult<PaginatedNotificationsResponse, Error> {
+  return useQuery({
+    queryKey: queryKeys.notifications.list(params),
+    queryFn: () => apiClient.getNotifications(params),
+    enabled,
+    staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+/**
+ * Hook to fetch unread notification count for badge
+ * Polls every 30 seconds to keep count updated
+ */
+export function useUnreadNotificationCount(): UseQueryResult<
+  { unread_count: number },
+  Error
+> {
+  return useQuery({
+    queryKey: queryKeys.notifications.unreadCount(),
+    queryFn: () => apiClient.getUnreadNotificationCount(),
+    refetchInterval: 30000, // Poll every 30 seconds
+    staleTime: 1000 * 15, // 15 seconds
+  });
+}
+
+/**
+ * Hook to mark a notification as read
+ */
+export function useMarkNotificationRead(): UseMutationResult<
+  { message: string },
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (notificationId: number) =>
+      apiClient.markNotificationAsRead(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to mark notification as read:", error);
+    },
+  });
+}
+
+/**
+ * Hook to mark a notification as unread
+ */
+export function useMarkNotificationUnread(): UseMutationResult<
+  { message: string },
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (notificationId: number) =>
+      apiClient.markNotificationAsUnread(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to mark notification as unread:", error);
+    },
+  });
+}
+
+/**
+ * Hook to mark all notifications as read
+ */
+export function useMarkAllNotificationsRead(): UseMutationResult<
+  { message: string },
+  Error,
+  void
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiClient.markAllNotificationsAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to mark all notifications as read:", error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch notification preferences
+ */
+export function useNotificationPreferences(): UseQueryResult<
+  NotificationPreferences,
+  Error
+> {
+  return useQuery({
+    queryKey: queryKeys.notifications.preferences(),
+    queryFn: () => apiClient.getNotificationPreferences(),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/**
+ * Hook to update notification preferences
+ */
+export function useUpdateNotificationPreferences(): UseMutationResult<
+  NotificationPreferences,
+  Error,
+  {
+    review_assigned?: boolean;
+    review_status_changed?: boolean;
+    comment_added?: boolean;
+  }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => apiClient.updateNotificationPreferences(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.notifications.preferences(),
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to update notification preferences:", error);
+    },
+  });
+}
+
+/**
+ * Hook to create a debug notification (development only)
+ */
+export function useCreateDebugNotification(): UseMutationResult<
+  components["schemas"]["NotificationResponse"],
+  Error,
+  components["schemas"]["DebugNotificationCreate"]
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => apiClient.createDebugNotification(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+    onError: (error) => {
+      console.error("Failed to create debug notification:", error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch users with a specific permission, optionally grouped by SME type
+ */
+export function useUsersByPermission(
+  permission: string
+): UseQueryResult<UserWithPermission[], Error> {
+  return useQuery({
+    queryKey: ["users", "byPermission", permission],
+    queryFn: () => apiClient.getUsersByPermission(permission),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!permission,
+  });
+}
+
+/**
+ * Hook to fetch assignments for a review
+ */
+export function useReviewAssignments(
+  materialNumber: number | undefined,
+  reviewId: number | undefined | null
+): UseQueryResult<ReviewAssignmentResponse[], Error> {
+  return useQuery({
+    queryKey: queryKeys.reviewAssignments.detail(materialNumber!, reviewId!),
+    queryFn: () => apiClient.getReviewAssignments(materialNumber!, reviewId!),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    enabled: !!materialNumber && !!reviewId,
+  });
+}
+
+/**
+ * Hook to fetch the current user's assignments (for My Reviews page)
+ */
+export function useMyAssignments(
+  params?: MyAssignmentsQueryParams
+): UseQueryResult<MyAssignmentResponse[], Error> {
+  return useQuery({
+    queryKey: ["myAssignments", params],
+    queryFn: () => apiClient.getMyAssignments(params),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+}
+
+/**
+ * Hook to fetch reviews initiated by the current user (for My Reviews page)
+ */
+export function useMyInitiatedReviews(
+  params?: MyInitiatedReviewsQueryParams
+): UseQueryResult<MyInitiatedReviewResponse[], Error> {
+  return useQuery({
+    queryKey: ["myInitiatedReviews", params],
+    queryFn: () => apiClient.getMyInitiatedReviews(params),
+    staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }

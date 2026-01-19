@@ -47,7 +47,7 @@ export function SettingsPage() {
         <TabsList>
           <TabsTrigger value="lookups">Lookup Options</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
-          <TabsTrigger value="user-roles">User Assignments</TabsTrigger>
+          <TabsTrigger value="user-roles">User Roles</TabsTrigger>
           <TabsTrigger value="sme-expertise">SME Expertise</TabsTrigger>
         </TabsList>
 

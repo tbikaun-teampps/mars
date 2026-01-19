@@ -1,11 +1,13 @@
 """Authentication and authorization utilities."""
 
 import logging
+import time
 from typing import Annotated, Optional
 
+import httpx
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jose import JWTError, jwk, jwt
 
 from app.core.config import settings
 
@@ -16,6 +18,10 @@ security = HTTPBearer()
 
 # Header name for impersonation
 IMPERSONATE_HEADER = "X-Impersonate-User-Id"
+
+# Cache for JWKS keys
+_jwks_cache: dict = {"keys": None, "fetched_at": 0}
+JWKS_CACHE_TTL = 3600  # 1 hour
 
 
 class User:
@@ -35,9 +41,62 @@ class User:
         self.is_impersonating = is_impersonating
 
 
+def _get_jwks() -> list[dict]:
+    """Fetch and cache JWKS from Supabase."""
+    now = time.time()
+    if _jwks_cache["keys"] and (now - _jwks_cache["fetched_at"]) < JWKS_CACHE_TTL:
+        return _jwks_cache["keys"]
+
+    jwks_url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+    try:
+        response = httpx.get(jwks_url, timeout=10)
+        response.raise_for_status()
+        jwks_data = response.json()
+        _jwks_cache["keys"] = jwks_data.get("keys", [])
+        _jwks_cache["fetched_at"] = now
+        logger.info(f"Fetched {len(_jwks_cache['keys'])} keys from JWKS endpoint")
+        return _jwks_cache["keys"]
+    except Exception as e:
+        logger.warning(f"Failed to fetch JWKS: {e}")
+        return _jwks_cache.get("keys") or []
+
+
+def _get_signing_key(token: str) -> tuple[str, str]:
+    """
+    Get the appropriate signing key for a token.
+
+    Returns:
+        Tuple of (key, algorithm) to use for verification
+    """
+    header = jwt.get_unverified_header(token)
+    alg = header.get("alg", "HS256")
+    kid = header.get("kid")
+
+    # For HS256, use the symmetric secret
+    if alg == "HS256":
+        return settings.supabase_jwt_secret, "HS256"
+
+    # For asymmetric algorithms (ES256, RS256), use JWKS
+    if alg in ("ES256", "RS256"):
+        keys = _get_jwks()
+        for key_data in keys:
+            if kid and key_data.get("kid") != kid:
+                continue
+            if key_data.get("alg") == alg:
+                # Convert JWK to PEM format
+                key_obj = jwk.construct(key_data, alg)
+                return key_obj, alg
+
+        raise JWTError(f"No matching key found for kid={kid}, alg={alg}")
+
+    raise JWTError(f"Unsupported algorithm: {alg}")
+
+
 def verify_token(token: str) -> dict:
     """
     Verify and decode a Supabase JWT token.
+
+    Supports both HS256 (legacy) and ES256/RS256 (asymmetric) tokens.
 
     Args:
         token: The JWT token string
@@ -49,14 +108,16 @@ def verify_token(token: str) -> dict:
         HTTPException: If the token is invalid or expired
     """
     try:
+        key, alg = _get_signing_key(token)
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            key,
+            algorithms=[alg],
             audience="authenticated",
         )
         return payload
     except JWTError as e:
+        logger.error(f"JWT verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid authentication credentials: {str(e)}",
@@ -119,21 +180,15 @@ async def get_current_user(
             )
 
         # Fetch the impersonated user's email from the database
-        impersonated_email = await _get_user_email_for_impersonation(
-            impersonate_user_id
-        )
+        impersonated_email = await _get_user_email_for_impersonation(impersonate_user_id)
         if not impersonated_email:
-            logger.warning(
-                f"Impersonation failed: user {impersonate_user_id} does not have an email address"
-            )
+            logger.warning(f"Impersonation failed: user {impersonate_user_id} does not have an email address")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Impersonated user not found or has no email address",
             )
 
-        logger.info(
-            f"User {user_id} ({email}) is impersonating user {impersonate_user_id}"
-        )
+        logger.info(f"User {user_id} ({email}) is impersonating user {impersonate_user_id}")
 
         # Return user with impersonated ID and email
         return User(

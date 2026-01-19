@@ -37,6 +37,7 @@ interface MultiStepFormProviderProps {
   children: React.ReactNode;
   steps: Step[];
   initialStep?: number;
+  initialCompletedSteps?: number[];
   onStepChange?: (step: number) => void;
 }
 
@@ -44,12 +45,22 @@ export function MultiStepFormProvider({
   children,
   steps,
   initialStep = 0,
+  initialCompletedSteps = [],
   onStepChange,
 }: MultiStepFormProviderProps) {
   const [currentStep, setCurrentStep] = React.useState(initialStep);
   const [completedSteps, setCompletedSteps] = React.useState<Set<number>>(
-    new Set()
+    () => new Set(initialCompletedSteps)
   );
+
+  // Sync completed steps when initial value changes (e.g., after query invalidation)
+  // This ensures UI reflects backend state after save operations
+  // Using JSON.stringify for stable dependency comparison of array contents
+  const initialCompletedStepsKey = JSON.stringify(initialCompletedSteps);
+  React.useEffect(() => {
+    setCompletedSteps(new Set(initialCompletedSteps));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCompletedStepsKey]);
 
   const goToStep = React.useCallback(
     (step: number) => {

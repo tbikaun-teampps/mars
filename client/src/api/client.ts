@@ -76,6 +76,28 @@ export type {
   UploadJobsQueryParams,
 } from "@/types/materials";
 
+// Assignment types
+export type ReviewAssignmentResponse =
+  components["schemas"]["ReviewAssignmentResponse"];
+export type UserWithPermission = components["schemas"]["UserWithPermission"];
+export type MyAssignmentResponse =
+  components["schemas"]["MyAssignmentResponse"];
+export type MyInitiatedReviewResponse =
+  components["schemas"]["MyInitiatedReviewResponse"];
+
+export interface MyAssignmentsQueryParams {
+  status?: string;
+  assignment_type?: string;
+  skip?: number;
+  limit?: number;
+}
+
+export interface MyInitiatedReviewsQueryParams {
+  status?: string;
+  skip?: number;
+  limit?: number;
+}
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -211,6 +233,15 @@ export class ApiClient {
     return this.get<MaterialWithReviews | null>(`/materials/${materialNumber}`);
   }
 
+  async getReview(
+    materialNumber: number,
+    reviewId: number
+  ): Promise<MaterialReview> {
+    return this.get<MaterialReview>(
+      `/materials/${materialNumber}/reviews/${reviewId}`
+    );
+  }
+
   async createReview(
     materialNumber: number,
     data: MaterialReviewCreate
@@ -227,10 +258,12 @@ export class ApiClient {
     step: number,
     data: MaterialReviewUpdate
   ): Promise<MaterialReview> {
-    // Map step number (0-4) to step enum string
+    // Map step number (0-5) to step enum string
+    // Step indices: 0=General, 1=Checklist, 2=Assignment, 3=SME, 4=FollowUp, 5=FinalDecision
     const stepNames = [
       "general_info",
       "checklist",
+      "assignment",
       "sme_investigation",
       "follow_up",
       "final_decision",
@@ -249,6 +282,69 @@ export class ApiClient {
   ): Promise<{ message: string }> {
     return this.put<{ message: string }>(
       `/materials/${materialNumber}/review/${reviewId}/cancel`
+    );
+  }
+
+  // Assignment API methods
+  async getReviewAssignments(
+    materialNumber: number,
+    reviewId: number
+  ): Promise<ReviewAssignmentResponse[]> {
+    return this.get<ReviewAssignmentResponse[]>(
+      `/materials/${materialNumber}/reviews/${reviewId}/assignments`
+    );
+  }
+
+  async createReviewAssignments(
+    materialNumber: number,
+    reviewId: number,
+    data: { sme_user_id?: string; approver_user_id: string }
+  ): Promise<{ message: string; review_id: number }> {
+    return this.post<{ message: string; review_id: number }>(
+      `/materials/${materialNumber}/reviews/${reviewId}/assignments`,
+      data
+    );
+  }
+
+  async getUsersByPermission(
+    permission: string
+  ): Promise<UserWithPermission[]> {
+    return this.get<UserWithPermission[]>(
+      `/users-by-permission?permission=${permission}`
+    );
+  }
+
+  async getMyAssignments(
+    params?: MyAssignmentsQueryParams
+  ): Promise<MyAssignmentResponse[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.assignment_type)
+      queryParams.append("assignment_type", params.assignment_type);
+    if (params?.skip !== undefined)
+      queryParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+
+    const queryString = queryParams.toString();
+    return this.get<MyAssignmentResponse[]>(
+      `/my-assignments${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async getMyInitiatedReviews(
+    params?: MyInitiatedReviewsQueryParams
+  ): Promise<MyInitiatedReviewResponse[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.skip !== undefined)
+      queryParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+
+    const queryString = queryParams.toString();
+    return this.get<MyInitiatedReviewResponse[]>(
+      `/my-initiated-reviews${queryString ? `?${queryString}` : ""}`
     );
   }
 
@@ -637,6 +733,79 @@ export class ApiClient {
     const queryString = queryParams.toString();
     return this.get<components["schemas"]["UserListItem"][]>(
       `/users${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  // Notifications API methods
+  async getNotifications(params?: {
+    skip?: number;
+    limit?: number;
+    unread_only?: boolean;
+  }): Promise<components["schemas"]["PaginatedNotificationsResponse"]> {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined)
+      queryParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined)
+      queryParams.append("limit", params.limit.toString());
+    if (params?.unread_only !== undefined)
+      queryParams.append("unread_only", params.unread_only.toString());
+
+    const queryString = queryParams.toString();
+    return this.get<components["schemas"]["PaginatedNotificationsResponse"]>(
+      `/notifications${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
+  async getUnreadNotificationCount(): Promise<{ unread_count: number }> {
+    return this.get<{ unread_count: number }>("/notifications/unread-count");
+  }
+
+  async markNotificationAsRead(
+    notificationId: number
+  ): Promise<{ message: string }> {
+    return this.put<{ message: string }>(
+      `/notifications/${notificationId}/read`
+    );
+  }
+
+  async markNotificationAsUnread(
+    notificationId: number
+  ): Promise<{ message: string }> {
+    return this.put<{ message: string }>(
+      `/notifications/${notificationId}/unread`
+    );
+  }
+
+  async markAllNotificationsAsRead(): Promise<{ message: string }> {
+    return this.put<{ message: string }>("/notifications/mark-all-read");
+  }
+
+  async getNotificationPreferences(): Promise<
+    components["schemas"]["NotificationPreferences"]
+  > {
+    return this.get<components["schemas"]["NotificationPreferences"]>(
+      "/notifications/preferences"
+    );
+  }
+
+  async updateNotificationPreferences(data: {
+    review_assigned?: boolean;
+    review_status_changed?: boolean;
+    comment_added?: boolean;
+  }): Promise<components["schemas"]["NotificationPreferences"]> {
+    return this.put<components["schemas"]["NotificationPreferences"]>(
+      "/notifications/preferences",
+      data
+    );
+  }
+
+  // Debug: Create test notification (development only)
+  async createDebugNotification(
+    data: components["schemas"]["DebugNotificationCreate"]
+  ): Promise<components["schemas"]["NotificationResponse"]> {
+    return this.post<components["schemas"]["NotificationResponse"]>(
+      "/notifications/debug/create",
+      data
     );
   }
 }

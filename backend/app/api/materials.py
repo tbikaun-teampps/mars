@@ -25,7 +25,7 @@ from sqlalchemy.orm import aliased
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.utils import transform_db_record_to_material
+from app.api.utils import calculate_workflow_state, transform_db_record_to_material
 from app.core.auth import User, get_current_user
 from app.core.config import settings
 from app.core.database import async_session_maker, get_db
@@ -34,6 +34,7 @@ from app.models.db_models import (
     MaterialInsightDB,
     MaterialReviewDB,
     ProfileDB,
+    ReviewAssignmentDB,
     ReviewChecklistDB,
     ReviewCommentDB,
     SAPMaterialData,
@@ -41,7 +42,7 @@ from app.models.db_models import (
     UploadSnapshot,
 )
 from app.models.material import Insight, Material, MaterialWithReviews, PaginatedMaterialsResponse
-from app.models.review import MaterialReview, ReviewChecklist, ReviewStatus
+from app.models.review import ReviewStatus, ReviewSummary
 from app.models.upload import (
     UploadJobListResponse,
     UploadJobProgress,
@@ -50,6 +51,7 @@ from app.models.upload import (
     UploadSAPDataResponse,
 )
 from app.models.user import UserProfile
+from app.services.workflow import TERMINAL_STATES, ReviewStateMachine
 
 router = APIRouter()
 
@@ -70,12 +72,9 @@ async def list_materials(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        20, ge=1, description="Maximum number of items to return"
-    ),
+    limit: int = Query(20, ge=1, description="Maximum number of items to return"),
     sort_by: Optional[str] = Query(None, description="Field to sort by"),
-    sort_order: Optional[str] = Query(
-        "asc", description="Sort order: asc or desc"),
+    sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
     search: Optional[str] = Query(
         None,
         description="Search across material_number, material_desc, and material_type",
@@ -85,21 +84,11 @@ async def list_materials(
         description="Exclude materials where description contains any of these terms (case-insensitive)",
     ),
     # Filter parameters
-    material_type: Optional[list[str]] = Query(
-        None, description="Filter by material types (e.g., SPRS, HALB, FERT)"
-    ),
-    min_total_value: Optional[float] = Query(
-        None, description="Minimum total value filter"
-    ),
-    max_total_value: Optional[float] = Query(
-        None, description="Maximum total value filter"
-    ),
-    min_total_quantity: Optional[float] = Query(
-        None, description="Minimum total quantity filter"
-    ),
-    max_total_quantity: Optional[float] = Query(
-        None, description="Maximum total quantity filter"
-    ),
+    material_type: Optional[list[str]] = Query(None, description="Filter by material types (e.g., SPRS, HALB, FERT)"),
+    min_total_value: Optional[float] = Query(None, description="Minimum total value filter"),
+    max_total_value: Optional[float] = Query(None, description="Maximum total value filter"),
+    min_total_quantity: Optional[float] = Query(None, description="Minimum total quantity filter"),
+    max_total_quantity: Optional[float] = Query(None, description="Maximum total quantity filter"),
     last_reviewed_filter: Optional[str] = Query(
         None,
         description="Filter by last reviewed: 'overdue_90' (>90 days), 'overdue_30' (>30 days), 'never' (never reviewed)",
@@ -108,15 +97,9 @@ async def list_materials(
         None,
         description="Filter by next review: 'overdue' (past due), 'due_soon' (<30 days), 'not_scheduled' (no date set)",
     ),
-    has_reviews: Optional[bool] = Query(
-        None, description="Filter by whether material has any reviews"
-    ),
-    has_errors: Optional[bool] = Query(
-        None, description="Filter by whether material has error insights"
-    ),
-    has_warnings: Optional[bool] = Query(
-        None, description="Filter by whether material has warning insights"
-    ),
+    has_reviews: Optional[bool] = Query(None, description="Filter by whether material has any reviews"),
+    has_errors: Optional[bool] = Query(None, description="Filter by whether material has error insights"),
+    has_warnings: Optional[bool] = Query(None, description="Filter by whether material has warning insights"),
 ) -> PaginatedMaterialsResponse:
     """List all materials with pagination, sorting, and search."""
 
@@ -129,7 +112,7 @@ async def list_materials(
             MaterialReviewDB.next_review_date,
             # MaterialReviewDB.notes,
         )
-        .where(MaterialReviewDB.status == ReviewStatus.COMPLETED.value)
+        .where(MaterialReviewDB.status == ReviewStatus.APPROVED.value)
         .distinct(MaterialReviewDB.material_number)
         .order_by(MaterialReviewDB.material_number, MaterialReviewDB.review_date.desc())
         .subquery()
@@ -141,7 +124,7 @@ async def list_materials(
             MaterialReviewDB.material_number,
             sa_func.count(MaterialReviewDB.review_id).label("active_count"),
         )
-        .where(MaterialReviewDB.status.notin_([ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value]))
+        .where(MaterialReviewDB.status.notin_(TERMINAL_STATES))
         .group_by(MaterialReviewDB.material_number)
         .subquery()
     )
@@ -149,8 +132,7 @@ async def list_materials(
     query = (
         select(
             SAPMaterialData,
-            func.count(MaterialReviewDB.review_id.distinct()
-                       ).label("reviews_count"),
+            func.count(MaterialReviewDB.review_id.distinct()).label("reviews_count"),
             latest_review.c.review_date.label("last_reviewed"),
             latest_review.c.next_review_date.label("next_review"),
             (active_review.c.active_count > 0).label("has_active_review"),
@@ -188,9 +170,7 @@ async def list_materials(
     if exclude:
         for term in exclude:
             exclude_pattern = f"%{term}%"
-            query = query.where(
-                ~SAPMaterialData.material_desc.ilike(exclude_pattern)
-            )
+            query = query.where(~SAPMaterialData.material_desc.ilike(exclude_pattern))
 
     # Apply material type filter
     if material_type:
@@ -204,22 +184,16 @@ async def list_materials(
 
     # Apply total quantity range filters
     if min_total_quantity is not None:
-        query = query.where(
-            SAPMaterialData.total_quantity >= min_total_quantity)
+        query = query.where(SAPMaterialData.total_quantity >= min_total_quantity)
     if max_total_quantity is not None:
-        query = query.where(
-            SAPMaterialData.total_quantity <= max_total_quantity)
+        query = query.where(SAPMaterialData.total_quantity <= max_total_quantity)
 
     # Apply has_reviews filter (uses HAVING since it's aggregated)
     if has_reviews is not None:
         if has_reviews:
-            query = query.having(
-                func.count(MaterialReviewDB.review_id.distinct()) > 0
-            )
+            query = query.having(func.count(MaterialReviewDB.review_id.distinct()) > 0)
         else:
-            query = query.having(
-                func.count(MaterialReviewDB.review_id.distinct()) == 0
-            )
+            query = query.having(func.count(MaterialReviewDB.review_id.distinct()) == 0)
 
     # Apply last_reviewed_filter (uses HAVING since it depends on latest_review)
     today = date.today()
@@ -237,20 +211,14 @@ async def list_materials(
     if next_review_filter:
         if next_review_filter == "not_scheduled":
             # Has been reviewed but no next review date set
-            query = query.having(
-                (latest_review.c.review_date.isnot(None))
-                & (latest_review.c.next_review_date.is_(None))
-            )
+            query = query.having((latest_review.c.review_date.isnot(None)) & (latest_review.c.next_review_date.is_(None)))
         elif next_review_filter == "overdue":
             # Next review date is in the past
             query = query.having(latest_review.c.next_review_date < today)
         elif next_review_filter == "due_soon":
             # Next review date is within 30 days
             threshold_30 = today + timedelta(days=30)
-            query = query.having(
-                (latest_review.c.next_review_date >= today)
-                & (latest_review.c.next_review_date <= threshold_30)
-            )
+            query = query.having((latest_review.c.next_review_date >= today) & (latest_review.c.next_review_date <= threshold_30))
 
     # Apply insights filters (has_errors, has_warnings)
     # Use EXISTS subqueries since MaterialInsightDB is not directly joined
@@ -309,8 +277,7 @@ async def list_materials(
     # Get total count before pagination
     # For complex queries with HAVING clauses, count distinct material_numbers from the filtered query
     # Create a subquery without pagination to count total matching rows
-    count_subquery = query.with_only_columns(
-        SAPMaterialData.material_number).subquery()
+    count_subquery = query.with_only_columns(SAPMaterialData.material_number).subquery()
     count_query = select(func.count()).select_from(count_subquery)
 
     total_result = await db.exec(count_query)
@@ -330,12 +297,9 @@ async def list_materials(
     insights_by_material: dict[int, list[Insight]] = {}
     opportunity_value_by_material: dict[int, float] = {}
     if material_numbers:
-        insights_query = (
-            select(MaterialInsightDB)
-            .where(
-                MaterialInsightDB.material_number.in_(material_numbers),
-                MaterialInsightDB.acknowledged_at.is_(None),
-            )
+        insights_query = select(MaterialInsightDB).where(
+            MaterialInsightDB.material_number.in_(material_numbers),
+            MaterialInsightDB.acknowledged_at.is_(None),
         )
         insights_result = await db.exec(insights_query)
         for insight_db in insights_result.all():
@@ -361,9 +325,7 @@ async def list_materials(
         next_review,
         has_active_review,
     ) in rows:
-        material_dict = transform_db_record_to_material(
-            material_data.model_dump()
-        ).model_dump()
+        material_dict = transform_db_record_to_material(material_data.model_dump()).model_dump()
         material_dict["reviews_count"] = reviews_count
         # Override with data from material_reviews table (most recent review)
         material_dict["last_reviewed"] = last_reviewed
@@ -377,17 +339,13 @@ async def list_materials(
         else:
             material_dict["stock_safety_ratio"] = None
         # Attach insights from separate query
-        material_dict["insights"] = insights_by_material.get(
-            material_data.material_number, [])
+        material_dict["insights"] = insights_by_material.get(material_data.material_number, [])
         # Attach opportunity value sum
         opp_value = opportunity_value_by_material.get(material_data.material_number, 0.0)
         material_dict["opportunity_value_sum"] = opp_value if opp_value > 0 else None
         materials.append(Material(**material_dict))
 
-    print(
-        f"Total materials: {total}, Returning items {skip} to {skip + limit}, "
-        f"Sorted by: {sort_by} {sort_order}, Search: {search}"
-    )
+    print(f"Total materials: {total}, Returning items {skip} to {skip + limit}, Sorted by: {sort_by} {sort_order}, Search: {search}")
 
     return PaginatedMaterialsResponse(
         items=materials,
@@ -403,30 +361,12 @@ async def list_materials(
 async def list_upload_jobs(
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
-    sort_by: Optional[str] = Query(
-        default="created_at",
-        description="Field to sort by: created_at, completed_at, file_name, status"
-    ),
-    sort_order: Optional[str] = Query(
-        default="desc",
-        description="Sort order: asc or desc"
-    ),
-    status: Optional[str] = Query(
-        default=None,
-        description="Filter by status: pending, processing, completed, failed"
-    ),
-    date_from: Optional[str] = Query(
-        default=None,
-        description="Filter jobs created on or after this date (ISO format)"
-    ),
-    date_to: Optional[str] = Query(
-        default=None,
-        description="Filter jobs created on or before this date (ISO format)"
-    ),
-    search: Optional[str] = Query(
-        default=None,
-        description="Search by file name"
-    ),
+    sort_by: Optional[str] = Query(default="created_at", description="Field to sort by: created_at, completed_at, file_name, status"),
+    sort_order: Optional[str] = Query(default="desc", description="Sort order: asc or desc"),
+    status: Optional[str] = Query(default=None, description="Filter by status: pending, processing, completed, failed"),
+    date_from: Optional[str] = Query(default=None, description="Filter jobs created on or after this date (ISO format)"),
+    date_to: Optional[str] = Query(default=None, description="Filter jobs created on or before this date (ISO format)"),
+    search: Optional[str] = Query(default=None, description="Search by file name"),
     db: AsyncSession = Depends(get_db),
 ) -> UploadJobListResponse:
     """Get paginated list of all upload jobs for history display."""
@@ -443,7 +383,7 @@ async def list_upload_jobs(
     # Apply date range filters
     if date_from:
         try:
-            from_date = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+            from_date = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
             base_query = base_query.where(UploadJobDB.created_at >= from_date)
             count_query = count_query.where(UploadJobDB.created_at >= from_date)
         except ValueError:
@@ -451,7 +391,7 @@ async def list_upload_jobs(
 
     if date_to:
         try:
-            to_date = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+            to_date = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
             # Add one day to include the entire end date
             to_date = to_date + timedelta(days=1)
             base_query = base_query.where(UploadJobDB.created_at < to_date)
@@ -493,8 +433,7 @@ async def list_upload_jobs(
     for job in jobs:
         progress_pct = 0.0
         if job.total_records > 0:
-            progress_pct = round(job.processed_records /
-                                 job.total_records * 100, 1)
+            progress_pct = round(job.processed_records / job.total_records * 100, 1)
 
         result = None
         if job.status == "completed":
@@ -539,9 +478,7 @@ async def get_upload_job_status(
 ) -> UploadJobStatus:
     """Get the status and progress of an upload job."""
 
-    result = await db.execute(
-        select(UploadJobDB).where(UploadJobDB.job_id == job_id)
-    )
+    result = await db.execute(select(UploadJobDB).where(UploadJobDB.job_id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:
@@ -552,8 +489,7 @@ async def get_upload_job_status(
 
     progress_pct = 0.0
     if job.total_records > 0:
-        progress_pct = round(job.processed_records /
-                             job.total_records * 100, 1)
+        progress_pct = round(job.processed_records / job.total_records * 100, 1)
 
     result = None
     if job.status == "completed":
@@ -593,151 +529,123 @@ async def get_material(
     """Get material details by material number."""
 
     # Get material
-    material_query = select(SAPMaterialData).where(
-        SAPMaterialData.material_number == material_number
-    )
+    material_query = select(SAPMaterialData).where(SAPMaterialData.material_number == material_number)
     material_result = await db.exec(material_query)
     material_data = material_result.first()
 
     if not material_data:
         return None
 
-    # Create aliases for profile joins (one for initiator, one for decider)
+    # Create alias for profile join (for initiator)
     InitiatorProfile = aliased(ProfileDB)
-    DeciderProfile = aliased(ProfileDB)
 
     # Get reviews for this material with comment counts, ordered by review_date descending
     reviews_query = (
-        select(
-            MaterialReviewDB,
-            ReviewChecklistDB,
-            InitiatorProfile,
-            DeciderProfile,
-            func.count(ReviewCommentDB.comment_id).label("comments_count")
-        )
+        select(MaterialReviewDB, ReviewChecklistDB, InitiatorProfile, func.count(ReviewCommentDB.comment_id).label("comments_count"))
         .where(MaterialReviewDB.material_number == material_number)
-        .outerjoin(
-            ReviewChecklistDB, MaterialReviewDB.review_id == ReviewChecklistDB.review_id
-        )
-        .outerjoin(
-            InitiatorProfile, MaterialReviewDB.initiated_by == InitiatorProfile.id
-        )
-        .outerjoin(DeciderProfile, MaterialReviewDB.decided_by == DeciderProfile.id)
-        .outerjoin(
-            ReviewCommentDB, MaterialReviewDB.review_id == ReviewCommentDB.review_id
-        )
-        .group_by(
-            MaterialReviewDB.review_id,
-            ReviewChecklistDB.checklist_id,
-            InitiatorProfile.id,
-            DeciderProfile.id
-        )
+        .outerjoin(ReviewChecklistDB, MaterialReviewDB.review_id == ReviewChecklistDB.review_id)
+        .outerjoin(InitiatorProfile, MaterialReviewDB.initiated_by == InitiatorProfile.id)
+        .outerjoin(ReviewCommentDB, MaterialReviewDB.review_id == ReviewCommentDB.review_id)
+        .group_by(MaterialReviewDB.review_id, ReviewChecklistDB.checklist_id, InitiatorProfile.id)
         .order_by(MaterialReviewDB.review_date.desc())
     )
     reviews_result = await db.exec(reviews_query)
     reviews_data = reviews_result.all()
 
+    # Batch query assignments for all reviews (for workflow state and display)
+    review_ids = [r.review_id for r, _, _, _ in reviews_data]
+    AssigneeProfile = aliased(ProfileDB)
+    assignments_map: dict[int, dict] = {}
+    if review_ids:
+        assignments_query = (
+            select(ReviewAssignmentDB, AssigneeProfile)
+            .where(
+                ReviewAssignmentDB.review_id.in_(review_ids),
+                ReviewAssignmentDB.status.notin_(["declined", "reassigned"]),
+            )
+            .outerjoin(AssigneeProfile, ReviewAssignmentDB.user_id == AssigneeProfile.id)
+        )
+        assignments_result = await db.exec(assignments_query)
+        all_assignments = assignments_result.all()
+        # Build map of review_id -> {has_sme, has_approver, sme_user_id, sme_name, approver_user_id, approver_name}
+        for a, profile in all_assignments:
+            if a.review_id not in assignments_map:
+                assignments_map[a.review_id] = {
+                    "has_sme": False,
+                    "has_approver": False,
+                    "sme_user_id": None,
+                    "sme_name": None,
+                    "approver_user_id": None,
+                    "approver_name": None,
+                }
+            if a.assignment_type == "sme":
+                assignments_map[a.review_id]["has_sme"] = True
+                assignments_map[a.review_id]["sme_user_id"] = a.user_id
+                assignments_map[a.review_id]["sme_name"] = profile.full_name if profile else None
+            elif a.assignment_type == "approver":
+                assignments_map[a.review_id]["has_approver"] = True
+                assignments_map[a.review_id]["approver_user_id"] = a.user_id
+                assignments_map[a.review_id]["approver_name"] = profile.full_name if profile else None
+
     # Transform to response models
     material = transform_db_record_to_material(material_data.model_dump())
     reviews = []
-    for r, checklist_db, initiator_profile, decider_profile, comments_count in reviews_data:
-        # Create checklist object if checklist data exists
-        checklist = None
-        if checklist_db:
-            checklist = ReviewChecklist(
-                has_open_orders=checklist_db.has_open_orders,
-                has_forecast_demand=checklist_db.has_forecast_demand,
-                checked_alternate_plants=checklist_db.checked_alternate_plants,
-                contacted_procurement=checklist_db.contacted_procurement,
-                reviewed_bom_usage=checklist_db.reviewed_bom_usage,
-                checked_supersession=checklist_db.checked_supersession,
-                checked_historical_usage=checklist_db.checked_historical_usage,
-                open_order_numbers=checklist_db.open_order_numbers,
-                forecast_next_12m=checklist_db.forecast_next_12m,
-                alternate_plant_qty=checklist_db.alternate_plant_qty,
-                procurement_feedback=checklist_db.procurement_feedback,
-            )
-
+    for r, checklist_db, initiator_profile, comments_count in reviews_data:
         # Create user profile objects if profile data exists
         initiated_by_user = None
         if initiator_profile:
-            initiated_by_user = UserProfile(
-                id=initiator_profile.id, full_name=initiator_profile.full_name
-            )
+            initiated_by_user = UserProfile(id=initiator_profile.id, full_name=initiator_profile.full_name)
 
-        decided_by_user = None
-        if decider_profile:
-            decided_by_user = UserProfile(
-                id=decider_profile.id, full_name=decider_profile.full_name
-            )
+        # Get assignment info for workflow state and display
+        assignment_info = assignments_map.get(r.review_id, {"has_sme": False, "has_approver": False})
+        has_assignments = assignment_info["has_sme"] and assignment_info["has_approver"]
+        current_step, _ = calculate_workflow_state(r, has_assignments)
 
-        review = MaterialReview(
+        # Get assigned user info from the detailed map
+        assigned_sme_id = assignment_info.get("sme_user_id")
+        assigned_sme_name = assignment_info.get("sme_name")
+        assigned_approver_id = assignment_info.get("approver_user_id")
+        assigned_approver_name = assignment_info.get("approver_name")
+
+        # Build ReviewSummary (lightweight model for history display)
+        review = ReviewSummary(
             review_id=r.review_id,
-            material_number=r.material_number,
+            status=r.status,
+            review_date=r.review_date,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
             initiated_by=r.initiated_by,
             initiated_by_user=initiated_by_user,
-            review_date=r.review_date,
-            review_reason=r.review_reason,
-            current_stock_qty=r.current_stock_qty,
-            current_stock_value=r.current_stock_value,
-            months_no_movement=r.months_no_movement,
-            proposed_action=r.proposed_action,
-            proposed_safety_stock_qty=r.proposed_safety_stock_qty,
-            proposed_unrestricted_qty=r.proposed_unrestricted_qty,
-            business_justification=r.business_justification,
-            sme_name=r.sme_name,
-            sme_email=r.sme_email,
-            sme_department=r.sme_department,
-            sme_feedback_method=r.sme_feedback_method,
-            sme_contacted_date=r.sme_contacted_date,
-            sme_responded_date=r.sme_responded_date,
-            sme_recommendation=r.sme_recommendation,
-            sme_recommended_safety_stock_qty=r.sme_recommended_safety_stock_qty,
-            sme_recommended_unrestricted_qty=r.sme_recommended_unrestricted_qty,
-            sme_analysis=r.sme_analysis,
-            alternative_applications=r.alternative_applications,
-            risk_assessment=r.risk_assessment,
+            current_step=current_step,
+            assigned_sme_id=assigned_sme_id,
+            assigned_sme_name=assigned_sme_name,
+            assigned_approver_id=assigned_approver_id,
+            assigned_approver_name=assigned_approver_name,
             final_decision=r.final_decision,
             final_safety_stock_qty=r.final_safety_stock_qty,
             final_unrestricted_qty=r.final_unrestricted_qty,
-            # final_notes=r.final_notes,
-            decided_by=r.decided_by,
-            decided_by_user=decided_by_user,
-            decided_at=r.decided_at,
-            requires_follow_up=r.requires_follow_up,
-            next_review_date=r.next_review_date,
-            follow_up_reason=r.follow_up_reason,
-            review_frequency_weeks=r.review_frequency_weeks,
-            previous_review_id=r.previous_review_id,
-            estimated_savings=r.estimated_savings,
-            implementation_date=r.implementation_date,
-            status=r.status,
-            completed_checklist=r.completed_checklist,
-            checklist=checklist,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-            is_read_only=r.status
-            in [ReviewStatus.COMPLETED.value, ReviewStatus.CANCELLED.value],
-            comments_count=comments_count or 0
+            final_notes=r.final_notes,
+            comments_count=comments_count or 0,
+            is_read_only=ReviewStateMachine.is_terminal(r.status),
         )
         reviews.append(review)
 
-    # Get the most recent COMPLETED review data for last_reviewed/next_review
+    # Get the most recent APPROVED review data for last_reviewed/next_review
     material_dict = material.model_dump()
     if reviews_data:
-        # Find the first completed review (reviews are ordered by date desc)
-        most_recent_completed_review = None
-        for r, _, _, _, _ in reviews_data:
-            if r.status == ReviewStatus.COMPLETED.value:
-                most_recent_completed_review = r
+        # Find the first approved review (reviews are ordered by date desc)
+        most_recent_approved_review = None
+        for r, _, _, _ in reviews_data:
+            if r.status == ReviewStatus.APPROVED.value:
+                most_recent_approved_review = r
                 break
 
-        if most_recent_completed_review:
-            material_dict["last_reviewed"] = most_recent_completed_review.review_date
-            material_dict["next_review"] = most_recent_completed_review.next_review_date
-            # material_dict["review_notes"] = most_recent_completed_review.notes
+        if most_recent_approved_review:
+            material_dict["last_reviewed"] = most_recent_approved_review.review_date
+            material_dict["next_review"] = most_recent_approved_review.next_review_date
+            # material_dict["review_notes"] = most_recent_approved_review.notes
         else:
-            # No completed reviews, set to None
+            # No approved reviews, set to None
             material_dict["last_reviewed"] = None
             material_dict["next_review"] = None
             material_dict["review_notes"] = None
@@ -765,9 +673,7 @@ async def get_material(
     for insight_db, acknowledger_profile in insights_data:
         acknowledged_by_user = None
         if acknowledger_profile:
-            acknowledged_by_user = UserProfile(
-                id=acknowledger_profile.id, full_name=acknowledger_profile.full_name
-            )
+            acknowledged_by_user = UserProfile(id=acknowledger_profile.id, full_name=acknowledger_profile.full_name)
 
         insights.append(
             Insight(
@@ -817,8 +723,7 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
             Insight(
                 insight_type="warning",
                 message=(
-                    "Material has unrestricted stock but no safety stock level defined. "
-                    "Consider setting a safety stock level to prevent stockouts."
+                    "Material has unrestricted stock but no safety stock level defined. Consider setting a safety stock level to prevent stockouts."
                 ),
             )
         )
@@ -837,9 +742,7 @@ def generate_material_insight(material: SAPMaterialData) -> list[Insight]:
     elif unrestricted_qty > 0 and safety_stock > 0:
         if coverage_ratio is not None and coverage_ratio > 0:
             # Calculate ideal stock based on coverage ratio threshold
-            ideal_stock = unrestricted_qty * (
-                settings.coverage_ratio_threshold / coverage_ratio
-            )
+            ideal_stock = unrestricted_qty * (settings.coverage_ratio_threshold / coverage_ratio)
 
             # Ensure ideal stock doesn't go below safety stock
             optimized_stock = max(ideal_stock, safety_stock)
@@ -957,8 +860,7 @@ async def upload_sap_material_data(
     try:
         # Just read header row to validate columns
         df_header = pd.read_csv(io.BytesIO(content), encoding="utf-8", nrows=0)
-        missing_columns = set(CSV_COLUMN_MAPPING.keys()
-                              ) - set(df_header.columns)
+        missing_columns = set(CSV_COLUMN_MAPPING.keys()) - set(df_header.columns)
         if missing_columns:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1015,35 +917,44 @@ def prepare_csv(file_content: bytes) -> pd.DataFrame:
         raise ValueError("CSV file contains no data rows")
 
     # Select and rename columns
-    df = df[list(CSV_COLUMN_MAPPING.keys())].rename(
-        columns=CSV_COLUMN_MAPPING)
+    df = df[list(CSV_COLUMN_MAPPING.keys())].rename(columns=CSV_COLUMN_MAPPING)
 
     # Convert string columns
-    string_columns = ["material_desc", "material_type", "mat_group",
-                      "mat_group_desc", "mrp_controller", "review_notes"]
+    string_columns = ["material_desc", "material_type", "mat_group", "mat_group_desc", "mrp_controller", "review_notes"]
     for col in string_columns:
         df[col] = df[col].astype(str).replace(["nan", "None"], None)
 
     # Validate material_number
     if df["material_number"].isna().any():
         first_null_idx = df["material_number"].isna().idxmax()
-        raise ValueError(
-            f"Row {first_null_idx + 2}: Material Number is required")
+        raise ValueError(f"Row {first_null_idx + 2}: Material Number is required")
 
     # Clean numeric columns
-    numeric_columns = ["total_quantity", "total_value", "unrestricted_quantity", "unrestricted_value",
-                       "safety_stock", "coverage_ratio", "max_cons_demand", "demand_fc_12m", "demand_fc_total",
-                       "cons_1y", "cons_2y", "cons_3y", "cons_4y", "cons_5y", "purchased_qty_2y"]
+    numeric_columns = [
+        "total_quantity",
+        "total_value",
+        "unrestricted_quantity",
+        "unrestricted_value",
+        "safety_stock",
+        "coverage_ratio",
+        "max_cons_demand",
+        "demand_fc_12m",
+        "demand_fc_total",
+        "cons_1y",
+        "cons_2y",
+        "cons_3y",
+        "cons_4y",
+        "cons_5y",
+        "purchased_qty_2y",
+    ]
     for col in numeric_columns:
-        df[col] = df[col].astype(str).str.replace(
-            "$", "", regex=False).str.strip()
+        df[col] = df[col].astype(str).str.replace("$", "", regex=False).str.strip()
         df[col] = pd.to_numeric(df[col], errors="coerce")
         df[col] = df[col].replace([float("inf"), float("-inf")], pd.NA)
 
     # Convert date columns
     for date_col in ["created_on", "last_reviewed", "next_review"]:
-        df[date_col] = pd.to_datetime(
-            df[date_col], format="mixed", dayfirst=True, errors="coerce").dt.date
+        df[date_col] = pd.to_datetime(df[date_col], format="mixed", dayfirst=True, errors="coerce").dt.date
 
     # Replace non-JSON values with None
     df = df.replace([np.nan, np.inf, -np.inf, pd.NA, pd.NaT], None)
@@ -1052,8 +963,7 @@ def prepare_csv(file_content: bytes) -> pd.DataFrame:
     if df["created_on"].isna().any():
         null_mask = df["created_on"].isna()
         first_null_idx = df[null_mask].index.tolist()[0]
-        raise ValueError(
-            f"Row {first_null_idx + 2}: Created On date is required")
+        raise ValueError(f"Row {first_null_idx + 2}: Created On date is required")
 
     return df
 
@@ -1098,18 +1008,13 @@ def compute_diff(old: dict, new: dict, ignored_fields: set[str]) -> tuple[dict, 
 
 
 async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
-
     # Get total inventory value at time of snapshot
-    total_value_query = select(
-        func.sum(SAPMaterialData.total_value)
-    )
+    total_value_query = select(func.sum(SAPMaterialData.total_value))
     total_value_result = await db.exec(total_value_query)
     total_inventory_value = total_value_result.one_or_none() or 0.0
 
     # Get total opportunity value
-    total_opportunity_query = select(
-        func.sum(MaterialInsightDB.opportunity_value)
-    )
+    total_opportunity_query = select(func.sum(MaterialInsightDB.opportunity_value))
     total_opportunity_result = await db.exec(total_opportunity_query)
     total_opportunity_value = total_opportunity_result.one_or_none() or 0.0
 
@@ -1117,45 +1022,45 @@ async def get_metrics_for_snapshot(db: AsyncSession) -> dict:
     overdue_reviews_query = select(func.count()).where(
         MaterialReviewDB.next_review_date.isnot(None),
         MaterialReviewDB.next_review_date < datetime.utcnow().date(),
-        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.status == ReviewStatus.APPROVED.value,
         MaterialReviewDB.is_superseded.is_(False),
     )
     overdue_reviews_result = await db.exec(overdue_reviews_query)
     total_overdue_reviews = overdue_reviews_result.one_or_none() or 0
 
-    # Get acceptance rate: % of SME reviews that didn't reject planner's proposed changes
+    # Get agreement rate: % of SME reviews that didn't reject planner's proposed changes
     # Rejection = Planner proposed a change, but SME said 'keep_no_change'
 
     # Total: reviews where planner proposed change AND SME gave feedback
     total_with_sme_query = select(func.count()).where(
         MaterialReviewDB.proposed_action.isnot(None),
-        MaterialReviewDB.proposed_action != 'keep_no_change',
+        MaterialReviewDB.proposed_action != "keep_no_change",
         MaterialReviewDB.sme_recommendation.isnot(None),
-        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.status == ReviewStatus.APPROVED.value,
         MaterialReviewDB.is_superseded.is_(False),
     )
     total_with_sme_result = await db.exec(total_with_sme_query)
     total_with_sme = total_with_sme_result.one_or_none() or 0
 
-    # Accepted: of those, SME didn't say "keep_no_change"
-    accepted_query = select(func.count()).where(
+    # Agreement: of those, SME didn't say "keep_no_change"
+    agreement_query = select(func.count()).where(
         MaterialReviewDB.proposed_action.isnot(None),
-        MaterialReviewDB.proposed_action != 'keep_no_change',
+        MaterialReviewDB.proposed_action != "keep_no_change",
         MaterialReviewDB.sme_recommendation.isnot(None),
-        MaterialReviewDB.sme_recommendation != 'keep_no_change',
-        MaterialReviewDB.status == ReviewStatus.COMPLETED.value,
+        MaterialReviewDB.sme_recommendation != "keep_no_change",
+        MaterialReviewDB.status == ReviewStatus.APPROVED.value,
         MaterialReviewDB.is_superseded.is_(False),
     )
-    accepted_result = await db.exec(accepted_query)
-    accepted_count = accepted_result.one_or_none() or 0
+    agreement_result = await db.exec(agreement_query)
+    agreement_count = agreement_result.one_or_none() or 0
 
-    acceptance_rate = accepted_count / total_with_sme if total_with_sme > 0 else 0.0
+    agreement_rate = agreement_count / total_with_sme if total_with_sme > 0 else 0.0
 
     return {
         "total_inventory_value": total_inventory_value,
         "total_opportunity_value": total_opportunity_value,
         "total_overdue_reviews": total_overdue_reviews,
-        "acceptance_rate": acceptance_rate,
+        "agreement_rate": agreement_rate,
     }
 
 
@@ -1168,10 +1073,7 @@ async def create_upload_snapshot(upload_job_id: UUID) -> None:
     # Check if there is a previous snapshot that exists
 
     async with async_session_maker() as db:
-
-        query = select(UploadSnapshot).order_by(
-            UploadSnapshot.created_at.desc()
-        ).limit(1)
+        query = select(UploadSnapshot).order_by(UploadSnapshot.created_at.desc()).limit(1)
 
         result = await db.exec(query)
         previous_snapshot = result.first()
@@ -1183,9 +1085,9 @@ async def create_upload_snapshot(upload_job_id: UUID) -> None:
             prev_snapshot_id=previous_snapshot.snapshot_id if previous_snapshot else None,
             # Metrics
             total_inventory_value=snapshot_metrics["total_inventory_value"],
-            total_opportunity_value=snapshot_metrics['total_opportunity_value'],
-            total_overdue_reviews=snapshot_metrics['total_overdue_reviews'],
-            acceptance_rate=snapshot_metrics['acceptance_rate'],
+            total_opportunity_value=snapshot_metrics["total_opportunity_value"],
+            total_overdue_reviews=snapshot_metrics["total_overdue_reviews"],
+            agreement_rate=snapshot_metrics["agreement_rate"],
         )
 
         db.add(snapshot)
@@ -1203,8 +1105,8 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
 
     # Chunk sizes based on PostgreSQL parameter limit (32,767)
     MATERIAL_CHUNK_SIZE = 1000  # 25 columns
-    INSIGHT_CHUNK_SIZE = 5000   # 3 columns
-    REVIEW_CHUNK_SIZE = 500     # ~30 columns
+    INSIGHT_CHUNK_SIZE = 5000  # 3 columns
+    REVIEW_CHUNK_SIZE = 500  # ~30 columns
     CHECKLIST_CHUNK_SIZE = 2000  # ~13 columns
     HISTORY_CHUNK_SIZE = 2000
 
@@ -1244,25 +1146,19 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             updated_material_numbers = []  # For stale review flagging
 
             for chunk_start in range(0, len(records), MATERIAL_CHUNK_SIZE):
-                chunk_end = min(
-                    chunk_start + MATERIAL_CHUNK_SIZE, len(records))
+                chunk_end = min(chunk_start + MATERIAL_CHUNK_SIZE, len(records))
                 chunk = records[chunk_start:chunk_end]
 
                 # Get material numbers in this chunk
                 chunk_material_numbers = [r["material_number"] for r in chunk]
 
                 # Fetch existing materials for comparison
-                existing_stmt = select(SAPMaterialData).where(
-                    SAPMaterialData.material_number.in_(chunk_material_numbers)
-                )
+                existing_stmt = select(SAPMaterialData).where(SAPMaterialData.material_number.in_(chunk_material_numbers))
                 existing_result = await db.exec(existing_stmt)
-                existing_materials = {
-                    m.material_number: m.__dict__.copy()
-                    for m in existing_result.all()
-                }
+                existing_materials = {m.material_number: m.__dict__.copy() for m in existing_result.all()}
                 # Clean up SQLAlchemy internal state from dicts
                 for mat_dict in existing_materials.values():
-                    mat_dict.pop('_sa_instance_state', None)
+                    mat_dict.pop("_sa_instance_state", None)
 
                 # Process each record and build history
                 for r in chunk:
@@ -1272,65 +1168,70 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                     if existing is None:
                         # INSERT - new material
                         total_inserted += 1
-                        all_history_records.append({
-                            "upload_job_id": str(job_id),
-                            "material_number": mat_num,
-                            "change_type": "INSERT",
-                            "old_values": None,
-                            "new_values": {k: json_serialize_value(v) for k, v in r.items() if k not in IGNORED_DIFF_FIELDS},
-                            "fields_changed": None,
-                        })
+                        all_history_records.append(
+                            {
+                                "upload_job_id": str(job_id),
+                                "material_number": mat_num,
+                                "change_type": "INSERT",
+                                "old_values": None,
+                                "new_values": {k: json_serialize_value(v) for k, v in r.items() if k not in IGNORED_DIFF_FIELDS},
+                                "fields_changed": None,
+                            }
+                        )
                     else:
                         # Potential UPDATE - check for meaningful changes
-                        old_values, new_values, fields_changed = compute_diff(
-                            existing, r, IGNORED_DIFF_FIELDS
-                        )
+                        old_values, new_values, fields_changed = compute_diff(existing, r, IGNORED_DIFF_FIELDS)
 
                         if fields_changed:
                             total_updated += 1
                             updated_material_numbers.append(mat_num)
-                            all_history_records.append({
-                                "upload_job_id": str(job_id),
-                                "material_number": mat_num,
-                                "change_type": "UPDATE",
-                                "old_values": old_values,
-                                "new_values": new_values,
-                                "fields_changed": fields_changed,
-                            })
+                            all_history_records.append(
+                                {
+                                    "upload_job_id": str(job_id),
+                                    "material_number": mat_num,
+                                    "change_type": "UPDATE",
+                                    "old_values": old_values,
+                                    "new_values": new_values,
+                                    "fields_changed": fields_changed,
+                                }
+                            )
                         # else: no meaningful changes, skip history
 
                 # Prepare values for upsert
-                material_values = [{
-                    "material_number": r["material_number"],
-                    "material_desc": r.get("material_desc"),
-                    "material_type": r.get("material_type"),
-                    "mat_group": r.get("mat_group"),
-                    "mat_group_desc": r.get("mat_group_desc"),
-                    "mrp_controller": r.get("mrp_controller"),
-                    "created_on": r.get("created_on"),
-                    "total_quantity": r.get("total_quantity"),
-                    "total_value": r.get("total_value"),
-                    "unrestricted_quantity": r.get("unrestricted_quantity"),
-                    "unrestricted_value": r.get("unrestricted_value"),
-                    "safety_stock": r.get("safety_stock"),
-                    "coverage_ratio": r.get("coverage_ratio"),
-                    "max_cons_demand": r.get("max_cons_demand"),
-                    "demand_fc_12m": r.get("demand_fc_12m"),
-                    "demand_fc_total": r.get("demand_fc_total"),
-                    "cons_1y": r.get("cons_1y"),
-                    "cons_2y": r.get("cons_2y"),
-                    "cons_3y": r.get("cons_3y"),
-                    "cons_4y": r.get("cons_4y"),
-                    "cons_5y": r.get("cons_5y"),
-                    "purchased_qty_2y": r.get("purchased_qty_2y"),
-                    "last_reviewed": r.get("last_reviewed"),
-                    "next_review": r.get("next_review"),
-                    "review_notes": r.get("review_notes"),
-                    # Tracking fields
-                    "last_upload_job_id": str(job_id),
-                    "first_uploaded_at": datetime.utcnow(),  # Only used on insert
-                    "last_modified_at": datetime.utcnow(),
-                } for r in chunk]
+                material_values = [
+                    {
+                        "material_number": r["material_number"],
+                        "material_desc": r.get("material_desc"),
+                        "material_type": r.get("material_type"),
+                        "mat_group": r.get("mat_group"),
+                        "mat_group_desc": r.get("mat_group_desc"),
+                        "mrp_controller": r.get("mrp_controller"),
+                        "created_on": r.get("created_on"),
+                        "total_quantity": r.get("total_quantity"),
+                        "total_value": r.get("total_value"),
+                        "unrestricted_quantity": r.get("unrestricted_quantity"),
+                        "unrestricted_value": r.get("unrestricted_value"),
+                        "safety_stock": r.get("safety_stock"),
+                        "coverage_ratio": r.get("coverage_ratio"),
+                        "max_cons_demand": r.get("max_cons_demand"),
+                        "demand_fc_12m": r.get("demand_fc_12m"),
+                        "demand_fc_total": r.get("demand_fc_total"),
+                        "cons_1y": r.get("cons_1y"),
+                        "cons_2y": r.get("cons_2y"),
+                        "cons_3y": r.get("cons_3y"),
+                        "cons_4y": r.get("cons_4y"),
+                        "cons_5y": r.get("cons_5y"),
+                        "purchased_qty_2y": r.get("purchased_qty_2y"),
+                        "last_reviewed": r.get("last_reviewed"),
+                        "next_review": r.get("next_review"),
+                        "review_notes": r.get("review_notes"),
+                        # Tracking fields
+                        "last_upload_job_id": str(job_id),
+                        "first_uploaded_at": datetime.utcnow(),  # Only used on insert
+                        "last_modified_at": datetime.utcnow(),
+                    }
+                    for r in chunk
+                ]
 
                 # Upsert with ON CONFLICT
                 stmt = pg_insert(SAPMaterialData).values(material_values)
@@ -1365,7 +1266,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                         # Update tracking fields (but NOT first_uploaded_at)
                         "last_upload_job_id": stmt.excluded.last_upload_job_id,
                         "last_modified_at": stmt.excluded.last_modified_at,
-                    }
+                    },
                 )
                 await db.execute(stmt)
                 await db.commit()
@@ -1379,21 +1280,19 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             await db.commit()
 
             for i in range(0, len(all_history_records), HISTORY_CHUNK_SIZE):
-                chunk = all_history_records[i:i + HISTORY_CHUNK_SIZE]
+                chunk = all_history_records[i : i + HISTORY_CHUNK_SIZE]
                 if chunk:
                     stmt = pg_insert(MaterialDataHistory).values(chunk)
                     await db.execute(stmt)
             await db.commit()
 
-            # Mark stale reviews for updated materials
+            # Mark stale reviews for updated materials (only active reviews, not terminal states)
             if updated_material_numbers:
                 stale_stmt = (
                     update(MaterialReviewDB)
                     .where(
-                        MaterialReviewDB.material_number.in_(
-                            updated_material_numbers),
-                        MaterialReviewDB.status.notin_(
-                            ["completed", "cancelled"]),
+                        MaterialReviewDB.material_number.in_(updated_material_numbers),
+                        MaterialReviewDB.status.notin_(["approved", "rejected", "cancelled"]),
                         MaterialReviewDB.is_data_stale.is_(False),
                     )
                     .values(
@@ -1415,9 +1314,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
 
             # Delete existing insights for uploaded materials
             material_numbers = [r["material_number"] for r in records]
-            delete_stmt = delete(MaterialInsightDB).where(
-                MaterialInsightDB.material_number.in_(material_numbers)
-            )
+            delete_stmt = delete(MaterialInsightDB).where(MaterialInsightDB.material_number.in_(material_numbers))
             await db.execute(delete_stmt)
             await db.commit()
 
@@ -1425,17 +1322,16 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             all_insights = []
             for i, record in enumerate(records):
                 valid_fields = set(SAPMaterialData.model_fields.keys())
-                material = SAPMaterialData(
-                    **{k: v for k, v in record.items() if k in valid_fields})
+                material = SAPMaterialData(**{k: v for k, v in record.items() if k in valid_fields})
                 insights = generate_material_insight(material)
                 for insight in insights:
                     all_insights.append(
                         {
-                        "material_number": material.material_number,
-                        "message": insight.message,
-                        "insight_type": insight.insight_type,
-                        "opportunity_value": insight.opportunity_value,
-                    }
+                            "material_number": material.material_number,
+                            "message": insight.message,
+                            "insight_type": insight.insight_type,
+                            "opportunity_value": insight.opportunity_value,
+                        }
                     )
 
                 # Update progress periodically
@@ -1445,7 +1341,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
 
             # Batch insert insights
             for i in range(0, len(all_insights), INSIGHT_CHUNK_SIZE):
-                chunk = all_insights[i:i + INSIGHT_CHUNK_SIZE]
+                chunk = all_insights[i : i + INSIGHT_CHUNK_SIZE]
                 if chunk:
                     stmt = pg_insert(MaterialInsightDB).values(chunk)
                     await db.execute(stmt)
@@ -1463,14 +1359,12 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             system_user_id = "00000000-0000-0000-0000-000000000000"
 
             # Get material numbers that have last_reviewed in the upload
-            materials_with_reviews = [
-                r["material_number"] for r in records if r.get("last_reviewed")
-            ]
+            materials_with_reviews = [r["material_number"] for r in records if r.get("last_reviewed")]
 
-            # Fetch existing most recent completed reviews for these materials
+            # Fetch existing most recent approved reviews for these materials
             existing_reviews: dict[int, tuple] = {}
             if materials_with_reviews:
-                # Subquery to get most recent completed review per material
+                # Subquery to get most recent approved review per material
                 latest_review_subq = (
                     select(
                         MaterialReviewDB.material_number,
@@ -1479,15 +1373,11 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                         MaterialReviewDB.final_notes,
                     )
                     .where(
-                        MaterialReviewDB.material_number.in_(
-                            materials_with_reviews),
-                        MaterialReviewDB.status == "completed",
+                        MaterialReviewDB.material_number.in_(materials_with_reviews),
+                        MaterialReviewDB.status == "approved",
                     )
                     .distinct(MaterialReviewDB.material_number)
-                    .order_by(
-                        MaterialReviewDB.material_number,
-                        MaterialReviewDB.review_date.desc()
-                    )
+                    .order_by(MaterialReviewDB.material_number, MaterialReviewDB.review_date.desc())
                 )
                 existing_result = await db.exec(latest_review_subq)
                 for row in existing_result.all():
@@ -1506,89 +1396,81 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
                     if existing:
                         existing_date, existing_next, existing_notes = existing
                         # Skip if review data is unchanged
-                        if (existing_date == record.get("last_reviewed") and
-                            existing_next == record.get("next_review") and
-                                existing_notes == record.get("review_notes")):
+                        if (
+                            existing_date == record.get("last_reviewed")
+                            and existing_next == record.get("next_review")
+                            and existing_notes == record.get("review_notes")
+                        ):
                             continue
 
                     current_stock_value = 0
-                    if record.get('total_quantity') and record.get('total_value') and record.get('unrestricted_quantity'):
-                        current_stock_value = round(
-                            record.get("total_value") / record.get('total_quantity') *
-                            record.get('unrestricted_quantity'),
-                            2
-                        )
+                    if record.get("total_quantity") and record.get("total_value") and record.get("unrestricted_quantity"):
+                        current_stock_value = round(record.get("total_value") / record.get("total_quantity") * record.get("unrestricted_quantity"), 2)
 
-                    all_reviews.append({
-                        "material_number": record.get("material_number"),
-                        "created_by": system_user_id,
-                        "last_updated_by": system_user_id,
-                        "created_at": record.get("last_reviewed"),
-                        "updated_at": record.get("last_reviewed"),
-                        "initiated_by": system_user_id,
-                        "review_date": record.get("last_reviewed"),
-                        "review_reason": "Initial OBS data import",
-                        "current_stock_qty": record.get("unrestricted_quantity"),
-                        "current_stock_value": current_stock_value,
-                        "months_no_movement": 0,
-                        "proposed_action": "No action proposed (historical data)",
-                        "proposed_safety_stock_qty": None,
-                        "proposed_unrestricted_qty": None,
-                        "business_justification": "N/A",
-                        "sme_name": "System",
-                        "sme_email": "system@mars.teampps.com",
-                        "sme_department": "System",
-                        "sme_feedback_method": "other",
-                        "sme_contacted_date": record.get("last_reviewed"),
-                        "sme_responded_date": record.get("last_reviewed"),
-                        "sme_recommendation": "N/A",
-                        "sme_recommended_safety_stock_qty": None,
-                        "sme_recommended_unrestricted_qty": None,
-                        "sme_analysis": "N/A",
-                        "alternative_applications": "N/A",
-                        "risk_assessment": "N/A",
-                        "final_decision": "no change",
-                        "final_safety_stock_qty": None,
-                        "final_unrestricted_qty": None,
-                        "final_notes": record.get("review_notes"),
-                        "decided_by": system_user_id,
-                        "decided_at": record.get("last_reviewed"),
-                        "requires_follow_up": True if record.get("next_review") else False,
-                        "next_review_date": record.get("next_review"),
-                        "follow_up_reason": "Scheduled review from initial OBS data import" if record.get("next_review") else None,
-                        "review_frequency_weeks": 0,
-                        "status": "completed",
-                        "completed_checklist": True,
-                    })
+                    all_reviews.append(
+                        {
+                            "material_number": record.get("material_number"),
+                            "created_by": system_user_id,
+                            "last_updated_by": system_user_id,
+                            "created_at": record.get("last_reviewed"),
+                            "updated_at": record.get("last_reviewed"),
+                            "initiated_by": system_user_id,
+                            "review_date": record.get("last_reviewed"),
+                            "review_reason": "Initial OBS data import",
+                            "current_stock_qty": record.get("unrestricted_quantity"),
+                            "current_stock_value": current_stock_value,
+                            "months_no_movement": 0,
+                            "proposed_action": "No action proposed (historical data)",
+                            "proposed_safety_stock_qty": None,
+                            "proposed_unrestricted_qty": None,
+                            "business_justification": "N/A",
+                            "sme_recommendation": "N/A",
+                            "sme_recommended_safety_stock_qty": None,
+                            "sme_recommended_unrestricted_qty": None,
+                            "sme_analysis": "N/A",
+                            "alternative_applications": "N/A",
+                            "risk_assessment": "N/A",
+                            "final_decision": "no change",
+                            "final_safety_stock_qty": None,
+                            "final_unrestricted_qty": None,
+                            "final_notes": record.get("review_notes"),
+                            "requires_follow_up": True if record.get("next_review") else False,
+                            "next_review_date": record.get("next_review"),
+                            "follow_up_reason": "Scheduled review from initial OBS data import" if record.get("next_review") else None,
+                            "review_frequency_weeks": 0,
+                            "status": "approved",  # Historical imports are treated as approved
+                            "completed_checklist": True,
+                        }
+                    )
 
             # Batch insert reviews and checklists
             all_checklists = []
             reviews_inserted = 0
 
             for i in range(0, len(all_reviews), REVIEW_CHUNK_SIZE):
-                chunk = all_reviews[i:i + REVIEW_CHUNK_SIZE]
+                chunk = all_reviews[i : i + REVIEW_CHUNK_SIZE]
                 if chunk:
-                    stmt = pg_insert(MaterialReviewDB).values(chunk).returning(
-                        MaterialReviewDB.review_id, MaterialReviewDB.created_at
-                    )
+                    stmt = pg_insert(MaterialReviewDB).values(chunk).returning(MaterialReviewDB.review_id, MaterialReviewDB.created_at)
                     result = await db.execute(stmt)
                     review_results = result.fetchall()
 
                     for review_id, created_at in review_results:
-                        all_checklists.append({
-                            "review_id": review_id,
-                            "created_by": system_user_id,
-                            "last_updated_by": system_user_id,
-                            "created_at": created_at,
-                            "updated_at": created_at,
-                            "has_open_orders": False,
-                            "has_forecast_demand": False,
-                            "checked_alternate_plants": False,
-                            "contacted_procurement": False,
-                            "reviewed_bom_usage": False,
-                            "checked_supersession": False,
-                            "checked_historical_usage": False,
-                        })
+                        all_checklists.append(
+                            {
+                                "review_id": review_id,
+                                "created_by": system_user_id,
+                                "last_updated_by": system_user_id,
+                                "created_at": created_at,
+                                "updated_at": created_at,
+                                "has_open_orders": False,
+                                "has_forecast_demand": False,
+                                "checked_alternate_plants": False,
+                                "contacted_procurement": False,
+                                "reviewed_bom_usage": False,
+                                "checked_supersession": False,
+                                "checked_historical_usage": False,
+                            }
+                        )
                         reviews_inserted += 1
 
                 job.processed_records = i + len(chunk)
@@ -1596,7 +1478,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
 
             # Batch insert checklists
             for i in range(0, len(all_checklists), CHECKLIST_CHUNK_SIZE):
-                chunk = all_checklists[i:i + CHECKLIST_CHUNK_SIZE]
+                chunk = all_checklists[i : i + CHECKLIST_CHUNK_SIZE]
                 if chunk:
                     stmt = pg_insert(ReviewChecklistDB).values(chunk)
                     await db.execute(stmt)
@@ -1610,8 +1492,7 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
             job.completed_at = datetime.utcnow()
             await db.commit()
 
-            print(
-                f"Upload job {job_id} completed: {job.inserted_count} materials, {job.insights_count} insights, {job.reviews_count} reviews")
+            print(f"Upload job {job_id} completed: {job.inserted_count} materials, {job.insights_count} insights, {job.reviews_count} reviews")
 
         except Exception as e:
             job.status = "failed"
@@ -1622,17 +1503,11 @@ async def process_sap_upload_background(job_id: UUID, file_content: bytes):
 
 
 @router.get("/materials/{material_number}/history", response_model=list[MaterialDataHistory])
-async def get_material_history(material_number: int,
-                               current_user: User = Depends(get_current_user),
-                               db: AsyncSession = Depends(get_db)
-                               ):
+async def get_material_history(material_number: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get the change history of a given material"""
 
     # Verify material exists
-    material = await db.exec(
-        select(SAPMaterialData).where(
-            SAPMaterialData.material_number == material_number)
-    )
+    material = await db.exec(select(SAPMaterialData).where(SAPMaterialData.material_number == material_number))
     if not material.first():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
