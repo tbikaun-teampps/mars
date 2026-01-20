@@ -306,8 +306,8 @@ export class ApiClient {
     materialNumber: number,
     reviewId: number,
     data: { sme_user_id?: string; approver_user_id: string }
-  ): Promise<{ message: string; review_id: number }> {
-    return this.post<{ message: string; review_id: number }>(
+  ): Promise<MaterialReview> {
+    return this.post<MaterialReview>(
       `/materials/${materialNumber}/reviews/${reviewId}/assignments`,
       data
     );

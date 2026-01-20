@@ -483,12 +483,12 @@ function MaterialReviewFormInner({
   // Revalidate SME step when requirements change (optional -> required)
   React.useEffect(() => {
     // When SME becomes required, check if the current data passes the required schema
-    if (isSmeRequired && isStepComplete(2)) {
+    if (isSmeRequired && isStepComplete(3)) {
       const formValues = form.getValues();
       const result = step3RequiredSchema.safeParse(formValues);
       if (!result.success) {
         // SME step no longer valid with required schema - unmark it
-        markStepIncomplete(2);
+        markStepIncomplete(3);
       }
     }
   }, [isSmeRequired, isStepComplete, form, markStepIncomplete]);
@@ -514,7 +514,8 @@ function MaterialReviewFormInner({
           throw new Error("Approver must be selected");
         }
         // SME is only required when isSmeRequired is true (checked via schema validation)
-        await apiClient.createReviewAssignments(
+        // The assignment endpoint now returns the full updated MaterialReview
+        return apiClient.createReviewAssignments(
           materialData.material_number,
           reviewId,
           {
@@ -522,8 +523,6 @@ function MaterialReviewFormInner({
             approver_user_id: formData.approverUserId,
           }
         );
-        // Return the current review data (assignments API doesn't return full review)
-        return existingReview || null;
       }
 
       // Extract only the fields relevant to this step
@@ -556,9 +555,8 @@ function MaterialReviewFormInner({
       }
     },
     onSuccess: (savedReview, variables) => {
-      // For assignment step (step 2), the data comes from a separate query
-      // Don't reset form fields - instead invalidate the assignments query
-      // so the useEffect in Step3Assignment repopulates the values
+      // For assignment step (step 2), also invalidate the assignments query
+      // so Step3Assignment's useEffect can repopulate assignment picker values
       if (variables.step === 2 && materialData?.material_number && reviewId) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.reviewAssignments.detail(
@@ -566,9 +564,12 @@ function MaterialReviewFormInner({
             reviewId
           ),
         });
-      } else if (savedReview) {
-        // Reset the form immediately with the saved data from the server
-        // This eliminates race conditions and provides instant UI feedback
+      }
+
+      // Reset the form with the saved data from the server
+      // This eliminates race conditions and provides instant UI feedback
+      // Now works for ALL steps including assignment (step 2)
+      if (savedReview) {
         const formData = mapReviewToFormData(savedReview, predefinedOptions);
         form.reset(formData, { keepErrors: false, keepDirty: false });
 

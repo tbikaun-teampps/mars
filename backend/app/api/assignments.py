@@ -28,7 +28,9 @@ from app.models.db_models import (
     SMEExpertiseDB,
     UserRoleDB,
 )
+from app.models.review import MaterialReview
 from app.services.notification_service import NotificationService
+from app.services.review_service import ReviewService
 from app.services.workflow import is_sme_required
 
 router = APIRouter()
@@ -244,7 +246,7 @@ async def create_review_assignments(
     data: AssignmentStepPayload,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> MaterialReview:
     """Create SME and approver assignments for a review (Assignment Step)."""
     # Permission check: require can_assign_reviews
     await require_permission(current_user.id, db, "can_assign_reviews")
@@ -391,7 +393,10 @@ async def create_review_assignments(
         assigned_by=current_user_uuid,
     )
 
-    return {"message": "Assignments created successfully", "review_id": review_id}
+    # Return the full updated review (same as other update endpoints)
+    # This ensures the frontend gets fresh data immediately without needing a refetch
+    review_service = ReviewService(db)
+    return await review_service.build_review_response(review, user_role="admin")
 
 
 @router.get("/users-by-permission")
