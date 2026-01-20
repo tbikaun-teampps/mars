@@ -15,7 +15,14 @@ import type {
 } from "@/types/materials";
 import { supabase } from "@/lib/supabase";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+// Normalize API URL - add https:// if no protocol specified
+function normalizeApiUrl(url: string | undefined): string {
+  if (!url) return "/api";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `https://${url}`;
+}
+
+const API_BASE_URL = normalizeApiUrl(import.meta.env.VITE_API_URL);
 
 // Impersonation header name (must match backend)
 const IMPERSONATE_HEADER = "X-Impersonate-User-Id";
