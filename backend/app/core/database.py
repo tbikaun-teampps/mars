@@ -16,6 +16,8 @@ engine = create_async_engine(
     database_url,
     echo=False,  # Set to True for SQL query logging
     future=True,
+    # Disable prepared statement cache for pgbouncer compatibility (Supabase pooler)
+    connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0},
 )
 
 # Create async session factory
