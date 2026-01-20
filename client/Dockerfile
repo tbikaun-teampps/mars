@@ -2,6 +2,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Build args for Vite env vars
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_API_URL
+
 # Copy package files (include lock file if it exists)
 COPY package*.json ./
 
@@ -11,7 +16,7 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application (env vars are embedded here)
 RUN npm run build
 
 # Production stage
