@@ -309,9 +309,8 @@ SELECT pg_catalog.setval('"public"."review_schedules_schedule_id_seq"', 1, false
 
 --
 -- Name: hooks_id_seq; Type: SEQUENCE SET; Schema: supabase_functions; Owner: supabase_functions_admin
+-- (Skipped - supabase_functions schema only exists in local Supabase)
 --
-
-SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 
 
 --
